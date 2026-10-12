@@ -1,0 +1,19 @@
+name: rsaas_ui_kit
+description: '"House Plating" design system (STYLE.md): tokens, themes and components shared by pos_app and admin_web.'
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.6.0
+  flutter: '>=3.27.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  google_fonts: ^6.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
