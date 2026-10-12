@@ -1,0 +1,374 @@
+[
+  {
+    "id": "percent_10_single",
+    "description": "10% off one line; tax computed after discount",
+    "lines": [
+      {
+        "pricePaise": 34000,
+        "qty": 1,
+        "taxRateBp": 500
+      }
+    ],
+    "discount": {
+      "type": "percent",
+      "bp": 1000
+    },
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 34000,
+          "discountPaise": 3400,
+          "taxablePaise": 30600,
+          "cgstPaise": 765,
+          "sgstPaise": 765
+        }
+      ],
+      "subtotalPaise": 34000,
+      "discountPaise": 3400,
+      "taxablePaise": 30600,
+      "cgstPaise": 765,
+      "sgstPaise": 765,
+      "tipPaise": 0,
+      "roundOffPaise": -30,
+      "totalPaise": 32100
+    }
+  },
+  {
+    "id": "percent_10_mixed",
+    "description": "10% off mixed rates; discount spread pro rata, tax after discount",
+    "lines": [
+      {
+        "pricePaise": 34000,
+        "qty": 1,
+        "taxRateBp": 500
+      },
+      {
+        "pricePaise": 12000,
+        "qty": 2,
+        "taxRateBp": 1200
+      },
+      {
+        "pricePaise": 9000,
+        "qty": 1,
+        "taxRateBp": 1800
+      }
+    ],
+    "discount": {
+      "type": "percent",
+      "bp": 1000
+    },
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 34000,
+          "discountPaise": 3400,
+          "taxablePaise": 30600,
+          "cgstPaise": 765,
+          "sgstPaise": 765
+        },
+        {
+          "amountPaise": 24000,
+          "discountPaise": 2400,
+          "taxablePaise": 21600,
+          "cgstPaise": 1296,
+          "sgstPaise": 1296
+        },
+        {
+          "amountPaise": 9000,
+          "discountPaise": 900,
+          "taxablePaise": 8100,
+          "cgstPaise": 729,
+          "sgstPaise": 729
+        }
+      ],
+      "subtotalPaise": 67000,
+      "discountPaise": 6700,
+      "taxablePaise": 60300,
+      "cgstPaise": 2790,
+      "sgstPaise": 2790,
+      "tipPaise": 0,
+      "roundOffPaise": 20,
+      "totalPaise": 65900
+    }
+  },
+  {
+    "id": "flat_50_two_lines",
+    "description": "Flat ₹50 across ₹300 + ₹100",
+    "lines": [
+      {
+        "pricePaise": 30000,
+        "qty": 1,
+        "taxRateBp": 500
+      },
+      {
+        "pricePaise": 10000,
+        "qty": 1,
+        "taxRateBp": 1800
+      }
+    ],
+    "discount": {
+      "type": "flat",
+      "paise": 5000
+    },
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 30000,
+          "discountPaise": 3750,
+          "taxablePaise": 26250,
+          "cgstPaise": 657,
+          "sgstPaise": 656
+        },
+        {
+          "amountPaise": 10000,
+          "discountPaise": 1250,
+          "taxablePaise": 8750,
+          "cgstPaise": 788,
+          "sgstPaise": 787
+        }
+      ],
+      "subtotalPaise": 40000,
+      "discountPaise": 5000,
+      "taxablePaise": 35000,
+      "cgstPaise": 1445,
+      "sgstPaise": 1443,
+      "tipPaise": 0,
+      "roundOffPaise": 12,
+      "totalPaise": 37900
+    }
+  },
+  {
+    "id": "flat_remainder_to_last",
+    "description": "Flat ₹1 over three equal lines → 33/33/34",
+    "lines": [
+      {
+        "pricePaise": 1000,
+        "qty": 1,
+        "taxRateBp": 500
+      },
+      {
+        "pricePaise": 1000,
+        "qty": 1,
+        "taxRateBp": 500
+      },
+      {
+        "pricePaise": 1000,
+        "qty": 1,
+        "taxRateBp": 500
+      }
+    ],
+    "discount": {
+      "type": "flat",
+      "paise": 100
+    },
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 1000,
+          "discountPaise": 33,
+          "taxablePaise": 967,
+          "cgstPaise": 24,
+          "sgstPaise": 24
+        },
+        {
+          "amountPaise": 1000,
+          "discountPaise": 33,
+          "taxablePaise": 967,
+          "cgstPaise": 24,
+          "sgstPaise": 24
+        },
+        {
+          "amountPaise": 1000,
+          "discountPaise": 34,
+          "taxablePaise": 966,
+          "cgstPaise": 24,
+          "sgstPaise": 24
+        }
+      ],
+      "subtotalPaise": 3000,
+      "discountPaise": 100,
+      "taxablePaise": 2900,
+      "cgstPaise": 72,
+      "sgstPaise": 72,
+      "tipPaise": 0,
+      "roundOffPaise": -44,
+      "totalPaise": 3000
+    }
+  },
+  {
+    "id": "excess_moves_back",
+    "description": "Last line too small to absorb its remainder; excess moves to the previous line",
+    "lines": [
+      {
+        "pricePaise": 3,
+        "qty": 1,
+        "taxRateBp": 500
+      },
+      {
+        "pricePaise": 3,
+        "qty": 1,
+        "taxRateBp": 500
+      },
+      {
+        "pricePaise": 1,
+        "qty": 1,
+        "taxRateBp": 500
+      }
+    ],
+    "discount": {
+      "type": "percent",
+      "bp": 5000
+    },
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 3,
+          "discountPaise": 1,
+          "taxablePaise": 2,
+          "cgstPaise": 0,
+          "sgstPaise": 0
+        },
+        {
+          "amountPaise": 3,
+          "discountPaise": 2,
+          "taxablePaise": 1,
+          "cgstPaise": 0,
+          "sgstPaise": 0
+        },
+        {
+          "amountPaise": 1,
+          "discountPaise": 1,
+          "taxablePaise": 0,
+          "cgstPaise": 0,
+          "sgstPaise": 0
+        }
+      ],
+      "subtotalPaise": 7,
+      "discountPaise": 4,
+      "taxablePaise": 3,
+      "cgstPaise": 0,
+      "sgstPaise": 0,
+      "tipPaise": 0,
+      "roundOffPaise": -3,
+      "totalPaise": 0
+    }
+  },
+  {
+    "id": "percent_100",
+    "description": "100% discount → nothing taxable, total 0",
+    "lines": [
+      {
+        "pricePaise": 34000,
+        "qty": 1,
+        "taxRateBp": 500
+      },
+      {
+        "pricePaise": 6000,
+        "qty": 2,
+        "taxRateBp": 500
+      }
+    ],
+    "discount": {
+      "type": "percent",
+      "bp": 10000
+    },
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 34000,
+          "discountPaise": 34000,
+          "taxablePaise": 0,
+          "cgstPaise": 0,
+          "sgstPaise": 0
+        },
+        {
+          "amountPaise": 12000,
+          "discountPaise": 12000,
+          "taxablePaise": 0,
+          "cgstPaise": 0,
+          "sgstPaise": 0
+        }
+      ],
+      "subtotalPaise": 46000,
+      "discountPaise": 46000,
+      "taxablePaise": 0,
+      "cgstPaise": 0,
+      "sgstPaise": 0,
+      "tipPaise": 0,
+      "roundOffPaise": 0,
+      "totalPaise": 0
+    }
+  },
+  {
+    "id": "percent_12_5",
+    "description": "12.5% off (1250 bp) with paise prices",
+    "lines": [
+      {
+        "pricePaise": 12345,
+        "qty": 1,
+        "taxRateBp": 1800
+      },
+      {
+        "pricePaise": 6789,
+        "qty": 2,
+        "taxRateBp": 500
+      }
+    ],
+    "discount": {
+      "type": "percent",
+      "bp": 1250
+    },
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 12345,
+          "discountPaise": 1542,
+          "taxablePaise": 10803,
+          "cgstPaise": 973,
+          "sgstPaise": 972
+        },
+        {
+          "amountPaise": 13578,
+          "discountPaise": 1698,
+          "taxablePaise": 11880,
+          "cgstPaise": 297,
+          "sgstPaise": 297
+        }
+      ],
+      "subtotalPaise": 25923,
+      "discountPaise": 3240,
+      "taxablePaise": 22683,
+      "cgstPaise": 1270,
+      "sgstPaise": 1269,
+      "tipPaise": 0,
+      "roundOffPaise": -22,
+      "totalPaise": 25200
+    }
+  },
+  {
+    "id": "flat_exceeds_subtotal",
+    "description": "Flat discount larger than the subtotal is rejected",
+    "lines": [
+      {
+        "pricePaise": 10000,
+        "qty": 1,
+        "taxRateBp": 500
+      }
+    ],
+    "discount": {
+      "type": "flat",
+      "paise": 10001
+    },
+    "tipPaise": 0,
+    "expected": {
+      "error": "discount_exceeds_subtotal"
+    }
+  }
+]

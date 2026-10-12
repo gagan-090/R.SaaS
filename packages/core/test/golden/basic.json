@@ -1,0 +1,553 @@
+[
+  {
+    "id": "single_5pct",
+    "description": "Butter Chicken ₹340 × 1 at 5%",
+    "lines": [
+      {
+        "pricePaise": 34000,
+        "qty": 1,
+        "taxRateBp": 500
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 34000,
+          "discountPaise": 0,
+          "taxablePaise": 34000,
+          "cgstPaise": 850,
+          "sgstPaise": 850
+        }
+      ],
+      "subtotalPaise": 34000,
+      "discountPaise": 0,
+      "taxablePaise": 34000,
+      "cgstPaise": 850,
+      "sgstPaise": 850,
+      "tipPaise": 0,
+      "roundOffPaise": 0,
+      "totalPaise": 35700
+    }
+  },
+  {
+    "id": "qty_3_naan",
+    "description": "Garlic Naan ₹60 × 3 at 5%",
+    "lines": [
+      {
+        "pricePaise": 6000,
+        "qty": 3,
+        "taxRateBp": 500
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 18000,
+          "discountPaise": 0,
+          "taxablePaise": 18000,
+          "cgstPaise": 450,
+          "sgstPaise": 450
+        }
+      ],
+      "subtotalPaise": 18000,
+      "discountPaise": 0,
+      "taxablePaise": 18000,
+      "cgstPaise": 450,
+      "sgstPaise": 450,
+      "tipPaise": 0,
+      "roundOffPaise": 0,
+      "totalPaise": 18900
+    }
+  },
+  {
+    "id": "zero_rated_single",
+    "description": "Zero-rated item ₹100",
+    "lines": [
+      {
+        "pricePaise": 10000,
+        "qty": 1,
+        "taxRateBp": 0
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 10000,
+          "discountPaise": 0,
+          "taxablePaise": 10000,
+          "cgstPaise": 0,
+          "sgstPaise": 0
+        }
+      ],
+      "subtotalPaise": 10000,
+      "discountPaise": 0,
+      "taxablePaise": 10000,
+      "cgstPaise": 0,
+      "sgstPaise": 0,
+      "tipPaise": 0,
+      "roundOffPaise": 0,
+      "totalPaise": 10000
+    }
+  },
+  {
+    "id": "zero_rated_many",
+    "description": "Only zero-rated items",
+    "lines": [
+      {
+        "pricePaise": 2500,
+        "qty": 2,
+        "taxRateBp": 0
+      },
+      {
+        "pricePaise": 4000,
+        "qty": 1,
+        "taxRateBp": 0
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 5000,
+          "discountPaise": 0,
+          "taxablePaise": 5000,
+          "cgstPaise": 0,
+          "sgstPaise": 0
+        },
+        {
+          "amountPaise": 4000,
+          "discountPaise": 0,
+          "taxablePaise": 4000,
+          "cgstPaise": 0,
+          "sgstPaise": 0
+        }
+      ],
+      "subtotalPaise": 9000,
+      "discountPaise": 0,
+      "taxablePaise": 9000,
+      "cgstPaise": 0,
+      "sgstPaise": 0,
+      "tipPaise": 0,
+      "roundOffPaise": 0,
+      "totalPaise": 9000
+    }
+  },
+  {
+    "id": "mixed_rates",
+    "description": "Mixed 5/12/18% lines",
+    "lines": [
+      {
+        "pricePaise": 34000,
+        "qty": 1,
+        "taxRateBp": 500
+      },
+      {
+        "pricePaise": 12000,
+        "qty": 2,
+        "taxRateBp": 1200
+      },
+      {
+        "pricePaise": 9000,
+        "qty": 1,
+        "taxRateBp": 1800
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 34000,
+          "discountPaise": 0,
+          "taxablePaise": 34000,
+          "cgstPaise": 850,
+          "sgstPaise": 850
+        },
+        {
+          "amountPaise": 24000,
+          "discountPaise": 0,
+          "taxablePaise": 24000,
+          "cgstPaise": 1440,
+          "sgstPaise": 1440
+        },
+        {
+          "amountPaise": 9000,
+          "discountPaise": 0,
+          "taxablePaise": 9000,
+          "cgstPaise": 810,
+          "sgstPaise": 810
+        }
+      ],
+      "subtotalPaise": 67000,
+      "discountPaise": 0,
+      "taxablePaise": 67000,
+      "cgstPaise": 3100,
+      "sgstPaise": 3100,
+      "tipPaise": 0,
+      "roundOffPaise": 0,
+      "totalPaise": 73200
+    }
+  },
+  {
+    "id": "twelve_only",
+    "description": "12% drinks",
+    "lines": [
+      {
+        "pricePaise": 8000,
+        "qty": 3,
+        "taxRateBp": 1200
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 24000,
+          "discountPaise": 0,
+          "taxablePaise": 24000,
+          "cgstPaise": 1440,
+          "sgstPaise": 1440
+        }
+      ],
+      "subtotalPaise": 24000,
+      "discountPaise": 0,
+      "taxablePaise": 24000,
+      "cgstPaise": 1440,
+      "sgstPaise": 1440,
+      "tipPaise": 0,
+      "roundOffPaise": 20,
+      "totalPaise": 26900
+    }
+  },
+  {
+    "id": "odd_tax_paisa_to_cgst",
+    "description": "GST of 9 paise splits 5 CGST / 4 SGST",
+    "lines": [
+      {
+        "pricePaise": 50,
+        "qty": 1,
+        "taxRateBp": 1800
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 50,
+          "discountPaise": 0,
+          "taxablePaise": 50,
+          "cgstPaise": 5,
+          "sgstPaise": 4
+        }
+      ],
+      "subtotalPaise": 50,
+      "discountPaise": 0,
+      "taxablePaise": 50,
+      "cgstPaise": 5,
+      "sgstPaise": 4,
+      "tipPaise": 0,
+      "roundOffPaise": 41,
+      "totalPaise": 100
+    }
+  },
+  {
+    "id": "paise_price_18",
+    "description": "Price with paise ₹123.45 at 18%",
+    "lines": [
+      {
+        "pricePaise": 12345,
+        "qty": 1,
+        "taxRateBp": 1800
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 12345,
+          "discountPaise": 0,
+          "taxablePaise": 12345,
+          "cgstPaise": 1111,
+          "sgstPaise": 1111
+        }
+      ],
+      "subtotalPaise": 12345,
+      "discountPaise": 0,
+      "taxablePaise": 12345,
+      "cgstPaise": 1111,
+      "sgstPaise": 1111,
+      "tipPaise": 0,
+      "roundOffPaise": 33,
+      "totalPaise": 14600
+    }
+  },
+  {
+    "id": "rate_28",
+    "description": "28% slab",
+    "lines": [
+      {
+        "pricePaise": 19900,
+        "qty": 1,
+        "taxRateBp": 2800
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 19900,
+          "discountPaise": 0,
+          "taxablePaise": 19900,
+          "cgstPaise": 2786,
+          "sgstPaise": 2786
+        }
+      ],
+      "subtotalPaise": 19900,
+      "discountPaise": 0,
+      "taxablePaise": 19900,
+      "cgstPaise": 2786,
+      "sgstPaise": 2786,
+      "tipPaise": 0,
+      "roundOffPaise": 28,
+      "totalPaise": 25500
+    }
+  },
+  {
+    "id": "reversed_line_excluded",
+    "description": "A reversed line stays on the order but adds nothing",
+    "lines": [
+      {
+        "pricePaise": 34000,
+        "qty": 1,
+        "taxRateBp": 500
+      },
+      {
+        "pricePaise": 22000,
+        "qty": 1,
+        "taxRateBp": 500,
+        "reversed": true
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 34000,
+          "discountPaise": 0,
+          "taxablePaise": 34000,
+          "cgstPaise": 850,
+          "sgstPaise": 850
+        },
+        {
+          "amountPaise": 0,
+          "discountPaise": 0,
+          "taxablePaise": 0,
+          "cgstPaise": 0,
+          "sgstPaise": 0
+        }
+      ],
+      "subtotalPaise": 34000,
+      "discountPaise": 0,
+      "taxablePaise": 34000,
+      "cgstPaise": 850,
+      "sgstPaise": 850,
+      "tipPaise": 0,
+      "roundOffPaise": 0,
+      "totalPaise": 35700
+    }
+  },
+  {
+    "id": "empty_bill",
+    "description": "No lines",
+    "lines": [],
+    "discount": null,
+    "tipPaise": 0,
+    "expected": {
+      "lines": [],
+      "subtotalPaise": 0,
+      "discountPaise": 0,
+      "taxablePaise": 0,
+      "cgstPaise": 0,
+      "sgstPaise": 0,
+      "tipPaise": 0,
+      "roundOffPaise": 0,
+      "totalPaise": 0
+    }
+  },
+  {
+    "id": "big_order",
+    "description": "Twelve lines across all rates",
+    "lines": [
+      {
+        "pricePaise": 34000,
+        "qty": 1,
+        "taxRateBp": 0
+      },
+      {
+        "pricePaise": 34137,
+        "qty": 2,
+        "taxRateBp": 500
+      },
+      {
+        "pricePaise": 34274,
+        "qty": 3,
+        "taxRateBp": 1200
+      },
+      {
+        "pricePaise": 34411,
+        "qty": 1,
+        "taxRateBp": 1800
+      },
+      {
+        "pricePaise": 34548,
+        "qty": 2,
+        "taxRateBp": 0
+      },
+      {
+        "pricePaise": 34685,
+        "qty": 3,
+        "taxRateBp": 500
+      },
+      {
+        "pricePaise": 34822,
+        "qty": 1,
+        "taxRateBp": 1200
+      },
+      {
+        "pricePaise": 34959,
+        "qty": 2,
+        "taxRateBp": 1800
+      },
+      {
+        "pricePaise": 35096,
+        "qty": 3,
+        "taxRateBp": 0
+      },
+      {
+        "pricePaise": 35233,
+        "qty": 1,
+        "taxRateBp": 500
+      },
+      {
+        "pricePaise": 35370,
+        "qty": 2,
+        "taxRateBp": 1200
+      },
+      {
+        "pricePaise": 35507,
+        "qty": 3,
+        "taxRateBp": 1800
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 34000,
+          "discountPaise": 0,
+          "taxablePaise": 34000,
+          "cgstPaise": 0,
+          "sgstPaise": 0
+        },
+        {
+          "amountPaise": 68274,
+          "discountPaise": 0,
+          "taxablePaise": 68274,
+          "cgstPaise": 1707,
+          "sgstPaise": 1707
+        },
+        {
+          "amountPaise": 102822,
+          "discountPaise": 0,
+          "taxablePaise": 102822,
+          "cgstPaise": 6170,
+          "sgstPaise": 6169
+        },
+        {
+          "amountPaise": 34411,
+          "discountPaise": 0,
+          "taxablePaise": 34411,
+          "cgstPaise": 3097,
+          "sgstPaise": 3097
+        },
+        {
+          "amountPaise": 69096,
+          "discountPaise": 0,
+          "taxablePaise": 69096,
+          "cgstPaise": 0,
+          "sgstPaise": 0
+        },
+        {
+          "amountPaise": 104055,
+          "discountPaise": 0,
+          "taxablePaise": 104055,
+          "cgstPaise": 2602,
+          "sgstPaise": 2601
+        },
+        {
+          "amountPaise": 34822,
+          "discountPaise": 0,
+          "taxablePaise": 34822,
+          "cgstPaise": 2090,
+          "sgstPaise": 2089
+        },
+        {
+          "amountPaise": 69918,
+          "discountPaise": 0,
+          "taxablePaise": 69918,
+          "cgstPaise": 6293,
+          "sgstPaise": 6292
+        },
+        {
+          "amountPaise": 105288,
+          "discountPaise": 0,
+          "taxablePaise": 105288,
+          "cgstPaise": 0,
+          "sgstPaise": 0
+        },
+        {
+          "amountPaise": 35233,
+          "discountPaise": 0,
+          "taxablePaise": 35233,
+          "cgstPaise": 881,
+          "sgstPaise": 881
+        },
+        {
+          "amountPaise": 70740,
+          "discountPaise": 0,
+          "taxablePaise": 70740,
+          "cgstPaise": 4245,
+          "sgstPaise": 4244
+        },
+        {
+          "amountPaise": 106521,
+          "discountPaise": 0,
+          "taxablePaise": 106521,
+          "cgstPaise": 9587,
+          "sgstPaise": 9587
+        }
+      ],
+      "subtotalPaise": 835180,
+      "discountPaise": 0,
+      "taxablePaise": 835180,
+      "cgstPaise": 36672,
+      "sgstPaise": 36667,
+      "tipPaise": 0,
+      "roundOffPaise": -19,
+      "totalPaise": 908500
+    }
+  }
+]

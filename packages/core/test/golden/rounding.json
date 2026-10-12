@@ -1,0 +1,346 @@
+[
+  {
+    "id": "tax_exact_half_rounds_up",
+    "description": "10 paise at 5% = 0.5 paise → 1",
+    "lines": [
+      {
+        "pricePaise": 10,
+        "qty": 1,
+        "taxRateBp": 500
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 10,
+          "discountPaise": 0,
+          "taxablePaise": 10,
+          "cgstPaise": 1,
+          "sgstPaise": 0
+        }
+      ],
+      "subtotalPaise": 10,
+      "discountPaise": 0,
+      "taxablePaise": 10,
+      "cgstPaise": 1,
+      "sgstPaise": 0,
+      "tipPaise": 0,
+      "roundOffPaise": -11,
+      "totalPaise": 0
+    }
+  },
+  {
+    "id": "tax_below_half_rounds_down",
+    "description": "9 paise at 5% = 0.45 paise → 0",
+    "lines": [
+      {
+        "pricePaise": 9,
+        "qty": 1,
+        "taxRateBp": 500
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 9,
+          "discountPaise": 0,
+          "taxablePaise": 9,
+          "cgstPaise": 0,
+          "sgstPaise": 0
+        }
+      ],
+      "subtotalPaise": 9,
+      "discountPaise": 0,
+      "taxablePaise": 9,
+      "cgstPaise": 0,
+      "sgstPaise": 0,
+      "tipPaise": 0,
+      "roundOffPaise": -9,
+      "totalPaise": 0
+    }
+  },
+  {
+    "id": "tax_one_and_half",
+    "description": "30 paise at 5% = 1.5 → 2 (CGST 1, SGST 1)",
+    "lines": [
+      {
+        "pricePaise": 30,
+        "qty": 1,
+        "taxRateBp": 500
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 30,
+          "discountPaise": 0,
+          "taxablePaise": 30,
+          "cgstPaise": 1,
+          "sgstPaise": 1
+        }
+      ],
+      "subtotalPaise": 30,
+      "discountPaise": 0,
+      "taxablePaise": 30,
+      "cgstPaise": 1,
+      "sgstPaise": 1,
+      "tipPaise": 0,
+      "roundOffPaise": -32,
+      "totalPaise": 0
+    }
+  },
+  {
+    "id": "one_paisa_line",
+    "description": "1 paisa at 18% = 0.18 → 0",
+    "lines": [
+      {
+        "pricePaise": 1,
+        "qty": 1,
+        "taxRateBp": 1800
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 1,
+          "discountPaise": 0,
+          "taxablePaise": 1,
+          "cgstPaise": 0,
+          "sgstPaise": 0
+        }
+      ],
+      "subtotalPaise": 1,
+      "discountPaise": 0,
+      "taxablePaise": 1,
+      "cgstPaise": 0,
+      "sgstPaise": 0,
+      "tipPaise": 0,
+      "roundOffPaise": -1,
+      "totalPaise": 0
+    }
+  },
+  {
+    "id": "per_line_not_bill_level",
+    "description": "3 × 10-paise lines at 5%: per-line rounding gives 3 paise, bill-level would give 2",
+    "lines": [
+      {
+        "pricePaise": 10,
+        "qty": 1,
+        "taxRateBp": 500
+      },
+      {
+        "pricePaise": 10,
+        "qty": 1,
+        "taxRateBp": 500
+      },
+      {
+        "pricePaise": 10,
+        "qty": 1,
+        "taxRateBp": 500
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 10,
+          "discountPaise": 0,
+          "taxablePaise": 10,
+          "cgstPaise": 1,
+          "sgstPaise": 0
+        },
+        {
+          "amountPaise": 10,
+          "discountPaise": 0,
+          "taxablePaise": 10,
+          "cgstPaise": 1,
+          "sgstPaise": 0
+        },
+        {
+          "amountPaise": 10,
+          "discountPaise": 0,
+          "taxablePaise": 10,
+          "cgstPaise": 1,
+          "sgstPaise": 0
+        }
+      ],
+      "subtotalPaise": 30,
+      "discountPaise": 0,
+      "taxablePaise": 30,
+      "cgstPaise": 3,
+      "sgstPaise": 0,
+      "tipPaise": 0,
+      "roundOffPaise": -33,
+      "totalPaise": 0
+    }
+  },
+  {
+    "id": "roundoff_up_at_50",
+    "description": "Payable ends in .50 → +50",
+    "lines": [
+      {
+        "pricePaise": 1050,
+        "qty": 1,
+        "taxRateBp": 0
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 1050,
+          "discountPaise": 0,
+          "taxablePaise": 1050,
+          "cgstPaise": 0,
+          "sgstPaise": 0
+        }
+      ],
+      "subtotalPaise": 1050,
+      "discountPaise": 0,
+      "taxablePaise": 1050,
+      "cgstPaise": 0,
+      "sgstPaise": 0,
+      "tipPaise": 0,
+      "roundOffPaise": 50,
+      "totalPaise": 1100
+    }
+  },
+  {
+    "id": "roundoff_down_at_49",
+    "description": "Payable ends in .49 → −49",
+    "lines": [
+      {
+        "pricePaise": 1049,
+        "qty": 1,
+        "taxRateBp": 0
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 1049,
+          "discountPaise": 0,
+          "taxablePaise": 1049,
+          "cgstPaise": 0,
+          "sgstPaise": 0
+        }
+      ],
+      "subtotalPaise": 1049,
+      "discountPaise": 0,
+      "taxablePaise": 1049,
+      "cgstPaise": 0,
+      "sgstPaise": 0,
+      "tipPaise": 0,
+      "roundOffPaise": -49,
+      "totalPaise": 1000
+    }
+  },
+  {
+    "id": "roundoff_none",
+    "description": "Payable is whole rupees",
+    "lines": [
+      {
+        "pricePaise": 10000,
+        "qty": 1,
+        "taxRateBp": 0
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 10000,
+          "discountPaise": 0,
+          "taxablePaise": 10000,
+          "cgstPaise": 0,
+          "sgstPaise": 0
+        }
+      ],
+      "subtotalPaise": 10000,
+      "discountPaise": 0,
+      "taxablePaise": 10000,
+      "cgstPaise": 0,
+      "sgstPaise": 0,
+      "tipPaise": 0,
+      "roundOffPaise": 0,
+      "totalPaise": 10000
+    }
+  },
+  {
+    "id": "roundoff_up_at_99",
+    "description": "Payable ends in .99 → +1",
+    "lines": [
+      {
+        "pricePaise": 1099,
+        "qty": 1,
+        "taxRateBp": 0
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 1099,
+          "discountPaise": 0,
+          "taxablePaise": 1099,
+          "cgstPaise": 0,
+          "sgstPaise": 0
+        }
+      ],
+      "subtotalPaise": 1099,
+      "discountPaise": 0,
+      "taxablePaise": 1099,
+      "cgstPaise": 0,
+      "sgstPaise": 0,
+      "tipPaise": 0,
+      "roundOffPaise": 1,
+      "totalPaise": 1100
+    }
+  },
+  {
+    "id": "roundoff_after_tax",
+    "description": "Round-off applies to the taxed total: ₹105.79 → ₹106",
+    "lines": [
+      {
+        "pricePaise": 10075,
+        "qty": 1,
+        "taxRateBp": 500
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 10075,
+          "discountPaise": 0,
+          "taxablePaise": 10075,
+          "cgstPaise": 252,
+          "sgstPaise": 252
+        }
+      ],
+      "subtotalPaise": 10075,
+      "discountPaise": 0,
+      "taxablePaise": 10075,
+      "cgstPaise": 252,
+      "sgstPaise": 252,
+      "tipPaise": 0,
+      "roundOffPaise": 21,
+      "totalPaise": 10600
+    }
+  }
+]

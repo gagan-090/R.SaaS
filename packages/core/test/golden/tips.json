@@ -1,0 +1,81 @@
+[
+  {
+    "id": "tip_untaxed",
+    "description": "₹20 tip is added after tax and not taxed",
+    "lines": [
+      {
+        "pricePaise": 34000,
+        "qty": 1,
+        "taxRateBp": 500
+      }
+    ],
+    "discount": null,
+    "tipPaise": 2000,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 34000,
+          "discountPaise": 0,
+          "taxablePaise": 34000,
+          "cgstPaise": 850,
+          "sgstPaise": 850
+        }
+      ],
+      "subtotalPaise": 34000,
+      "discountPaise": 0,
+      "taxablePaise": 34000,
+      "cgstPaise": 850,
+      "sgstPaise": 850,
+      "tipPaise": 2000,
+      "roundOffPaise": 0,
+      "totalPaise": 37700
+    }
+  },
+  {
+    "id": "tip_discount_roundoff",
+    "description": "Tip + discount + round-off together",
+    "lines": [
+      {
+        "pricePaise": 12345,
+        "qty": 1,
+        "taxRateBp": 1800
+      },
+      {
+        "pricePaise": 6000,
+        "qty": 1,
+        "taxRateBp": 500
+      }
+    ],
+    "discount": {
+      "type": "percent",
+      "bp": 1000
+    },
+    "tipPaise": 1550,
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 12345,
+          "discountPaise": 1234,
+          "taxablePaise": 11111,
+          "cgstPaise": 1000,
+          "sgstPaise": 1000
+        },
+        {
+          "amountPaise": 6000,
+          "discountPaise": 601,
+          "taxablePaise": 5399,
+          "cgstPaise": 135,
+          "sgstPaise": 135
+        }
+      ],
+      "subtotalPaise": 18345,
+      "discountPaise": 1835,
+      "taxablePaise": 16510,
+      "cgstPaise": 1135,
+      "sgstPaise": 1135,
+      "tipPaise": 1550,
+      "roundOffPaise": -30,
+      "totalPaise": 20300
+    }
+  }
+]

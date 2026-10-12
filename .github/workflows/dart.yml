@@ -15,8 +15,9 @@ jobs:
         working-directory: packages/${{ matrix.package }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dart-lang/setup-dart@v1
-        with: { sdk: stable }
+      # The Dart packages share a pub workspace with the Flutter apps, so resolution needs the Flutter SDK.
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, cache: true }
       - run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
         if: matrix.package == 'hub_server'
       - run: dart pub get

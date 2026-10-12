@@ -1,0 +1,287 @@
+[
+  {
+    "id": "cash_exact",
+    "description": "Exact cash",
+    "lines": [
+      {
+        "pricePaise": 34000,
+        "qty": 1,
+        "taxRateBp": 500
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "payments": [
+      {
+        "mode": "cash",
+        "tenderedPaise": 35700
+      }
+    ],
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 34000,
+          "discountPaise": 0,
+          "taxablePaise": 34000,
+          "cgstPaise": 850,
+          "sgstPaise": 850
+        }
+      ],
+      "subtotalPaise": 34000,
+      "discountPaise": 0,
+      "taxablePaise": 34000,
+      "cgstPaise": 850,
+      "sgstPaise": 850,
+      "tipPaise": 0,
+      "roundOffPaise": 0,
+      "totalPaise": 35700,
+      "payments": {
+        "paidPaise": 35700,
+        "changePaise": 0,
+        "remainingPaise": 0,
+        "settled": true
+      }
+    }
+  },
+  {
+    "id": "cash_with_change",
+    "description": "₹500 note for ₹357",
+    "lines": [
+      {
+        "pricePaise": 34000,
+        "qty": 1,
+        "taxRateBp": 500
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "payments": [
+      {
+        "mode": "cash",
+        "tenderedPaise": 50000
+      }
+    ],
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 34000,
+          "discountPaise": 0,
+          "taxablePaise": 34000,
+          "cgstPaise": 850,
+          "sgstPaise": 850
+        }
+      ],
+      "subtotalPaise": 34000,
+      "discountPaise": 0,
+      "taxablePaise": 34000,
+      "cgstPaise": 850,
+      "sgstPaise": 850,
+      "tipPaise": 0,
+      "roundOffPaise": 0,
+      "totalPaise": 35700,
+      "payments": {
+        "paidPaise": 35700,
+        "changePaise": 14300,
+        "remainingPaise": 0,
+        "settled": true
+      }
+    }
+  },
+  {
+    "id": "split_cash_upi",
+    "description": "Pay across modes: ₹200 UPI then cash for the rest",
+    "lines": [
+      {
+        "pricePaise": 34000,
+        "qty": 1,
+        "taxRateBp": 500
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "payments": [
+      {
+        "mode": "upi",
+        "amountPaise": 20000
+      },
+      {
+        "mode": "cash",
+        "tenderedPaise": 20000
+      }
+    ],
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 34000,
+          "discountPaise": 0,
+          "taxablePaise": 34000,
+          "cgstPaise": 850,
+          "sgstPaise": 850
+        }
+      ],
+      "subtotalPaise": 34000,
+      "discountPaise": 0,
+      "taxablePaise": 34000,
+      "cgstPaise": 850,
+      "sgstPaise": 850,
+      "tipPaise": 0,
+      "roundOffPaise": 0,
+      "totalPaise": 35700,
+      "payments": {
+        "paidPaise": 35700,
+        "changePaise": 4300,
+        "remainingPaise": 0,
+        "settled": true
+      }
+    }
+  },
+  {
+    "id": "split_three_modes",
+    "description": "UPI + card + cash with change",
+    "lines": [
+      {
+        "pricePaise": 34000,
+        "qty": 1,
+        "taxRateBp": 500
+      },
+      {
+        "pricePaise": 12000,
+        "qty": 2,
+        "taxRateBp": 1200
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "payments": [
+      {
+        "mode": "upi",
+        "amountPaise": 30000
+      },
+      {
+        "mode": "card",
+        "amountPaise": 20000
+      },
+      {
+        "mode": "cash",
+        "tenderedPaise": 20000
+      }
+    ],
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 34000,
+          "discountPaise": 0,
+          "taxablePaise": 34000,
+          "cgstPaise": 850,
+          "sgstPaise": 850
+        },
+        {
+          "amountPaise": 24000,
+          "discountPaise": 0,
+          "taxablePaise": 24000,
+          "cgstPaise": 1440,
+          "sgstPaise": 1440
+        }
+      ],
+      "subtotalPaise": 58000,
+      "discountPaise": 0,
+      "taxablePaise": 58000,
+      "cgstPaise": 2290,
+      "sgstPaise": 2290,
+      "tipPaise": 0,
+      "roundOffPaise": 20,
+      "totalPaise": 62600,
+      "payments": {
+        "paidPaise": 62600,
+        "changePaise": 7400,
+        "remainingPaise": 0,
+        "settled": true
+      }
+    }
+  },
+  {
+    "id": "upi_overpay_rejected",
+    "description": "UPI cannot exceed the amount due",
+    "lines": [
+      {
+        "pricePaise": 34000,
+        "qty": 1,
+        "taxRateBp": 500
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "payments": [
+      {
+        "mode": "upi",
+        "amountPaise": 40000
+      }
+    ],
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 34000,
+          "discountPaise": 0,
+          "taxablePaise": 34000,
+          "cgstPaise": 850,
+          "sgstPaise": 850
+        }
+      ],
+      "subtotalPaise": 34000,
+      "discountPaise": 0,
+      "taxablePaise": 34000,
+      "cgstPaise": 850,
+      "sgstPaise": 850,
+      "tipPaise": 0,
+      "roundOffPaise": 0,
+      "totalPaise": 35700,
+      "payments": {
+        "error": "overpayment"
+      }
+    }
+  },
+  {
+    "id": "partial_unsettled",
+    "description": "Part-paid bill keeps a remainder",
+    "lines": [
+      {
+        "pricePaise": 34000,
+        "qty": 1,
+        "taxRateBp": 500
+      }
+    ],
+    "discount": null,
+    "tipPaise": 0,
+    "payments": [
+      {
+        "mode": "card",
+        "amountPaise": 10000
+      }
+    ],
+    "expected": {
+      "lines": [
+        {
+          "amountPaise": 34000,
+          "discountPaise": 0,
+          "taxablePaise": 34000,
+          "cgstPaise": 850,
+          "sgstPaise": 850
+        }
+      ],
+      "subtotalPaise": 34000,
+      "discountPaise": 0,
+      "taxablePaise": 34000,
+      "cgstPaise": 850,
+      "sgstPaise": 850,
+      "tipPaise": 0,
+      "roundOffPaise": 0,
+      "totalPaise": 35700,
+      "payments": {
+        "paidPaise": 10000,
+        "changePaise": 0,
+        "remainingPaise": 25700,
+        "settled": false
+      }
+    }
+  }
+]

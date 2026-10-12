@@ -1,0 +1,30 @@
+# Dart/Flutter workspace root (pub workspaces + melos 7). TypeScript lives in the pnpm workspace.
+name: rsaas_workspace
+publish_to: none
+environment:
+  sdk: ^3.6.0
+
+workspace:
+  - packages/core
+
+dev_dependencies:
+  melos: ^7.0.0
+
+melos:
+  scripts:
+    analyze:
+      run: dart analyze --fatal-infos
+      exec: { concurrency: 1 }
+      packageFilters: { flutter: false }
+    test:dart:
+      run: dart test
+      exec: { concurrency: 1 }
+      packageFilters: { flutter: false, dirExists: test }
+    analyze:flutter:
+      run: flutter analyze
+      exec: { concurrency: 1 }
+      packageFilters: { flutter: true }
+    test:flutter:
+      run: flutter test
+      exec: { concurrency: 1 }
+      packageFilters: { flutter: true, dirExists: test }
