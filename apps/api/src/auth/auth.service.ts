@@ -137,14 +137,10 @@ export class AuthService {
 
   /** Rotating refresh: each token is single-use; reusing a rotated token revokes the whole family (theft signal). */
   async refresh(refreshToken: string, meta: AuditMeta & { userAgent?: string }): Promise<TokenPair> {
-    return this.db.platform(async (tx) => {
+    const outcome = await this.db.platform(async (tx) => {
       const row = await tx.refreshToken.findUnique({ where: { tokenHash: sha256(refreshToken) } });
       if (!row) throw unauthorized('invalid_refresh', 'Invalid refresh token');
-      if (row.revokedAt) {
-        await tx.refreshToken.updateMany({ where: { familyId: row.familyId, revokedAt: null }, data: { revokedAt: new Date() } });
-        await this.audit.record({ action: 'auth.refresh_reuse_detected', objectType: row.subjectType, objectId: row.subjectId }, null, meta, tx);
-        throw unauthorized('refresh_reused', 'Refresh token reuse detected; please sign in again');
-      }
+      if (row.revokedAt) return { reused: row, pair: null }; // handled outside so the revocation is not rolled back
       if (row.expiresAt < new Date()) throw unauthorized('refresh_expired', 'Refresh token expired');
       let tid: string | undefined;
       if (row.subjectType === 'user') {
@@ -155,11 +151,21 @@ export class AuthService {
         const a = await tx.platformAdmin.findUnique({ where: { id: row.subjectId } });
         if (!a || a.status !== 'active') throw unauthorized('inactive_account');
       }
+      // Claim the old token first; a concurrent refresh with the same token then sees it revoked.
+      const claimed = await tx.refreshToken.updateMany({ where: { id: row.id, revokedAt: null }, data: { revokedAt: new Date() } });
+      if (claimed.count === 0) return { reused: row, pair: null };
       const pair = await this.issueTokens({ typ: row.subjectType, id: row.subjectId, tid }, meta, row.familyId, tx);
       const next = await tx.refreshToken.findUnique({ where: { tokenHash: sha256(pair.refreshToken) } });
-      await tx.refreshToken.update({ where: { id: row.id }, data: { revokedAt: new Date(), replacedBy: next?.id } });
-      return pair;
+      await tx.refreshToken.update({ where: { id: row.id }, data: { replacedBy: next?.id } });
+      return { pair, reused: null };
     });
+    if (outcome.pair) return outcome.pair;
+    const row = outcome.reused!;
+    await this.db.platform(async (tx) => {
+      await tx.refreshToken.updateMany({ where: { familyId: row.familyId, revokedAt: null }, data: { revokedAt: new Date() } });
+      await this.audit.record({ action: 'auth.refresh_reuse_detected', objectType: row.subjectType, objectId: row.subjectId }, null, meta, tx);
+    });
+    throw unauthorized('refresh_reused', 'Refresh token reuse detected; please sign in again');
   }
 
   async logout(refreshToken: string, actor: Actor | null, meta: AuditMeta) {

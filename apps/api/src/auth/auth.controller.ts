@@ -11,7 +11,8 @@ import { zbody } from '../common/validation';
 import { DbService } from '../db/db.service';
 import { AuthService } from './auth.service';
 
-const authLimit = () => ({ default: { limit: loadEnv().AUTH_RATE_LIMIT_PER_MIN, ttl: 60_000 } });
+// Resolved per request so the configured limit (AUTH_RATE_LIMIT_PER_MIN, default 10/min/IP) always applies.
+const authLimit = () => ({ default: { limit: () => loadEnv().AUTH_RATE_LIMIT_PER_MIN, ttl: 60_000 } });
 
 const LoginBody = z.object({ email: z.string().email(), password: z.string().min(1).max(256) });
 const MfaVerifyBody = z

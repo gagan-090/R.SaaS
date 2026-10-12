@@ -2,7 +2,7 @@
 module.exports = {
   rootDir: '.',
   testRegex: 'test/.*\\.spec\\.ts$',
-  transform: { '^.+\\.ts$': ['ts-jest', { isolatedModules: true }] },
+  transform: { '^.+\\.ts$': ['ts-jest', {}] },
   testEnvironment: 'node',
   setupFiles: ['<rootDir>/test/setup-env.ts'],
   testTimeout: 60000,
