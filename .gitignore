@@ -1,0 +1,44 @@
+# Secrets — never commit
+.env
+.env.local
+.env.*.local
+*.pem
+*.pfx
+*.jks
+*.keystore
+*.p12
+*.key
+
+# Node
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Dart / Flutter
+.dart_tool/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec_overrides.yaml
+*.iml
+.idea/
+**/android/local.properties
+**/ios/Flutter/Generated.xcconfig
+**/*.g.dart.bak
+
+# OS / editors
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+
+# Local data
+*.sqlite
+*.sqlite-journal
+*.db
+.localdb/
+backups/
+
+# Local leftovers (see MORNING.md): duplicate PDF, original style file (copied to packages/ui_kit/STYLE.md)
+docs/*(1).pdf
+pakages/

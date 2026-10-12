@@ -1,0 +1,49 @@
+name: api
+on:
+  push:
+    paths: ['apps/api/**', 'pnpm-lock.yaml', '.github/workflows/api.yml']
+  pull_request:
+    paths: ['apps/api/**', 'pnpm-lock.yaml', '.github/workflows/api.yml']
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: rsaas
+          POSTGRES_USER: rsaas_owner
+          POSTGRES_PASSWORD: ci-owner-pw
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U rsaas_owner -d rsaas" --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      # Throwaway CI-only values; generated keys come from the step below.
+      NODE_ENV: test
+      DATABASE_URL: postgresql://rsaas_app:ci-app-pw@localhost:5432/rsaas?schema=public
+      MIGRATION_DATABASE_URL: postgresql://rsaas_owner:ci-owner-pw@localhost:5432/rsaas?schema=public
+      BOOTSTRAP_SUPERADMIN_EMAIL: admin@example.com
+      BOOTSTRAP_SUPERADMIN_PASSWORD: ci-Admin-pass-123
+      CORS_ORIGINS: http://localhost:8080
+      PUBLIC_API_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Create app role
+        run: |
+          PGPASSWORD=ci-owner-pw psql -h localhost -U rsaas_owner -d rsaas -c \
+            "CREATE ROLE rsaas_app LOGIN PASSWORD 'ci-app-pw' NOSUPERUSER NOBYPASSRLS; GRANT CONNECT ON DATABASE rsaas TO rsaas_app;"
+      - name: Generate throwaway keys
+        run: |
+          node -e "const c=require('crypto');const {privateKey,publicKey}=c.generateKeyPairSync('ed25519');const r=n=>c.randomBytes(n).toString('base64');
+          console.log('JWT_ACCESS_SECRET='+r(48));console.log('JWT_REFRESH_SECRET='+r(48));console.log('MFA_ENCRYPTION_KEY='+r(32));
+          console.log('LICENSE_SIGNING_PRIVATE_KEY='+privateKey.export({format:'der',type:'pkcs8'}).toString('base64'));
+          console.log('LICENSE_PUBLIC_KEY='+publicKey.export({format:'der',type:'spki'}).toString('base64'));" >> "$GITHUB_ENV"
+      - run: pnpm --filter @rsaas/api lint
+      - run: pnpm --filter @rsaas/api prisma:generate
+      - run: pnpm --filter @rsaas/api db:migrate:deploy
+      - run: pnpm --filter @rsaas/api db:seed
+      - run: pnpm --filter @rsaas/api test

@@ -1,0 +1,49 @@
+# Local dev stack. Secrets come from ../.env.local (run infra/scripts/gen-dev-secrets.sh first).
+# Usage (from repo root):  docker compose -f infra/docker-compose.yml --env-file .env.local up -d db
+name: rsaas
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: rsaas
+      POSTGRES_USER: rsaas_owner
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run infra/scripts/gen-dev-secrets.sh}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?run infra/scripts/gen-dev-secrets.sh}
+    ports:
+      - "5433:5432" # 5433 on the host so it never collides with a locally installed Postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rsaas_owner -d rsaas"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    env_file: ../.env.local
+    environment:
+      DATABASE_URL: postgresql://rsaas_app:${APP_DB_PASSWORD}@db:5432/rsaas?schema=public
+      MIGRATION_DATABASE_URL: postgresql://rsaas_owner:${POSTGRES_PASSWORD}@db:5432/rsaas?schema=public
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2
+    profiles: ["prod"] # unused in dev; production TLS terminator
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [api]
+
+volumes:
+  pgdata:
+  caddy_data:

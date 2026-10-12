@@ -1,0 +1,24 @@
+name: dart
+on:
+  push:
+    paths: ['packages/core/**', 'packages/hub_server/**', '.github/workflows/dart.yml']
+  pull_request:
+    paths: ['packages/core/**', 'packages/hub_server/**', '.github/workflows/dart.yml']
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package: [core, hub_server]
+    defaults:
+      run:
+        working-directory: packages/${{ matrix.package }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with: { sdk: stable }
+      - run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+        if: matrix.package == 'hub_server'
+      - run: dart pub get
+      - run: dart analyze --fatal-infos
+      - run: dart test

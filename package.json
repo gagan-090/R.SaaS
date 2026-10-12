@@ -1,0 +1,13 @@
+{
+  "name": "restaurant-saas",
+  "private": true,
+  "packageManager": "pnpm@11.23.0",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "api:dev": "pnpm --filter @rsaas/api start:dev",
+    "api:test": "pnpm --filter @rsaas/api test",
+    "api:lint": "pnpm --filter @rsaas/api lint",
+    "secrets:dev": "bash infra/scripts/gen-dev-secrets.sh",
+    "secret-scan": "bash infra/scripts/secret-scan.sh"
+  }
+}
