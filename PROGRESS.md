@@ -76,3 +76,13 @@ Test: `pnpm --filter @rsaas/api test` → **73 passed** (adds `sync.spec.ts`: sa
 Bug found: same-millisecond UUIDv7 ordering was random → monotonic counter.
 Not done in M5: KDS status endpoint, inventory, shifts (Premium, later milestones); waiter "assigned tables" scoping (no assignment data yet);
 cloud-side projection of synced events into orders/bills tables (events are stored in `sync_events`; projection + reconciliation report is Day 10 work).
+
+### M6 Design system and admin portal — DONE (23:52 IST)
+Built: `packages/ui_kit` (`rsaas_ui_kit`) per `STYLE.md` — colour/spacing/radius tokens, service (dark) + back-office (light) themes,
+Fraunces/DM Sans/DM Mono via google_fonts, Primary/Secondary/Success/Danger buttons, StatusChip, OfflineBanner, Loading/Empty/Error states,
+HPDialog + ReasonDialog, NumericKeypad, PlateIcon, VegMark, QtyStepper, CategoryChip, TableTile (free/ordering/served/bill printed/reserved), OrderCard.
+`apps/admin_web` (`rsaas_admin_web`, Riverpod + go_router) — P1–P11 wired to the real API (in-memory tokens, refresh on 401).
+`docs/SCREEN_MAP.md`.
+Test: `cd packages/ui_kit && flutter analyze && flutter test` → No issues; **+6: All tests passed!**
+Test: `cd apps/admin_web && flutter analyze && flutter test` → No issues; **+4: All tests passed!** (driven by the recorded contract fixtures)
+Build: `flutter build web --release --dart-define=API_BASE_URL=…` → **✓ Built build/web**.

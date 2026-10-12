@@ -28,3 +28,6 @@ Format: date · decision · why · alternative rejected.
 - 2026-10-12 · Hub UUIDv7 is monotonic within a millisecond (12-bit counter) · lines added in one request must keep their order; found by a flaky test · random-only v7.
 - 2026-10-12 · Hub PIN check verifies the cloud's Argon2id PHC strings with pointycastle (cross-checked against a node-argon2 hash in tests) · one hash format end to end · a second, weaker PIN hash for the hub.
 - 2026-10-12 · Hub LAN TLS: self-signed RSA-2048 cert generated on first start (basic_utils), SHA-256 fingerprint shown in the pairing QR and pinned by clients · no CA on a restaurant LAN · plain HTTP on Wi-Fi.
+- 2026-10-12 · Admin portal keeps tokens in memory only (refresh on 401; browser reload = sign in again) · no tokens in localStorage, where any XSS could read them · localStorage persistence. **Confirm the UX with Gagan.**
+- 2026-10-12 · Flutter widget tests run against the recorded contract fixtures (`packages/contracts/fixtures`) through a MockClient · a contract change that breaks a screen fails CI · hand-written mock JSON in each app.
+- 2026-10-12 · Riverpod 2.6 + go_router 14 (Playbook stack), `admin_web` on Dart ≥ 3.8 for null-aware map entries · known-stable APIs · Riverpod 3 migration risk overnight.

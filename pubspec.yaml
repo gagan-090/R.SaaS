@@ -8,6 +8,7 @@ workspace:
   - packages/core
   - packages/hub_server
   - packages/ui_kit
+  - apps/admin_web
 
 dev_dependencies:
   melos: ^7.0.0

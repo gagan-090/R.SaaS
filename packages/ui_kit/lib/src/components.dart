@@ -46,15 +46,16 @@ class _HPButton extends StatelessWidget {
               onTap: enabled ? onPressed : null,
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: HPSpace.x2),
-                child: Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [
+                // scaleDown: a long label in a narrow slot shrinks instead of overflowing
+                child: FittedBox(fit: BoxFit.scaleDown, child: Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [
                   if (busy)
                     SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: textColor))
                   else if (icon != null)
                     Icon(icon, size: 20, color: textColor),
                   if (busy || icon != null) const SizedBox(width: HPSpace.sm),
-                  Flexible(child: Text(label, style: HPType.label(textColor).copyWith(fontSize: 16), overflow: TextOverflow.ellipsis)),
+                  Text(label, style: HPType.label(textColor).copyWith(fontSize: 16)),
                   if (trailing != null) ...[const SizedBox(width: HPSpace.sm), Icon(trailing, size: 20, color: textColor)],
-                ]),
+                ])),
               ),
             ),
           ),
@@ -133,7 +134,7 @@ class StatusChip extends StatelessWidget {
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         if (icon != null) Icon(icon, size: 14, color: textColor) else Container(width: 8, height: 8, decoration: BoxDecoration(color: tone.color, shape: BoxShape.circle)),
         const SizedBox(width: HPSpace.sm),
-        Text(label, style: HPType.label(textColor).copyWith(fontSize: 13)),
+        Flexible(child: Text(label, style: HPType.label(textColor).copyWith(fontSize: 13), overflow: TextOverflow.ellipsis, maxLines: 1)),
       ]),
     );
   }
