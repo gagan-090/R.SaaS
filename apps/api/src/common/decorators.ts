@@ -1,4 +1,5 @@
 import { SetMetadata } from '@nestjs/common';
+import { loadEnv } from '../config/env';
 import type { FeatureFlag, PermissionKey } from './permissions';
 
 export const IS_PUBLIC = 'isPublic';
@@ -20,3 +21,6 @@ export const AllowEnrollmentToken = () => SetMetadata(ALLOW_ENROLL_TOKEN, true);
 export const RequiresFeature = (flag: FeatureFlag) => SetMetadata(FEATURE, flag);
 /** Write route: AuditInterceptor records this action on success. */
 export const Audited = (action: string) => SetMetadata(AUDIT_ACTION, action);
+
+/** @Throttle() options for credential/token endpoints: AUTH_RATE_LIMIT_PER_MIN (default 10) per IP, resolved per request. */
+export const authLimit = () => ({ default: { limit: () => loadEnv().AUTH_RATE_LIMIT_PER_MIN, ttl: 60_000 } });

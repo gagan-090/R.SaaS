@@ -1,0 +1,16 @@
+{
+  "method": "POST",
+  "path": "/api/v1/auth/accept-invite",
+  "example": "ok",
+  "auth": "none",
+  "request": {
+    "body": {
+      "token": "<token>",
+      "password": "<password>"
+    }
+  },
+  "status": 200,
+  "response": {
+    "email": "admin-mv5jtfoe-b1fca2@example.test"
+  }
+}

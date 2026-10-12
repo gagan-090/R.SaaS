@@ -13,7 +13,7 @@
     "db:migrate:dev": "node scripts/with-migration-url.js prisma migrate dev",
     "db:seed": "node scripts/with-migration-url.js ts-node --transpile-only prisma/seed.ts",
     "db:reset": "node scripts/with-migration-url.js prisma migrate reset --force --skip-seed",
-    "openapi": "ts-node --transpile-only scripts/gen-openapi.ts"
+    "openapi": "ts-node --transpile-only scripts/gen-contracts.ts"
   },
   "prisma": {
     "seed": "ts-node --transpile-only prisma/seed.ts"

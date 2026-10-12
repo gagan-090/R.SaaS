@@ -1,0 +1,19 @@
+{
+  "method": "GET",
+  "path": "/api/v1/menu/categories",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {},
+  "status": 200,
+  "response": [
+    {
+      "id": "01a1313d-8e5a-75f0-94ce-d7b0b2c80465",
+      "tenantId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+      "branchId": null,
+      "name": "Mains",
+      "sortOrder": 1,
+      "seq": "426",
+      "deleted": false
+    }
+  ]
+}

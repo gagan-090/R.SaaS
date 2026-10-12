@@ -1,0 +1,22 @@
+{
+  "method": "POST",
+  "path": "/api/v1/restaurants",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {
+    "body": {
+      "ownerEmail": "owner-mv5jtfbi-7556bc@example.test",
+      "ownerName": "Asha Rao",
+      "restaurantName": "Spice Route",
+      "gstin": "27AAAPA1234A1Z5",
+      "address": "FC Road, Pune",
+      "planCode": "premium"
+    }
+  },
+  "status": 201,
+  "response": {
+    "registrationId": "01a1313d-89ea-71f0-9ab0-839e704ce195",
+    "status": "pending_verification",
+    "ownerEmail": "owner-mv5jtfbi-7556bc@example.test"
+  }
+}

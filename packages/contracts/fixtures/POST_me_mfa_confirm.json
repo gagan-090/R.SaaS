@@ -1,0 +1,31 @@
+{
+  "method": "POST",
+  "path": "/api/v1/me/mfa/confirm",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {
+    "body": {
+      "code": "500662"
+    }
+  },
+  "status": 200,
+  "response": {
+    "recoveryCodes": [
+      "<recovery-code-1>",
+      "<recovery-code-2>",
+      "<recovery-code-3>",
+      "<recovery-code-4>",
+      "<recovery-code-5>",
+      "<recovery-code-6>",
+      "<recovery-code-7>",
+      "<recovery-code-8>",
+      "<recovery-code-9>",
+      "<recovery-code-10>"
+    ],
+    "tokens": {
+      "accessToken": "<accessToken>",
+      "refreshToken": "<refreshToken>",
+      "expiresIn": 900
+    }
+  }
+}

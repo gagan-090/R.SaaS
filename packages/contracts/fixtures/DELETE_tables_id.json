@@ -1,0 +1,9 @@
+{
+  "method": "DELETE",
+  "path": "/api/v1/tables/:id",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {},
+  "status": 204,
+  "response": {}
+}

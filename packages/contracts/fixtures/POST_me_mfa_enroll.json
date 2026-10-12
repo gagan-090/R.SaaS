@@ -1,0 +1,12 @@
+{
+  "method": "POST",
+  "path": "/api/v1/me/mfa/enroll",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {},
+  "status": 200,
+  "response": {
+    "secret": "<secret>",
+    "otpauthUrl": "<otpauthUrl>"
+  }
+}

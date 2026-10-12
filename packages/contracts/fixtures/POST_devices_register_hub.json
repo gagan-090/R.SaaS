@@ -1,0 +1,19 @@
+{
+  "method": "POST",
+  "path": "/api/v1/devices/register-hub",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {
+    "body": {
+      "branchId": "01a1313d-8a54-71a0-8ad1-321b14fd11ad",
+      "name": "Cashier PC",
+      "platform": "windows"
+    }
+  },
+  "status": 201,
+  "response": {
+    "deviceId": "01a1313d-8f07-7872-9580-052ccba43e80",
+    "deviceToken": "<deviceToken>",
+    "branchId": "01a1313d-8a54-71a0-8ad1-321b14fd11ad"
+  }
+}

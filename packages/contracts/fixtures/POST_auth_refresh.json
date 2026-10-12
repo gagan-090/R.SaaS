@@ -1,0 +1,17 @@
+{
+  "method": "POST",
+  "path": "/api/v1/auth/refresh",
+  "example": "ok",
+  "auth": "none",
+  "request": {
+    "body": {
+      "refreshToken": "<refreshToken>"
+    }
+  },
+  "status": 200,
+  "response": {
+    "accessToken": "<accessToken>",
+    "refreshToken": "<refreshToken>",
+    "expiresIn": 900
+  }
+}

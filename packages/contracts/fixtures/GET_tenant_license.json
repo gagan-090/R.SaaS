@@ -1,0 +1,40 @@
+{
+  "method": "GET",
+  "path": "/api/v1/tenant/license",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {},
+  "status": 200,
+  "response": {
+    "state": "active",
+    "readOnly": false,
+    "features": [
+      "tables",
+      "orders.dinein",
+      "orders.takeaway",
+      "menu",
+      "billing",
+      "offline.single",
+      "floors",
+      "multi_cashier",
+      "waiter_app",
+      "lan_hub",
+      "franchise",
+      "roles.extended",
+      "kds",
+      "recipes",
+      "menu.approval",
+      "inventory",
+      "shifts"
+    ],
+    "limits": {
+      "branches": null,
+      "staffPerBranch": null,
+      "floorsPerBranch": null,
+      "devicesPerBranch": null,
+      "concurrentCashiers": null
+    },
+    "token": "<token>",
+    "endsAt": "2026-12-12T17:51:19.133Z"
+  }
+}

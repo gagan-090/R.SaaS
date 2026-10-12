@@ -1,0 +1,50 @@
+{
+  "method": "POST",
+  "path": "/api/v1/sync/push",
+  "example": "duplicate_and_rejected",
+  "auth": "device",
+  "request": {
+    "body": {
+      "events": [
+        {
+          "eventId": "01a1313d-8f0c-782d-a3a0-2b78263a1719",
+          "entity": "order",
+          "entityId": "01a1313d-8f0c-769d-8640-abca23600625",
+          "op": "create",
+          "payload": {
+            "branchId": "01a1313d-8a54-71a0-8ad1-321b14fd11ad",
+            "type": "dine_in",
+            "tableId": "01a1313d-8da2-7400-bd57-ca845c180dec"
+          },
+          "createdAt": "2026-10-12T17:51:20.332Z"
+        },
+        {
+          "eventId": "01a1313d-8f20-730c-83ae-ec102b08efb5",
+          "entity": "menu_item",
+          "entityId": "01a1313d-8f0c-769d-8640-abca23600625",
+          "op": "create",
+          "payload": {
+            "branchId": "01a1313d-8a54-71a0-8ad1-321b14fd11ad",
+            "type": "dine_in",
+            "tableId": "01a1313d-8da2-7400-bd57-ca845c180dec"
+          },
+          "createdAt": "2026-10-12T17:51:20.332Z"
+        }
+      ]
+    }
+  },
+  "status": 200,
+  "response": {
+    "results": [
+      {
+        "eventId": "01a1313d-8f0c-782d-a3a0-2b78263a1719",
+        "result": "duplicate"
+      },
+      {
+        "eventId": "01a1313d-8f20-730c-83ae-ec102b08efb5",
+        "result": "rejected",
+        "reason": "entity \"menu_item\" is not hub-owned"
+      }
+    ]
+  }
+}

@@ -1,0 +1,226 @@
+{
+  "method": "GET",
+  "path": "/api/v1/restaurants",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {
+    "query": {
+      "status": "active",
+      "plan": "premium",
+      "page": "1",
+      "pageSize": "25"
+    }
+  },
+  "status": 200,
+  "response": {
+    "items": [
+      {
+        "id": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+        "code": "R000074",
+        "name": "Spice Route",
+        "ownerEmail": "owner-mv5jtfbi-7556bc@example.test",
+        "status": "active",
+        "statusReason": null,
+        "plan": "premium",
+        "licenseEndsAt": "2026-11-12T17:51:19.133Z",
+        "branches": 1,
+        "createdAt": "2026-10-12T17:51:19.122Z"
+      },
+      {
+        "id": "01a1313d-332f-7760-8f57-83241e5cd960",
+        "code": "R000073",
+        "name": "Spice Route Kitchen",
+        "ownerEmail": "owner-mv5jsy37-aa9dec@example.test",
+        "status": "active",
+        "statusReason": "Payment received",
+        "plan": "premium",
+        "licenseEndsAt": "2026-12-12T17:50:56.839Z",
+        "branches": 1,
+        "createdAt": "2026-10-12T17:50:56.816Z"
+      },
+      {
+        "id": "01a1313b-4f04-7161-8834-329594b0bdfe",
+        "code": "R000072",
+        "name": "Resto-mv5jqahd-f2d447",
+        "ownerEmail": "owner-mv5jqahd-37dca1@example.test",
+        "status": "active",
+        "statusReason": null,
+        "plan": "premium",
+        "licenseEndsAt": "2026-11-12T17:48:52.874Z",
+        "branches": 1,
+        "createdAt": "2026-10-12T17:48:52.868Z"
+      },
+      {
+        "id": "01a1313b-4169-7b53-b262-695c8b536486",
+        "code": "R000066",
+        "name": "Resto-mv5jq7su-491b72",
+        "ownerEmail": "owner-mv5jq7su-78f220@example.test",
+        "status": "active",
+        "statusReason": null,
+        "plan": "premium",
+        "licenseEndsAt": "2026-11-12T17:48:49.393Z",
+        "branches": 1,
+        "createdAt": "2026-10-12T17:48:49.385Z"
+      },
+      {
+        "id": "01a1313b-3cc4-7473-863f-e302244680e3",
+        "code": "R000063",
+        "name": "Resto-mv5jq6vo-179e21",
+        "ownerEmail": "owner-mv5jq6vo-4aa6c6@example.test",
+        "status": "active",
+        "statusReason": null,
+        "plan": "premium",
+        "licenseEndsAt": "2026-11-12T17:48:48.207Z",
+        "branches": 1,
+        "createdAt": "2026-10-12T17:48:48.196Z"
+      },
+      {
+        "id": "01a1313a-1023-7d63-acc7-47a2fd026a60",
+        "code": "R000054",
+        "name": "Resto-mv5jojid-33d903",
+        "ownerEmail": "owner-mv5jojic-7e20cd@example.test",
+        "status": "active",
+        "statusReason": null,
+        "plan": "premium",
+        "licenseEndsAt": "2026-11-12T17:47:31.242Z",
+        "branches": 1,
+        "createdAt": "2026-10-12T17:47:31.236Z"
+      },
+      {
+        "id": "01a1313a-0cc2-7571-ae5b-6a44d2e4ffe5",
+        "code": "R000051",
+        "name": "Resto-mv5joiu5-5ad597",
+        "ownerEmail": "owner-mv5joiu5-42322a@example.test",
+        "status": "active",
+        "statusReason": null,
+        "plan": "premium",
+        "licenseEndsAt": "2026-11-12T17:47:30.380Z",
+        "branches": 1,
+        "createdAt": "2026-10-12T17:47:30.370Z"
+      },
+      {
+        "id": "01a13139-ceeb-7a22-b951-28c90c574513",
+        "code": "R000048",
+        "name": "Resto-mv5jo6mt-530e22",
+        "ownerEmail": "owner-mv5jo6ms-c71845@example.test",
+        "status": "active",
+        "statusReason": null,
+        "plan": "premium",
+        "licenseEndsAt": "2026-11-12T17:47:14.545Z",
+        "branches": 1,
+        "createdAt": "2026-10-12T17:47:14.540Z"
+      },
+      {
+        "id": "01a13139-c1cd-72b3-9e76-e7992f04782c",
+        "code": "R000042",
+        "name": "Resto-mv5jo3yc-1610a3",
+        "ownerEmail": "owner-mv5jo3yb-25aa4a@example.test",
+        "status": "active",
+        "statusReason": null,
+        "plan": "premium",
+        "licenseEndsAt": "2026-11-12T17:47:11.191Z",
+        "branches": 1,
+        "createdAt": "2026-10-12T17:47:11.181Z"
+      },
+      {
+        "id": "01a13139-bd13-7102-91c5-ff8c54f1efdd",
+        "code": "R000039",
+        "name": "Resto-mv5jo32t-a338ec",
+        "ownerEmail": "owner-mv5jo32t-0bbe02@example.test",
+        "status": "active",
+        "statusReason": null,
+        "plan": "premium",
+        "licenseEndsAt": "2026-11-12T17:47:09.979Z",
+        "branches": 1,
+        "createdAt": "2026-10-12T17:47:09.972Z"
+      },
+      {
+        "id": "01a13139-25c3-7392-b02d-12aea320fabb",
+        "code": "R000033",
+        "name": "Resto-mv5jn97x-0be980",
+        "ownerEmail": "owner-mv5jn97x-92dae8@example.test",
+        "status": "active",
+        "statusReason": null,
+        "plan": "premium",
+        "licenseEndsAt": "2026-11-12T17:46:31.241Z",
+        "branches": 1,
+        "createdAt": "2026-10-12T17:46:31.235Z"
+      },
+      {
+        "id": "01a13139-22d8-7bd2-a381-df3175ddd512",
+        "code": "R000030",
+        "name": "Resto-mv5jn8lw-c2688f",
+        "ownerEmail": "owner-mv5jn8lw-94bc0d@example.test",
+        "status": "active",
+        "statusReason": null,
+        "plan": "premium",
+        "licenseEndsAt": "2026-11-12T17:46:30.498Z",
+        "branches": 1,
+        "createdAt": "2026-10-12T17:46:30.489Z"
+      },
+      {
+        "id": "01a13138-c648-7f52-bc20-76a6bf2a3c62",
+        "code": "R000023",
+        "name": "Resto-mv5jmqda-ac1fb7",
+        "ownerEmail": "owner-mv5jmqda-989d18@example.test",
+        "status": "active",
+        "statusReason": null,
+        "plan": "premium",
+        "licenseEndsAt": "2026-11-12T17:46:06.797Z",
+        "branches": 1,
+        "createdAt": "2026-10-12T17:46:06.792Z"
+      },
+      {
+        "id": "01a13138-c387-7e62-9f23-15426f119d6f",
+        "code": "R000020",
+        "name": "Resto-mv5jmptp-ce3ff3",
+        "ownerEmail": "owner-mv5jmptp-d584f7@example.test",
+        "status": "active",
+        "statusReason": null,
+        "plan": "premium",
+        "licenseEndsAt": "2026-11-12T17:46:06.092Z",
+        "branches": 1,
+        "createdAt": "2026-10-12T17:46:06.087Z"
+      },
+      {
+        "id": "01a13137-5654-7310-bbf2-ddd549741a31",
+        "code": "R000017",
+        "name": "Resto-mv5jkpnz-5420cb",
+        "ownerEmail": "owner-mv5jkpny-757704@example.test",
+        "status": "active",
+        "statusReason": null,
+        "plan": "premium",
+        "licenseEndsAt": "2026-11-12T17:44:32.604Z",
+        "branches": 1,
+        "createdAt": "2026-10-12T17:44:32.596Z"
+      },
+      {
+        "id": "01a13136-e9fd-77f0-8ca1-f9887f0d03e7",
+        "code": "R000013",
+        "name": "Resto-mv5jk499-66b7dc",
+        "ownerEmail": "owner-mv5jk498-df72f7@example.test",
+        "status": "active",
+        "statusReason": null,
+        "plan": "premium",
+        "licenseEndsAt": "2026-11-12T17:44:04.872Z",
+        "branches": 1,
+        "createdAt": "2026-10-12T17:44:04.861Z"
+      },
+      {
+        "id": "01a13135-46ad-79a1-916e-464779757adf",
+        "code": "R000011",
+        "name": "Resto-mv5jhtg8-9e7726",
+        "ownerEmail": "owner-mv5jhtg8-f7f4e5@example.test",
+        "status": "active",
+        "statusReason": null,
+        "plan": "premium",
+        "licenseEndsAt": "2026-11-12T17:42:17.523Z",
+        "branches": 1,
+        "createdAt": "2026-10-12T17:42:17.518Z"
+      }
+    ],
+    "total": 17,
+    "page": 1,
+    "pageSize": 25
+  }
+}

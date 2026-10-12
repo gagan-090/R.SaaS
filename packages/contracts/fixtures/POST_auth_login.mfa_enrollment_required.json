@@ -1,0 +1,17 @@
+{
+  "method": "POST",
+  "path": "/api/v1/auth/login",
+  "example": "mfa_enrollment_required",
+  "auth": "none",
+  "request": {
+    "body": {
+      "email": "admin-mv5jteyx-65eecb@example.test",
+      "password": "<password>"
+    }
+  },
+  "status": 200,
+  "response": {
+    "status": "mfa_enrollment_required",
+    "enrollmentToken": "<enrollmentToken>"
+  }
+}

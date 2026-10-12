@@ -1,0 +1,17 @@
+{
+  "method": "POST",
+  "path": "/api/v1/platform/admins/:id/mfa/reset",
+  "example": "error_step_up_required",
+  "auth": "bearer",
+  "request": {
+    "body": {
+      "reason": "no step-up"
+    }
+  },
+  "status": 403,
+  "response": {
+    "statusCode": 403,
+    "code": "step_up_required",
+    "message": "This action requires step-up re-authentication"
+  }
+}

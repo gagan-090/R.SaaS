@@ -1,0 +1,33 @@
+{
+  "method": "PATCH",
+  "path": "/api/v1/platform/admins/:id/roles",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {
+    "body": {
+      "roleIds": [
+        "01a1312f-28d6-73a3-bc48-433e2853727a",
+        "01a1312f-28d5-7a02-8354-baacc55f2420"
+      ]
+    }
+  },
+  "status": 200,
+  "response": {
+    "id": "01a1313d-8bae-7623-9a5a-0bf2c1af654b",
+    "email": "admin-mv5jtfoe-b1fca2@example.test",
+    "name": "Neha Support",
+    "status": "active",
+    "lastLoginAt": null,
+    "mfaEnrolled": false,
+    "roles": [
+      {
+        "id": "01a1312f-28d6-73a3-bc48-433e2853727a",
+        "name": "Platform Auditor"
+      },
+      {
+        "id": "01a1312f-28d5-7a02-8354-baacc55f2420",
+        "name": "Onboarding Admin"
+      }
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "method": "GET",
+  "path": "/api/v1/restaurants/:id/licenses/current/token",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {},
+  "status": 200,
+  "response": {
+    "token": "<token>",
+    "state": "active",
+    "readOnly": false,
+    "publicKey": "<publicKey>"
+  }
+}

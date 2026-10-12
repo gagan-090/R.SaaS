@@ -1,0 +1,18 @@
+{
+  "method": "POST",
+  "path": "/api/v1/restaurants/:id/status",
+  "example": "suspend",
+  "auth": "bearer",
+  "request": {
+    "body": {
+      "action": "suspend",
+      "reason": "Subscription unpaid"
+    }
+  },
+  "status": 200,
+  "response": {
+    "id": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+    "status": "suspended",
+    "statusReason": "Subscription unpaid"
+  }
+}

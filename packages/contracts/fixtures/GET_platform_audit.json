@@ -1,0 +1,149 @@
+{
+  "method": "GET",
+  "path": "/api/v1/platform/audit",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {
+    "query": {
+      "action": "restaurant",
+      "pageSize": "5"
+    }
+  },
+  "status": 200,
+  "response": {
+    "items": [
+      {
+        "id": "01a1313d-8ad3-72a1-841a-9689df93876c",
+        "tenantId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+        "branchId": null,
+        "actorId": "01a1313d-873d-7be0-882e-324e69d8774c",
+        "actorType": "admin",
+        "action": "restaurant.status_changed",
+        "objectType": "restaurant",
+        "objectId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+        "before": {
+          "status": "suspended"
+        },
+        "after": {
+          "status": "active"
+        },
+        "reason": "Payment received",
+        "deviceId": null,
+        "sessionId": "01a1313d-87fb-7393-a498-b944ed7ac055",
+        "ip": "127.0.0.1",
+        "at": "2026-10-12T17:51:19.251Z"
+      },
+      {
+        "id": "01a1313d-8ac3-7333-ba65-3f6f0c8bde0f",
+        "tenantId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+        "branchId": null,
+        "actorId": "01a1313d-873d-7be0-882e-324e69d8774c",
+        "actorType": "admin",
+        "action": "restaurant.status_changed",
+        "objectType": "restaurant",
+        "objectId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+        "before": {
+          "status": "active"
+        },
+        "after": {
+          "status": "suspended"
+        },
+        "reason": "Subscription unpaid",
+        "deviceId": null,
+        "sessionId": "01a1313d-87fb-7393-a498-b944ed7ac055",
+        "ip": "127.0.0.1",
+        "at": "2026-10-12T17:51:19.235Z"
+      },
+      {
+        "id": "01a1313d-8ab4-7490-a61d-015e852fcc31",
+        "tenantId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+        "branchId": null,
+        "actorId": "01a1313d-873d-7be0-882e-324e69d8774c",
+        "actorType": "admin",
+        "action": "restaurant.updated",
+        "objectType": "restaurant",
+        "objectId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+        "before": {
+          "id": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+          "code": "R000074",
+          "name": "Spice Route",
+          "gstin": "27AAAPA1234A1Z5",
+          "status": "active",
+          "address": "FC Road, Pune",
+          "createdAt": "2026-10-12T17:51:19.122Z",
+          "updatedAt": "2026-10-12T17:51:19.122Z",
+          "ownerEmail": "owner-mv5jtfbi-7556bc@example.test",
+          "menuVersion": 0,
+          "statusReason": null
+        },
+        "after": {
+          "id": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+          "code": "R000074",
+          "name": "Spice Route",
+          "gstin": "27AAAPA1234A1Z5",
+          "status": "active",
+          "address": "FC Road, Shivajinagar, Pune",
+          "createdAt": "2026-10-12T17:51:19.122Z",
+          "updatedAt": "2026-10-12T17:51:19.216Z",
+          "ownerEmail": "owner-mv5jtfbi-7556bc@example.test",
+          "menuVersion": 0,
+          "statusReason": null
+        },
+        "reason": null,
+        "deviceId": null,
+        "sessionId": "01a1313d-87fb-7393-a498-b944ed7ac055",
+        "ip": "127.0.0.1",
+        "at": "2026-10-12T17:51:19.221Z"
+      },
+      {
+        "id": "01a1313d-8a68-7371-b4f7-aaac46dca9a1",
+        "tenantId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+        "branchId": null,
+        "actorId": "01a1313d-8a59-7ca0-bcc5-d3372420c4fb",
+        "actorType": "user",
+        "action": "restaurant.created",
+        "objectType": "restaurant",
+        "objectId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+        "before": null,
+        "after": {
+          "code": "R000074",
+          "name": "Spice Route",
+          "plan": "premium",
+          "licenseId": "01a1313d-8a5e-7666-9dc2-bf4e769ef582"
+        },
+        "reason": null,
+        "deviceId": null,
+        "sessionId": null,
+        "ip": null,
+        "at": "2026-10-12T17:51:19.145Z"
+      },
+      {
+        "id": "01a1313d-89ef-7960-8555-2c419a49bb98",
+        "tenantId": null,
+        "branchId": null,
+        "actorId": "01a1313d-873d-7be0-882e-324e69d8774c",
+        "actorType": "admin",
+        "action": "restaurant.registered",
+        "objectType": "restaurant_registration",
+        "objectId": "01a1313d-89ea-71f0-9ab0-839e704ce195",
+        "before": null,
+        "after": {
+          "gstin": "27AAAPA1234A1Z5",
+          "address": "FC Road, Pune",
+          "planCode": "premium",
+          "ownerName": "Asha Rao",
+          "ownerEmail": "owner-mv5jtfbi-7556bc@example.test",
+          "restaurantName": "Spice Route"
+        },
+        "reason": null,
+        "deviceId": null,
+        "sessionId": "01a1313d-87fb-7393-a498-b944ed7ac055",
+        "ip": "127.0.0.1",
+        "at": "2026-10-12T17:51:19.024Z"
+      }
+    ],
+    "total": 202,
+    "page": 1,
+    "pageSize": 5
+  }
+}

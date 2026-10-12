@@ -1,0 +1,31 @@
+{
+  "method": "POST",
+  "path": "/api/v1/restaurants/verify-email",
+  "example": "ok",
+  "auth": "none",
+  "request": {
+    "body": {
+      "token": "<token>",
+      "password": "<password>"
+    }
+  },
+  "status": 201,
+  "response": {
+    "tenantId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+    "code": "R000074",
+    "branchId": "01a1313d-8a54-71a0-8ad1-321b14fd11ad",
+    "ownerUserId": "01a1313d-8a59-7ca0-bcc5-d3372420c4fb",
+    "license": {
+      "id": "01a1313d-8a5e-7666-9dc2-bf4e769ef582",
+      "planCode": "premium",
+      "planName": "Premium",
+      "startsAt": "2026-10-12T17:51:19.133Z",
+      "endsAt": "2026-11-12T17:51:19.133Z",
+      "graceDays": 7,
+      "status": "active",
+      "reason": "initial license at onboarding",
+      "issuedBy": "01a1313d-873d-7be0-882e-324e69d8774c",
+      "createdAt": "2026-10-12T17:51:19.140Z"
+    }
+  }
+}

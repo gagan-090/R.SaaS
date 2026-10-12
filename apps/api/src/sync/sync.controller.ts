@@ -1,12 +1,12 @@
 import { Body, Controller, Get, Headers, HttpCode, Post, Query } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import type { Actor, AuditDetails } from '../common/actor';
 import { AuditCtx, CurrentActor } from '../common/actor';
 import { randomToken, sha256 } from '../common/crypto';
 import { Audited, Public, RequirePermissions, RequiresFeature } from '../common/decorators';
 import { forbidden, notFound } from '../common/errors';
-import { zbody, ZodPipe } from '../common/validation';
+import { apiBody, zbody, ZodPipe } from '../common/validation';
 import { DbService } from '../db/db.service';
 import { SyncService } from './sync.service';
 
@@ -41,6 +41,7 @@ export class SyncController {
   @RequiresFeature('offline.single')
   @Audited('device.hub_registered')
   @Post('devices/register-hub')
+  @ApiBody(apiBody(RegisterHubBody))
   async registerHub(@CurrentActor() a: Actor, @Body(zbody(RegisterHubBody)) b: z.infer<typeof RegisterHubBody>, @AuditCtx() audit: AuditDetails) {
     if (a.branchIds.length && !a.branchIds.includes(b.branchId)) throw forbidden('branch_scope', 'Not your branch');
     const token = randomToken(32);
@@ -56,6 +57,7 @@ export class SyncController {
   @Public()
   @Post('sync/push')
   @HttpCode(200)
+  @ApiBody(apiBody(PushBody))
   async push(@Headers('x-device-token') token: string | undefined, @Body(zbody(PushBody)) b: z.infer<typeof PushBody>) {
     const dev = await this.sync.authenticateDevice(token);
     const results = await this.sync.push(dev, b.events);

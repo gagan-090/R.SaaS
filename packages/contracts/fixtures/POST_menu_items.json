@@ -1,0 +1,43 @@
+{
+  "method": "POST",
+  "path": "/api/v1/menu/items",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {
+    "body": {
+      "categoryId": "01a1313d-8e5a-75f0-94ce-d7b0b2c80465",
+      "name": "Butter Chicken",
+      "description": "Tomato-butter gravy",
+      "pricePaise": 34000,
+      "taxRuleId": "01a1313d-8e31-7311-a939-1867f12006da",
+      "isVeg": false,
+      "plateColors": {
+        "base": "#D9622B",
+        "sauce": "#F2C27B",
+        "garnish": "#4F8A3B"
+      }
+    }
+  },
+  "status": 201,
+  "response": {
+    "id": "01a1313d-8e8b-7221-9666-8064114832eb",
+    "tenantId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+    "categoryId": "01a1313d-8e5a-75f0-94ce-d7b0b2c80465",
+    "name": "Butter Chicken",
+    "description": "Tomato-butter gravy",
+    "unit": "plate",
+    "quantity": 1,
+    "pricePaise": 34000,
+    "taxRuleId": "01a1313d-8e31-7311-a939-1867f12006da",
+    "available": true,
+    "isVeg": false,
+    "imageId": null,
+    "plateColors": {
+      "base": "#D9622B",
+      "sauce": "#F2C27B",
+      "garnish": "#4F8A3B"
+    },
+    "seq": "427",
+    "deleted": false
+  }
+}

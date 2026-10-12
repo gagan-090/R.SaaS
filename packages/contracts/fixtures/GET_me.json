@@ -1,0 +1,34 @@
+{
+  "method": "GET",
+  "path": "/api/v1/me",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {},
+  "status": 200,
+  "response": {
+    "type": "admin",
+    "id": "01a1313d-873d-7be0-882e-324e69d8774c",
+    "email": "admin-mv5jtep5-553825@example.test",
+    "name": "admin-mv5jtep5-553825@example.test",
+    "mfaEnrolled": true,
+    "roles": [
+      "Super Admin"
+    ],
+    "permissions": [
+      "platform.admin.deactivate",
+      "platform.admin.invite",
+      "platform.admin.read",
+      "platform.admin.roles",
+      "platform.audit.read",
+      "platform.license.manage",
+      "platform.mfa.reset",
+      "platform.payment.record",
+      "platform.plan.manage",
+      "platform.restaurant.create",
+      "platform.restaurant.read",
+      "platform.restaurant.status",
+      "platform.restaurant.update"
+    ],
+    "branchIds": []
+  }
+}

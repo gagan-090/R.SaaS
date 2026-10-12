@@ -1,0 +1,21 @@
+{
+  "method": "POST",
+  "path": "/api/v1/tax-rules",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {
+    "body": {
+      "name": "GST 5%",
+      "rateBp": 500
+    }
+  },
+  "status": 201,
+  "response": {
+    "id": "01a1313d-8e31-7311-a939-1867f12006da",
+    "tenantId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+    "name": "GST 5%",
+    "rateBp": 500,
+    "seq": "425",
+    "deleted": false
+  }
+}

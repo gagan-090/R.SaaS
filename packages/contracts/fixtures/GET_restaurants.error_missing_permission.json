@@ -1,0 +1,13 @@
+{
+  "method": "GET",
+  "path": "/api/v1/restaurants",
+  "example": "error_missing_permission",
+  "auth": "bearer",
+  "request": {},
+  "status": 403,
+  "response": {
+    "statusCode": 403,
+    "code": "missing_permission",
+    "message": "Missing permission: platform.restaurant.read"
+  }
+}

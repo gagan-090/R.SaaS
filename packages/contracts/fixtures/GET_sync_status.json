@@ -1,0 +1,13 @@
+{
+  "method": "GET",
+  "path": "/api/v1/sync/status",
+  "example": "ok",
+  "auth": "device",
+  "request": {},
+  "status": 200,
+  "response": {
+    "lastPushAt": "2026-10-12T17:51:20.350Z",
+    "storedEvents": 1,
+    "openConflicts": 1
+  }
+}

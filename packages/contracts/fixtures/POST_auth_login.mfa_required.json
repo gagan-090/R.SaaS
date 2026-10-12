@@ -1,0 +1,17 @@
+{
+  "method": "POST",
+  "path": "/api/v1/auth/login",
+  "example": "mfa_required",
+  "auth": "none",
+  "request": {
+    "body": {
+      "email": "admin-mv5jtep5-553825@example.test",
+      "password": "<password>"
+    }
+  },
+  "status": 200,
+  "response": {
+    "status": "mfa_required",
+    "challengeToken": "<challengeToken>"
+  }
+}

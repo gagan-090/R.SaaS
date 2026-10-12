@@ -1,0 +1,28 @@
+{
+  "method": "POST",
+  "path": "/api/v1/tables",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {
+    "body": {
+      "floorId": "01a1313d-8d73-71a1-a075-418bf25e612e",
+      "name": "12",
+      "seats": 4,
+      "layoutX": 2,
+      "layoutY": 1
+    }
+  },
+  "status": 201,
+  "response": {
+    "id": "01a1313d-8da2-7400-bd57-ca845c180dec",
+    "tenantId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+    "branchId": "01a1313d-8a54-71a0-8ad1-321b14fd11ad",
+    "floorId": "01a1313d-8d73-71a1-a075-418bf25e612e",
+    "name": "12",
+    "seats": 4,
+    "layoutX": 2,
+    "layoutY": 1,
+    "seq": "421",
+    "deleted": false
+  }
+}

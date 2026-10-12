@@ -1,0 +1,86 @@
+{
+  "method": "GET",
+  "path": "/api/v1/restaurants/:id",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {},
+  "status": 200,
+  "response": {
+    "id": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+    "code": "R000074",
+    "name": "Spice Route",
+    "ownerEmail": "owner-mv5jtfbi-7556bc@example.test",
+    "gstin": "27AAAPA1234A1Z5",
+    "address": "FC Road, Pune",
+    "status": "active",
+    "statusReason": null,
+    "menuVersion": 0,
+    "createdAt": "2026-10-12T17:51:19.122Z",
+    "updatedAt": "2026-10-12T17:51:19.122Z",
+    "branches": [
+      {
+        "id": "01a1313d-8a54-71a0-8ad1-321b14fd11ad",
+        "tenantId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+        "franchiseId": null,
+        "code": "BR01",
+        "name": "Spice Route",
+        "address": "FC Road, Pune",
+        "gstin": "27AAAPA1234A1Z5",
+        "settings": {},
+        "seq": "415",
+        "createdAt": "2026-10-12T17:51:19.124Z"
+      }
+    ],
+    "licenses": [
+      {
+        "id": "01a1313d-8a5e-7666-9dc2-bf4e769ef582",
+        "planCode": "premium",
+        "planName": "Premium",
+        "startsAt": "2026-10-12T17:51:19.133Z",
+        "endsAt": "2026-11-12T17:51:19.133Z",
+        "graceDays": 7,
+        "status": "active",
+        "reason": "initial license at onboarding",
+        "issuedBy": "01a1313d-873d-7be0-882e-324e69d8774c",
+        "createdAt": "2026-10-12T17:51:19.140Z"
+      }
+    ],
+    "currentLicense": {
+      "id": "01a1313d-8a5e-7666-9dc2-bf4e769ef582",
+      "planCode": "premium",
+      "planName": "Premium",
+      "startsAt": "2026-10-12T17:51:19.133Z",
+      "endsAt": "2026-11-12T17:51:19.133Z",
+      "graceDays": 7,
+      "status": "active",
+      "reason": "initial license at onboarding",
+      "issuedBy": "01a1313d-873d-7be0-882e-324e69d8774c",
+      "createdAt": "2026-10-12T17:51:19.140Z"
+    },
+    "entitlement": {
+      "state": "active",
+      "readOnly": false,
+      "features": [
+        "tables",
+        "orders.dinein",
+        "orders.takeaway",
+        "menu",
+        "billing",
+        "offline.single",
+        "floors",
+        "multi_cashier",
+        "waiter_app",
+        "lan_hub",
+        "franchise",
+        "roles.extended",
+        "kds",
+        "recipes",
+        "menu.approval",
+        "inventory",
+        "shifts"
+      ]
+    },
+    "devices": [],
+    "payments": []
+  }
+}

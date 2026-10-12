@@ -1,0 +1,18 @@
+{
+  "method": "POST",
+  "path": "/api/v1/auth/mfa/verify",
+  "example": "ok",
+  "auth": "none",
+  "request": {
+    "body": {
+      "challengeToken": "<challengeToken>",
+      "code": "857272"
+    }
+  },
+  "status": 200,
+  "response": {
+    "accessToken": "<accessToken>",
+    "refreshToken": "<refreshToken>",
+    "expiresIn": 900
+  }
+}

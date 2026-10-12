@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Headers, HttpCode, Ip, Param, ParseUUIDPipe, Post, Patch, Query, Req } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { AuthService } from '../auth/auth.service';
@@ -11,7 +11,7 @@ import { randomToken, sha256 } from '../common/crypto';
 import { Audited, RequirePermissions } from '../common/decorators';
 import { badRequest, conflict, forbidden, notFound } from '../common/errors';
 import { ALL_PLATFORM_PERMISSIONS } from '../common/permissions';
-import { zbody, ZodPipe } from '../common/validation';
+import { apiBody, zbody, ZodPipe } from '../common/validation';
 import { DbService, Tx } from '../db/db.service';
 import { Mailer } from '../mail/mail.service';
 
@@ -68,6 +68,7 @@ export class PlatformController {
   @RequirePermissions('platform.admin.invite')
   @Audited('platform.admin.invited')
   @Post('admins')
+  @ApiBody(apiBody(InviteBody))
   async invite(@Body(zbody(InviteBody)) b: z.infer<typeof InviteBody>, @CurrentActor() actor: Actor, @AuditCtx() audit: AuditDetails) {
     const email = b.email.toLowerCase();
     const token = randomToken(32);
@@ -97,6 +98,7 @@ export class PlatformController {
   @RequirePermissions('platform.admin.roles')
   @Audited('platform.admin.roles_changed')
   @Patch('admins/:id/roles')
+  @ApiBody(apiBody(RolesBody))
   async setRoles(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(zbody(RolesBody)) b: z.infer<typeof RolesBody>,
@@ -124,6 +126,7 @@ export class PlatformController {
   @Audited('platform.admin.deactivated')
   @Post('admins/:id/deactivate')
   @HttpCode(200)
+  @ApiBody(apiBody(ReasonBody))
   async deactivate(@Param('id', ParseUUIDPipe) id: string, @Body(zbody(ReasonBody)) b: z.infer<typeof ReasonBody>, @CurrentActor() actor: Actor, @AuditCtx() audit: AuditDetails) {
     if (id === actor.id) throw forbidden('self_action', 'You cannot deactivate yourself');
     await this.db.platform(async (tx) => {
@@ -141,6 +144,7 @@ export class PlatformController {
   @RequirePermissions('platform.mfa.reset')
   @Post('admins/:id/mfa/reset')
   @HttpCode(200)
+  @ApiBody(apiBody(ReasonBody))
   async resetMfa(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(zbody(ReasonBody)) b: z.infer<typeof ReasonBody>,
@@ -192,6 +196,7 @@ export class PlatformController {
   @RequirePermissions('platform.admin.roles')
   @Audited('platform.role.created')
   @Post('roles')
+  @ApiBody(apiBody(RoleBody))
   async createRole(@Body(zbody(RoleBody)) b: z.infer<typeof RoleBody>, @CurrentActor() actor: Actor, @AuditCtx() audit: AuditDetails) {
     const unknown = b.permissions.filter((p) => !(ALL_PLATFORM_PERMISSIONS as string[]).includes(p));
     if (unknown.length) throw badRequest('unknown_permission', `Unknown platform permissions: ${unknown.join(', ')}`);

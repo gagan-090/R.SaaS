@@ -1,0 +1,235 @@
+{
+  "method": "GET",
+  "path": "/api/v1/platform/permissions",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {},
+  "status": 200,
+  "response": [
+    {
+      "key": "audit.read",
+      "description": "Restaurant audit log",
+      "tier": "restaurant"
+    },
+    {
+      "key": "bill.adjust",
+      "description": "Post an adjustment to a paid bill (or approve with PIN)",
+      "tier": "restaurant"
+    },
+    {
+      "key": "clock",
+      "description": "Clock in / out, start / end break",
+      "tier": "restaurant"
+    },
+    {
+      "key": "device.manage",
+      "description": "Pair devices, set hub, technical settings",
+      "tier": "restaurant"
+    },
+    {
+      "key": "discount.apply",
+      "description": "Apply a discount",
+      "tier": "restaurant"
+    },
+    {
+      "key": "floor.manage",
+      "description": "Manage floors and tables",
+      "tier": "restaurant"
+    },
+    {
+      "key": "floor.read",
+      "description": "View floors and tables",
+      "tier": "restaurant"
+    },
+    {
+      "key": "inventory.read",
+      "description": "View inventory",
+      "tier": "restaurant"
+    },
+    {
+      "key": "inventory.write",
+      "description": "Inventory receipts, transfers, adjustments, wastage",
+      "tier": "restaurant"
+    },
+    {
+      "key": "kds.read",
+      "description": "View kitchen queue",
+      "tier": "restaurant"
+    },
+    {
+      "key": "kds.update",
+      "description": "Kitchen queue: accept / preparing / ready / served",
+      "tier": "restaurant"
+    },
+    {
+      "key": "license.read",
+      "description": "View own license and plan",
+      "tier": "restaurant"
+    },
+    {
+      "key": "menu.approve",
+      "description": "Approve recipe and ingredient changes",
+      "tier": "restaurant"
+    },
+    {
+      "key": "menu.publish",
+      "description": "Publish menu changes and prices; manage menu master data",
+      "tier": "restaurant"
+    },
+    {
+      "key": "menu.read",
+      "description": "View menu, categories and tax rules",
+      "tier": "restaurant"
+    },
+    {
+      "key": "menu.submit",
+      "description": "Submit menu item / ingredient change",
+      "tier": "restaurant"
+    },
+    {
+      "key": "order.read",
+      "description": "View orders",
+      "tier": "restaurant"
+    },
+    {
+      "key": "order.reverse",
+      "description": "Reverse an item not yet sent to kitchen",
+      "tier": "restaurant"
+    },
+    {
+      "key": "order.reverse.sent",
+      "description": "Reverse an item already sent to kitchen (or approve with PIN)",
+      "tier": "restaurant"
+    },
+    {
+      "key": "order.transfer",
+      "description": "Transfer an order to another table",
+      "tier": "restaurant"
+    },
+    {
+      "key": "order.write",
+      "description": "Create / edit orders",
+      "tier": "restaurant"
+    },
+    {
+      "key": "payment.take",
+      "description": "Take payment, close bill, assign tip",
+      "tier": "restaurant"
+    },
+    {
+      "key": "platform.admin.deactivate",
+      "description": "Deactivate a platform admin",
+      "tier": "platform"
+    },
+    {
+      "key": "platform.admin.invite",
+      "description": "Invite platform admins",
+      "tier": "platform"
+    },
+    {
+      "key": "platform.admin.read",
+      "description": "List platform admins and roles",
+      "tier": "platform"
+    },
+    {
+      "key": "platform.admin.roles",
+      "description": "Assign roles to platform admins / create roles",
+      "tier": "platform"
+    },
+    {
+      "key": "platform.audit.read",
+      "description": "Read the platform audit log",
+      "tier": "platform"
+    },
+    {
+      "key": "platform.license.manage",
+      "description": "Issue, renew, upgrade, downgrade or revoke licenses",
+      "tier": "platform"
+    },
+    {
+      "key": "platform.mfa.reset",
+      "description": "Reset another admin's MFA (requires step-up)",
+      "tier": "platform"
+    },
+    {
+      "key": "platform.payment.record",
+      "description": "Record a subscription payment",
+      "tier": "platform"
+    },
+    {
+      "key": "platform.plan.manage",
+      "description": "Create and edit subscription plans",
+      "tier": "platform"
+    },
+    {
+      "key": "platform.restaurant.create",
+      "description": "Register a restaurant (sends owner verification email)",
+      "tier": "platform"
+    },
+    {
+      "key": "platform.restaurant.read",
+      "description": "View restaurants, their licenses, devices and payments",
+      "tier": "platform"
+    },
+    {
+      "key": "platform.restaurant.status",
+      "description": "Activate, suspend, block or reactivate a restaurant (with reason)",
+      "tier": "platform"
+    },
+    {
+      "key": "platform.restaurant.update",
+      "description": "Edit restaurant profile fields",
+      "tier": "platform"
+    },
+    {
+      "key": "recipe.read",
+      "description": "View recipes",
+      "tier": "restaurant"
+    },
+    {
+      "key": "recipe.write",
+      "description": "Create and version recipes",
+      "tier": "restaurant"
+    },
+    {
+      "key": "reports.own",
+      "description": "Own shift / own tips reports",
+      "tier": "restaurant"
+    },
+    {
+      "key": "reports.read",
+      "description": "Reports and dashboards (branch-scoped)",
+      "tier": "restaurant"
+    },
+    {
+      "key": "restaurant.profile.manage",
+      "description": "Edit restaurant profile and tax settings",
+      "tier": "restaurant"
+    },
+    {
+      "key": "restaurant.profile.read",
+      "description": "View restaurant profile and tax settings",
+      "tier": "restaurant"
+    },
+    {
+      "key": "shift.manage",
+      "description": "Shifts, breaks, attendance setup",
+      "tier": "restaurant"
+    },
+    {
+      "key": "shift.read",
+      "description": "View shifts and attendance setup",
+      "tier": "restaurant"
+    },
+    {
+      "key": "staff.manage",
+      "description": "Manage staff users and roles",
+      "tier": "restaurant"
+    },
+    {
+      "key": "staff.read",
+      "description": "View staff users and roles",
+      "tier": "restaurant"
+    }
+  ]
+}

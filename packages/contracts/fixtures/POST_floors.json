@@ -1,0 +1,23 @@
+{
+  "method": "POST",
+  "path": "/api/v1/floors",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {
+    "body": {
+      "branchId": "01a1313d-8a54-71a0-8ad1-321b14fd11ad",
+      "name": "Ground floor",
+      "sortOrder": 0
+    }
+  },
+  "status": 201,
+  "response": {
+    "id": "01a1313d-8d73-71a1-a075-418bf25e612e",
+    "tenantId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+    "branchId": "01a1313d-8a54-71a0-8ad1-321b14fd11ad",
+    "name": "Ground floor",
+    "sortOrder": 0,
+    "seq": "419",
+    "deleted": false
+  }
+}

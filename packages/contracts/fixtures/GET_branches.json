@@ -1,0 +1,22 @@
+{
+  "method": "GET",
+  "path": "/api/v1/branches",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {},
+  "status": 200,
+  "response": [
+    {
+      "id": "01a1313d-8a54-71a0-8ad1-321b14fd11ad",
+      "tenantId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+      "franchiseId": null,
+      "code": "BR01",
+      "name": "Spice Route",
+      "address": "FC Road, Pune",
+      "gstin": "27AAAPA1234A1Z5",
+      "settings": {},
+      "seq": "415",
+      "createdAt": "2026-10-12T17:51:19.124Z"
+    }
+  ]
+}

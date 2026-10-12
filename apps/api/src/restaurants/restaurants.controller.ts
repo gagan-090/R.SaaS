@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { License, Prisma, TenantStatus } from '@prisma/client';
 import { uuidv7 } from '../common/uuid';
@@ -10,10 +10,10 @@ import type { Actor, AuditDetails } from '../common/actor';
 import { AuditCtx, CurrentActor } from '../common/actor';
 import { AuditService } from '../common/audit.service';
 import { randomToken, sha256 } from '../common/crypto';
-import { Audited, Public, RequirePermissions } from '../common/decorators';
+import { Audited, authLimit, Public, RequirePermissions } from '../common/decorators';
 import { badRequest, conflict, notFound } from '../common/errors';
 import { PLAN_DEFAULTS } from '../common/permissions';
-import { zbody, ZodPipe } from '../common/validation';
+import { apiBody, zbody, ZodPipe } from '../common/validation';
 import { DbService, Tx } from '../db/db.service';
 import { LicenseService } from '../licensing/license.service';
 import { Mailer } from '../mail/mail.service';
@@ -93,6 +93,7 @@ export class RestaurantsController {
   @RequirePermissions('platform.restaurant.create')
   @Audited('restaurant.registered')
   @Post()
+  @ApiBody(apiBody(RegisterBody))
   async register(@Body(zbody(RegisterBody)) b: z.infer<typeof RegisterBody>, @CurrentActor() actor: Actor, @AuditCtx() audit: AuditDetails) {
     const ownerEmail = b.ownerEmail.toLowerCase();
     const token = randomToken(32);
@@ -129,9 +130,10 @@ export class RestaurantsController {
 
   /** Owner clicks the emailed link: creates the isolated tenant, main branch, owner user and a plan-bound license. */
   @Public()
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Throttle(authLimit())
   @Post('verify-email')
   @HttpCode(201)
+  @ApiBody(apiBody(VerifyBody))
   async verifyEmail(@Body(zbody(VerifyBody)) b: z.infer<typeof VerifyBody>) {
     const passwordHash = await hashPassword(b.password);
     return this.db.platform(async (tx) => {
@@ -142,7 +144,7 @@ export class RestaurantsController {
       const plan = await tx.subscriptionPlan.findUnique({ where: { code: reg.planCode } });
       if (!plan) throw badRequest('unknown_plan', 'Plan no longer exists');
 
-      const seqRow = await tx.$queryRaw<{ n: bigint }[]>`SELECT count(*)::bigint + 1 AS n FROM restaurant_tenants`;
+      const seqRow = await tx.$queryRaw<{ n: bigint }[]>`SELECT nextval('tenant_code_seq') AS n`;
       const code = `R${String(seqRow[0].n).padStart(6, '0')}`;
       const tenant = await tx.restaurantTenant.create({
         data: { code, name: reg.restaurantName, ownerEmail: reg.ownerEmail, gstin: reg.gstin, address: reg.address, status: 'active' },
@@ -229,6 +231,7 @@ export class RestaurantsController {
   @RequirePermissions('platform.restaurant.update')
   @Audited('restaurant.updated')
   @Patch(':id')
+  @ApiBody(apiBody(PatchBody))
   async update(@Param('id', ParseUUIDPipe) id: string, @Body(zbody(PatchBody)) b: z.infer<typeof PatchBody>, @AuditCtx() audit: AuditDetails) {
     const { before, after } = await this.db.platform(async (tx) => {
       const before = await tx.restaurantTenant.findUnique({ where: { id } });
@@ -244,6 +247,7 @@ export class RestaurantsController {
   @Audited('restaurant.status_changed')
   @Post(':id/status')
   @HttpCode(200)
+  @ApiBody(apiBody(StatusBody))
   async setStatus(@Param('id', ParseUUIDPipe) id: string, @Body(zbody(StatusBody)) b: z.infer<typeof StatusBody>, @AuditCtx() audit: AuditDetails) {
     const rule = TRANSITIONS[b.action];
     const { before, after } = await this.db.platform(async (tx) => {
@@ -269,6 +273,7 @@ export class RestaurantsController {
   @RequirePermissions('platform.license.manage')
   @Audited('license.changed')
   @Post(':id/licenses')
+  @ApiBody(apiBody(LicenseBody))
   async licenseAction(@Param('id', ParseUUIDPipe) id: string, @Body(zbody(LicenseBody)) b: z.infer<typeof LicenseBody>, @CurrentActor() actor: Actor, @AuditCtx() audit: AuditDetails) {
     const result = await this.db.platform(async (tx) => {
       const tenant = await tx.restaurantTenant.findUnique({ where: { id } });
@@ -320,6 +325,7 @@ export class RestaurantsController {
   @RequirePermissions('platform.payment.record')
   @Audited('payment.recorded')
   @Post(':id/payments')
+  @ApiBody(apiBody(PaymentBody))
   async recordPayment(@Param('id', ParseUUIDPipe) id: string, @Body(zbody(PaymentBody)) b: z.infer<typeof PaymentBody>, @CurrentActor() actor: Actor, @AuditCtx() audit: AuditDetails) {
     const p = await this.db.platform(async (tx) => {
       if (!(await tx.restaurantTenant.findUnique({ where: { id } }))) throw notFound('Restaurant');

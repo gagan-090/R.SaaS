@@ -1,0 +1,29 @@
+{
+  "method": "PATCH",
+  "path": "/api/v1/plans/:id",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {
+    "body": {
+      "pricePaise": 49900
+    }
+  },
+  "status": 200,
+  "response": {
+    "id": "01a1313d-89a3-75d0-b056-96fef7a0a8d2",
+    "code": "trial_mv5jtf9z",
+    "name": "Trial",
+    "featureFlags": [
+      "tables",
+      "menu",
+      "billing"
+    ],
+    "limits": {
+      "branches": 1
+    },
+    "pricePaise": 49900,
+    "billingCycle": "monthly",
+    "createdAt": "2026-10-12T17:51:18.947Z",
+    "updatedAt": "2026-10-12T17:51:18.979Z"
+  }
+}

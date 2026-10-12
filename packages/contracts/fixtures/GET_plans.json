@@ -1,0 +1,114 @@
+{
+  "method": "GET",
+  "path": "/api/v1/plans",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {},
+  "status": 200,
+  "response": [
+    {
+      "id": "01a1312f-28d8-73a2-89a8-01eef358bd7e",
+      "code": "standard",
+      "name": "Standard",
+      "featureFlags": [
+        "tables",
+        "orders.dinein",
+        "orders.takeaway",
+        "menu",
+        "billing",
+        "offline.single"
+      ],
+      "limits": {
+        "branches": 1,
+        "staffPerBranch": null,
+        "floorsPerBranch": 1,
+        "devicesPerBranch": 1,
+        "concurrentCashiers": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "createdAt": "2026-10-12T17:35:36.664Z",
+      "updatedAt": "2026-10-12T17:35:36.664Z"
+    },
+    {
+      "id": "01a1312f-28e0-7d51-9f03-ed6608376c45",
+      "code": "professional",
+      "name": "Professional",
+      "featureFlags": [
+        "tables",
+        "orders.dinein",
+        "orders.takeaway",
+        "menu",
+        "billing",
+        "offline.single",
+        "floors",
+        "multi_cashier",
+        "waiter_app",
+        "lan_hub"
+      ],
+      "limits": {
+        "branches": 1,
+        "staffPerBranch": null,
+        "floorsPerBranch": null,
+        "devicesPerBranch": null,
+        "concurrentCashiers": null
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "createdAt": "2026-10-12T17:35:36.673Z",
+      "updatedAt": "2026-10-12T17:35:36.673Z"
+    },
+    {
+      "id": "01a1312f-28e3-7421-a559-a78f5fd3df43",
+      "code": "premium",
+      "name": "Premium",
+      "featureFlags": [
+        "tables",
+        "orders.dinein",
+        "orders.takeaway",
+        "menu",
+        "billing",
+        "offline.single",
+        "floors",
+        "multi_cashier",
+        "waiter_app",
+        "lan_hub",
+        "franchise",
+        "roles.extended",
+        "kds",
+        "recipes",
+        "menu.approval",
+        "inventory",
+        "shifts"
+      ],
+      "limits": {
+        "branches": null,
+        "staffPerBranch": null,
+        "floorsPerBranch": null,
+        "devicesPerBranch": null,
+        "concurrentCashiers": null
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "createdAt": "2026-10-12T17:35:36.675Z",
+      "updatedAt": "2026-10-12T17:35:36.675Z"
+    },
+    {
+      "id": "01a1313d-326e-7672-9f4d-4f9230d1e9ee",
+      "code": "trial_mv5jsy1m",
+      "name": "Trial",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1
+      },
+      "pricePaise": 49900,
+      "billingCycle": "monthly",
+      "createdAt": "2026-10-12T17:50:56.622Z",
+      "updatedAt": "2026-10-12T17:50:56.650Z"
+    }
+  ]
+}

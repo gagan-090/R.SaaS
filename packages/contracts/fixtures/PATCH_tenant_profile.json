@@ -1,0 +1,25 @@
+{
+  "method": "PATCH",
+  "path": "/api/v1/tenant/profile",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {
+    "body": {
+      "name": "Spice Route Kitchen"
+    }
+  },
+  "status": 200,
+  "response": {
+    "id": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+    "code": "R000074",
+    "name": "Spice Route Kitchen",
+    "ownerEmail": "owner-mv5jtfbi-7556bc@example.test",
+    "gstin": "27AAAPA1234A1Z5",
+    "address": "FC Road, Shivajinagar, Pune",
+    "status": "active",
+    "statusReason": "Payment received",
+    "menuVersion": 0,
+    "createdAt": "2026-10-12T17:51:19.122Z",
+    "updatedAt": "2026-10-12T17:51:19.861Z"
+  }
+}

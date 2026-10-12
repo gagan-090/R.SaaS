@@ -1,0 +1,17 @@
+{
+  "method": "POST",
+  "path": "/api/v1/auth/step-up",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {
+    "body": {
+      "password": "<password>",
+      "code": "306961"
+    }
+  },
+  "status": 200,
+  "response": {
+    "stepUpToken": "<stepUpToken>",
+    "expiresIn": 300
+  }
+}

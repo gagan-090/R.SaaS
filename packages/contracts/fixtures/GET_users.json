@@ -1,0 +1,23 @@
+{
+  "method": "GET",
+  "path": "/api/v1/users",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {},
+  "status": 200,
+  "response": [
+    {
+      "id": "01a1313d-8a59-7ca0-bcc5-d3372420c4fb",
+      "name": "Asha Rao",
+      "email": "owner-mv5jtfbi-7556bc@example.test",
+      "phone": null,
+      "status": "active",
+      "roles": [
+        {
+          "role": "owner",
+          "branchIds": []
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,134 @@
+{
+  "method": "GET",
+  "path": "/api/v1/sync/pull",
+  "example": "ok",
+  "auth": "device",
+  "request": {
+    "query": {
+      "since": "0"
+    }
+  },
+  "status": 200,
+  "response": {
+    "cursor": "428",
+    "menuVersion": 2,
+    "tenant": {
+      "id": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+      "name": "Spice Route Kitchen",
+      "gstin": "27AAAPA1234A1Z5",
+      "address": "FC Road, Shivajinagar, Pune",
+      "status": "active"
+    },
+    "licenseToken": "<licenseToken>",
+    "branches": [
+      {
+        "id": "01a1313d-8a54-71a0-8ad1-321b14fd11ad",
+        "tenantId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+        "franchiseId": null,
+        "code": "BR01",
+        "name": "Spice Route",
+        "address": "FC Road, Pune",
+        "gstin": "27AAAPA1234A1Z5",
+        "settings": {},
+        "seq": "415",
+        "createdAt": "2026-10-12T17:51:19.124Z"
+      }
+    ],
+    "floors": [
+      {
+        "id": "01a1313d-8d73-71a1-a075-418bf25e612e",
+        "tenantId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+        "branchId": "01a1313d-8a54-71a0-8ad1-321b14fd11ad",
+        "name": "Ground floor (AC)",
+        "sortOrder": 0,
+        "seq": "420",
+        "deleted": false
+      }
+    ],
+    "tables": [
+      {
+        "id": "01a1313d-8da2-7400-bd57-ca845c180dec",
+        "tenantId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+        "branchId": "01a1313d-8a54-71a0-8ad1-321b14fd11ad",
+        "floorId": "01a1313d-8d73-71a1-a075-418bf25e612e",
+        "name": "12",
+        "seats": 6,
+        "layoutX": 0,
+        "layoutY": 0,
+        "seq": "423",
+        "deleted": false
+      },
+      {
+        "id": "01a1313d-8db7-7651-8e80-49d99d717ca6",
+        "tenantId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+        "branchId": "01a1313d-8a54-71a0-8ad1-321b14fd11ad",
+        "floorId": "01a1313d-8d73-71a1-a075-418bf25e612e",
+        "name": "13",
+        "seats": 2,
+        "layoutX": 0,
+        "layoutY": 0,
+        "seq": "424",
+        "deleted": true
+      }
+    ],
+    "taxRules": [
+      {
+        "id": "01a1313d-8e31-7311-a939-1867f12006da",
+        "tenantId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+        "name": "GST 5%",
+        "rateBp": 500,
+        "seq": "425",
+        "deleted": false
+      }
+    ],
+    "categories": [
+      {
+        "id": "01a1313d-8e5a-75f0-94ce-d7b0b2c80465",
+        "tenantId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+        "branchId": null,
+        "name": "Mains",
+        "sortOrder": 1,
+        "seq": "426",
+        "deleted": false
+      }
+    ],
+    "items": [
+      {
+        "id": "01a1313d-8e8b-7221-9666-8064114832eb",
+        "tenantId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+        "categoryId": "01a1313d-8e5a-75f0-94ce-d7b0b2c80465",
+        "name": "Butter Chicken",
+        "description": "Tomato-butter gravy",
+        "unit": "plate",
+        "quantity": 1,
+        "pricePaise": 35000,
+        "taxRuleId": "01a1313d-8e31-7311-a939-1867f12006da",
+        "available": true,
+        "isVeg": true,
+        "imageId": null,
+        "plateColors": {
+          "base": "#D9622B",
+          "sauce": "#F2C27B",
+          "garnish": "#4F8A3B"
+        },
+        "seq": "428",
+        "deleted": false
+      }
+    ],
+    "users": [
+      {
+        "id": "01a1313d-8a59-7ca0-bcc5-d3372420c4fb",
+        "name": "Asha Rao",
+        "status": "active",
+        "pinHash": null,
+        "seq": "418",
+        "roles": [
+          {
+            "role": "owner",
+            "extraPermissions": []
+          }
+        ]
+      }
+    ]
+  }
+}

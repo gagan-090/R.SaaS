@@ -1,0 +1,20 @@
+{
+  "method": "POST",
+  "path": "/api/v1/platform/admins/:id/mfa/reset",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {
+    "headers": {
+      "X-Step-Up-Token": "<X-Step-Up-Token>"
+    },
+    "body": {
+      "reason": "Lost phone; identity verified on call"
+    }
+  },
+  "status": 200,
+  "response": {
+    "id": "01a1313d-8c80-7fe3-a4f1-a0507a64a8e5",
+    "mfaReset": true,
+    "notified": "admin-mv5jtfsk-039a43@example.test"
+  }
+}

@@ -14,3 +14,8 @@ export class ZodPipe<T extends z.ZodType> implements PipeTransform {
   }
 }
 export const zbody = <T extends z.ZodType>(s: T) => new ZodPipe(s);
+
+/** OpenAPI request-body schema derived from the same zod schema the route validates with. */
+export const apiBody = (s: z.ZodType) => ({
+  schema: z.toJSONSchema(s, { target: 'openapi-3.0', unrepresentable: 'any', io: 'input' }) as Record<string, unknown>,
+});

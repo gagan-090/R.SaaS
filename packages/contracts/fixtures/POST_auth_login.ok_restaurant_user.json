@@ -1,0 +1,19 @@
+{
+  "method": "POST",
+  "path": "/api/v1/auth/login",
+  "example": "ok_restaurant_user",
+  "auth": "none",
+  "request": {
+    "body": {
+      "email": "owner-mv5jtfbi-7556bc@example.test",
+      "password": "<password>"
+    }
+  },
+  "status": 200,
+  "response": {
+    "status": "ok",
+    "accessToken": "<accessToken>",
+    "refreshToken": "<refreshToken>",
+    "expiresIn": 900
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "method": "POST",
+  "path": "/api/v1/platform/admins/:id/deactivate",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {
+    "body": {
+      "reason": "Left the company"
+    }
+  },
+  "status": 200,
+  "response": {
+    "id": "01a1313d-8bae-7623-9a5a-0bf2c1af654b",
+    "status": "disabled"
+  }
+}

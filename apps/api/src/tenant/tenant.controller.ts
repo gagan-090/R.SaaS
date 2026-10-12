@@ -1,11 +1,11 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import type { Actor, AuditDetails } from '../common/actor';
 import { AuditCtx, CurrentActor } from '../common/actor';
 import { Audited, RequirePermissions, RequiresFeature } from '../common/decorators';
 import { forbidden, notFound } from '../common/errors';
-import { zbody } from '../common/validation';
+import { apiBody, zbody } from '../common/validation';
 import { DbService, Tx } from '../db/db.service';
 import { LicenseService } from '../licensing/license.service';
 
@@ -74,6 +74,7 @@ export class TenantController {
   @RequiresFeature('menu')
   @Audited('tenant.profile_updated')
   @Patch('tenant/profile')
+  @ApiBody(apiBody(ProfileBody))
   async updateProfile(@CurrentActor() a: Actor, @Body(zbody(ProfileBody)) b: z.infer<typeof ProfileBody>, @AuditCtx() audit: AuditDetails) {
     const r = await this.t(a, async (tx) => {
       const before = await tx.restaurantTenant.findUniqueOrThrow({ where: { id: a.tenantId } });
@@ -112,6 +113,7 @@ export class TenantController {
   @RequiresFeature('tables')
   @Audited('floor.created')
   @Post('floors')
+  @ApiBody(apiBody(FloorBody))
   async createFloor(@CurrentActor() a: Actor, @Body(zbody(FloorBody)) b: z.infer<typeof FloorBody>, @AuditCtx() audit: AuditDetails) {
     assertBranch(a, b.branchId);
     const f = await this.t(a, async (tx) => {
@@ -129,6 +131,7 @@ export class TenantController {
   @RequiresFeature('tables')
   @Audited('floor.updated')
   @Patch('floors/:id')
+  @ApiBody(apiBody(FloorPatch))
   async updateFloor(@CurrentActor() a: Actor, @Param('id', ParseUUIDPipe) id: string, @Body(zbody(FloorPatch)) b: z.infer<typeof FloorPatch>, @AuditCtx() audit: AuditDetails) {
     const r = await this.t(a, async (tx) => {
       const before = await tx.floor.findUnique({ where: { id } });
@@ -151,6 +154,7 @@ export class TenantController {
   @RequiresFeature('tables')
   @Audited('table.created')
   @Post('tables')
+  @ApiBody(apiBody(TableBody))
   async createTable(@CurrentActor() a: Actor, @Body(zbody(TableBody)) b: z.infer<typeof TableBody>, @AuditCtx() audit: AuditDetails) {
     const t = await this.t(a, async (tx) => {
       const floor = await tx.floor.findUnique({ where: { id: b.floorId } });
@@ -166,6 +170,7 @@ export class TenantController {
   @RequiresFeature('tables')
   @Audited('table.updated')
   @Patch('tables/:id')
+  @ApiBody(apiBody(TablePatch))
   async updateTable(@CurrentActor() a: Actor, @Param('id', ParseUUIDPipe) id: string, @Body(zbody(TablePatch)) b: z.infer<typeof TablePatch>, @AuditCtx() audit: AuditDetails) {
     const r = await this.t(a, async (tx) => {
       const before = await tx.table.findUnique({ where: { id } });
@@ -206,6 +211,7 @@ export class TenantController {
   @RequiresFeature('menu')
   @Audited('tax_rule.created')
   @Post('tax-rules')
+  @ApiBody(apiBody(TaxBody))
   async createTaxRule(@CurrentActor() a: Actor, @Body(zbody(TaxBody)) b: z.infer<typeof TaxBody>, @AuditCtx() audit: AuditDetails) {
     const r = await this.t(a, (tx) => tx.taxRule.create({ data: { ...b, tenantId: a.tenantId! } }));
     Object.assign(audit, { objectType: 'tax_rule', objectId: r.id, after: r });
@@ -223,6 +229,7 @@ export class TenantController {
   @RequiresFeature('menu')
   @Audited('menu.category_created')
   @Post('menu/categories')
+  @ApiBody(apiBody(CategoryBody))
   async createCategory(@CurrentActor() a: Actor, @Body(zbody(CategoryBody)) b: z.infer<typeof CategoryBody>, @AuditCtx() audit: AuditDetails) {
     if (b.branchId) assertBranch(a, b.branchId);
     const c = await this.t(a, (tx) => tx.menuCategory.create({ data: { ...b, tenantId: a.tenantId! } }));
@@ -250,6 +257,7 @@ export class TenantController {
   @RequiresFeature('menu')
   @Audited('menu.item_created')
   @Post('menu/items')
+  @ApiBody(apiBody(ItemBody))
   async createItem(@CurrentActor() a: Actor, @Body(zbody(ItemBody)) b: z.infer<typeof ItemBody>, @AuditCtx() audit: AuditDetails) {
     const it = await this.t(a, async (tx) => {
       if (!(await tx.menuCategory.findUnique({ where: { id: b.categoryId } }))) throw notFound('Category');
@@ -266,6 +274,7 @@ export class TenantController {
   @RequiresFeature('menu')
   @Audited('menu.item_updated')
   @Patch('menu/items/:id')
+  @ApiBody(apiBody(ItemPatch))
   async updateItem(@CurrentActor() a: Actor, @Param('id', ParseUUIDPipe) id: string, @Body(zbody(ItemPatch)) b: z.infer<typeof ItemPatch>, @AuditCtx() audit: AuditDetails) {
     const r = await this.t(a, async (tx) => {
       const before = await tx.menuItem.findUnique({ where: { id } });

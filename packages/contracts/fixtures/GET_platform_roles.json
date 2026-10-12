@@ -1,0 +1,195 @@
+{
+  "method": "GET",
+  "path": "/api/v1/platform/roles",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {},
+  "status": 200,
+  "response": [
+    {
+      "id": "01a1312f-28d5-7a02-8354-baacc55f2420",
+      "name": "Onboarding Admin",
+      "description": "Registers restaurants and manages licenses",
+      "permissions": [
+        "platform.restaurant.read",
+        "platform.restaurant.create",
+        "platform.restaurant.update",
+        "platform.restaurant.status",
+        "platform.license.manage",
+        "platform.payment.record"
+      ],
+      "isSystem": true,
+      "createdAt": "2026-10-12T17:35:36.661Z"
+    },
+    {
+      "id": "01a1312f-28d6-73a3-bc48-433e2853727a",
+      "name": "Platform Auditor",
+      "description": "Read-only access to restaurants, admins and the platform audit log",
+      "permissions": [
+        "platform.restaurant.read",
+        "platform.admin.read",
+        "platform.audit.read"
+      ],
+      "isSystem": true,
+      "createdAt": "2026-10-12T17:35:36.662Z"
+    },
+    {
+      "id": "01a13135-4252-7470-9958-dc59d99d5f74",
+      "name": "RoleAdmin-mv5jhsnm-e48e93",
+      "description": null,
+      "permissions": [
+        "platform.admin.roles",
+        "platform.admin.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-12T17:42:16.403Z"
+    },
+    {
+      "id": "01a13136-e4a2-71e3-bbd1-458adb92a84f",
+      "name": "RoleAdmin-mv5jk3aa-7490dc",
+      "description": null,
+      "permissions": [
+        "platform.admin.roles",
+        "platform.admin.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-12T17:44:03.491Z"
+    },
+    {
+      "id": "01a13137-5135-76e0-968f-20ab1b032ddd",
+      "name": "RoleAdmin-mv5jkoqc-52f807",
+      "description": null,
+      "permissions": [
+        "platform.admin.roles",
+        "platform.admin.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-12T17:44:31.285Z"
+    },
+    {
+      "id": "01a13139-cacd-7d33-9df3-1933e5f0cab9",
+      "name": "RoleAdmin-mv5jo5vx-919d7c",
+      "description": null,
+      "permissions": [
+        "platform.admin.roles",
+        "platform.admin.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-12T17:47:13.486Z"
+    },
+    {
+      "id": "01a1313a-a83b-7ff1-bde0-9e88a2d36391",
+      "name": "RoleAdmin-mv5jpdmi-060b61",
+      "description": null,
+      "permissions": [
+        "platform.admin.roles",
+        "platform.admin.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-12T17:48:10.171Z"
+    },
+    {
+      "id": "01a1313b-4a55-78c1-8cdb-357e8740256b",
+      "name": "RoleAdmin-mv5jq9n9-248801",
+      "description": null,
+      "permissions": [
+        "platform.admin.roles",
+        "platform.admin.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-12T17:48:51.669Z"
+    },
+    {
+      "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+      "name": "Super Admin",
+      "description": "All platform permissions",
+      "permissions": [
+        "platform.restaurant.read",
+        "platform.restaurant.create",
+        "platform.restaurant.update",
+        "platform.restaurant.status",
+        "platform.license.manage",
+        "platform.payment.record",
+        "platform.plan.manage",
+        "platform.admin.read",
+        "platform.admin.invite",
+        "platform.admin.roles",
+        "platform.admin.deactivate",
+        "platform.mfa.reset",
+        "platform.audit.read"
+      ],
+      "isSystem": true,
+      "createdAt": "2026-10-12T17:35:36.656Z"
+    },
+    {
+      "id": "01a1313d-3506-7502-84af-496e9a22057b",
+      "name": "Support t-mv5jsykc-a9dbee",
+      "description": "Reads restaurants",
+      "permissions": [
+        "platform.restaurant.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-12T17:50:57.286Z"
+    },
+    {
+      "id": "01a13135-4361-7690-8983-9ddc48a904e3",
+      "name": "r-mv5jhsuw-1c0bd3",
+      "description": null,
+      "permissions": [
+        "platform.restaurant.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-12T17:42:16.674Z"
+    },
+    {
+      "id": "01a13136-e5f8-7593-aeb0-46dcc7d72d2e",
+      "name": "r-mv5jk3jd-ac203a",
+      "description": null,
+      "permissions": [
+        "platform.restaurant.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-12T17:44:03.833Z"
+    },
+    {
+      "id": "01a13137-527a-7fe3-8a36-70f59607021f",
+      "name": "r-mv5jkoyz-4a39fe",
+      "description": null,
+      "permissions": [
+        "platform.restaurant.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-12T17:44:31.610Z"
+    },
+    {
+      "id": "01a13139-cbe4-7d41-802e-e42077a4defd",
+      "name": "r-mv5jo639-9ac936",
+      "description": null,
+      "permissions": [
+        "platform.restaurant.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-12T17:47:13.765Z"
+    },
+    {
+      "id": "01a1313a-a9d3-7bb1-aec6-a8871059ac4a",
+      "name": "r-mv5jpduh-fe3c83",
+      "description": null,
+      "permissions": [
+        "platform.restaurant.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-12T17:48:10.579Z"
+    },
+    {
+      "id": "01a1313b-4b72-7d11-84b8-a893d84f24d5",
+      "name": "r-mv5jq9uv-02374b",
+      "description": null,
+      "permissions": [
+        "platform.restaurant.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-12T17:48:51.955Z"
+    }
+  ]
+}

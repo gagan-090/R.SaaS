@@ -1,18 +1,16 @@
 import { Body, Controller, Get, Headers, HttpCode, Ip, Post, Req } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { z } from 'zod';
-import { loadEnv } from '../config/env';
+import { authLimit } from '../common/decorators';
 import type { Actor, AppRequest } from '../common/actor';
 import { CurrentActor } from '../common/actor';
 import { AllowEnrollmentToken, AuthenticatedOnly, Public } from '../common/decorators';
 import { badRequest } from '../common/errors';
-import { zbody } from '../common/validation';
+import { apiBody, zbody } from '../common/validation';
 import { DbService } from '../db/db.service';
 import { AuthService } from './auth.service';
 
-// Resolved per request so the configured limit (AUTH_RATE_LIMIT_PER_MIN, default 10/min/IP) always applies.
-const authLimit = () => ({ default: { limit: () => loadEnv().AUTH_RATE_LIMIT_PER_MIN, ttl: 60_000 } });
 
 const LoginBody = z.object({ email: z.string().email(), password: z.string().min(1).max(256) });
 const MfaVerifyBody = z
@@ -34,6 +32,7 @@ export class AuthController {
   @Throttle(authLimit())
   @Post('auth/login')
   @HttpCode(200)
+  @ApiBody(apiBody(LoginBody))
   login(@Body(zbody(LoginBody)) b: z.infer<typeof LoginBody>, @Req() req: AppRequest, @Ip() ip: string, @Headers('user-agent') ua?: string) {
     return this.auth.login(b.email, b.password, meta(req, ip, ua));
   }
@@ -42,6 +41,7 @@ export class AuthController {
   @Throttle(authLimit())
   @Post('auth/mfa/verify')
   @HttpCode(200)
+  @ApiBody(apiBody(MfaVerifyBody))
   mfaVerify(@Body(zbody(MfaVerifyBody)) b: z.infer<typeof MfaVerifyBody>, @Req() req: AppRequest, @Ip() ip: string, @Headers('user-agent') ua?: string) {
     return this.auth.mfaVerify(b.challengeToken, b, meta(req, ip, ua));
   }
@@ -50,6 +50,7 @@ export class AuthController {
   @Throttle(authLimit())
   @Post('auth/refresh')
   @HttpCode(200)
+  @ApiBody(apiBody(RefreshBody))
   refresh(@Body(zbody(RefreshBody)) b: z.infer<typeof RefreshBody>, @Req() req: AppRequest, @Ip() ip: string, @Headers('user-agent') ua?: string) {
     return this.auth.refresh(b.refreshToken, meta(req, ip, ua));
   }
@@ -57,6 +58,7 @@ export class AuthController {
   @AuthenticatedOnly()
   @Post('auth/logout')
   @HttpCode(204)
+  @ApiBody(apiBody(RefreshBody))
   async logout(@Body(zbody(RefreshBody)) b: z.infer<typeof RefreshBody>, @CurrentActor() actor: Actor, @Req() req: AppRequest, @Ip() ip: string) {
     await this.auth.logout(b.refreshToken, actor, meta(req, ip));
   }
@@ -66,6 +68,7 @@ export class AuthController {
   @Throttle(authLimit())
   @Post('auth/step-up')
   @HttpCode(200)
+  @ApiBody(apiBody(StepUpBody))
   stepUp(@Body(zbody(StepUpBody)) b: z.infer<typeof StepUpBody>, @CurrentActor() actor: Actor, @Req() req: AppRequest, @Ip() ip: string) {
     return this.auth.stepUp(actor, b.password, b.code, meta(req, ip));
   }
@@ -74,6 +77,7 @@ export class AuthController {
   @Throttle(authLimit())
   @Post('auth/accept-invite')
   @HttpCode(200)
+  @ApiBody(apiBody(AcceptInviteBody))
   acceptInvite(@Body(zbody(AcceptInviteBody)) b: z.infer<typeof AcceptInviteBody>, @Req() req: AppRequest, @Ip() ip: string) {
     return this.auth.acceptInvite(b.token, b.password, meta(req, ip));
   }
@@ -114,6 +118,7 @@ export class AuthController {
   @Throttle(authLimit())
   @Post('me/mfa/confirm')
   @HttpCode(200)
+  @ApiBody(apiBody(ConfirmBody))
   async confirm(@Body(zbody(ConfirmBody)) b: z.infer<typeof ConfirmBody>, @CurrentActor() a: Actor, @Req() req: AppRequest, @Ip() ip: string) {
     const p = { typ: a.type, id: a.id, tid: a.tenantId };
     const { recoveryCodes } = await this.auth.enrollConfirm(p, b.code, meta(req, ip));

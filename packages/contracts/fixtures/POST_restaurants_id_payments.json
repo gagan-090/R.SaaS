@@ -1,0 +1,26 @@
+{
+  "method": "POST",
+  "path": "/api/v1/restaurants/:id/payments",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {
+    "body": {
+      "amountPaise": 99900,
+      "method": "upi",
+      "reference": "UTR4455",
+      "paidAt": "2026-10-12T17:51:19.298Z"
+    }
+  },
+  "status": 201,
+  "response": {
+    "id": "01a1313d-8b0e-7213-9d08-9201293c2416",
+    "tenantId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+    "licenseId": null,
+    "amountPaise": 99900,
+    "method": "upi",
+    "reference": "UTR4455",
+    "paidAt": "2026-10-12T17:51:19.298Z",
+    "recordedBy": "01a1313d-873d-7be0-882e-324e69d8774c",
+    "createdAt": "2026-10-12T17:51:19.310Z"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "method": "POST",
+  "path": "/api/v1/restaurants/:id/licenses",
+  "example": "ok",
+  "auth": "bearer",
+  "request": {
+    "body": {
+      "action": "renew",
+      "reason": "Annual renewal"
+    }
+  },
+  "status": 201,
+  "response": {
+    "id": "01a1313d-8ae4-7d04-ae3e-bde4e0c97dc2",
+    "planCode": "premium",
+    "planName": "Premium",
+    "startsAt": "2026-10-12T17:51:19.133Z",
+    "endsAt": "2026-12-12T17:51:19.133Z",
+    "graceDays": 7,
+    "status": "active",
+    "reason": "Annual renewal",
+    "issuedBy": "01a1313d-873d-7be0-882e-324e69d8774c",
+    "createdAt": "2026-10-12T17:51:19.270Z"
+  }
+}
