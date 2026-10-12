@@ -1,0 +1,648 @@
+// Restaurant SaaS — cloud schema (Phase 1 + Phase 2 entities).
+// Conventions: ids are UUIDv7; money is integer paise (Int); times are UTC (timestamptz).
+// Every restaurant-scoped table carries tenant_id; branch-scoped tables also carry branch_id.
+// Row-level security policies live in prisma/migrations/*_rls/migration.sql.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------- platform
+
+enum AdminStatus {
+  invited
+  active
+  disabled
+}
+
+model PlatformAdmin {
+  id                String              @id @default(uuid(7)) @db.Uuid
+  email             String              @unique
+  name              String
+  passwordHash      String?             @map("password_hash")
+  status            AdminStatus         @default(invited)
+  failedLoginCount  Int                 @default(0) @map("failed_login_count")
+  lockedUntil       DateTime?           @map("locked_until") @db.Timestamptz(3)
+  lastLoginAt       DateTime?           @map("last_login_at") @db.Timestamptz(3)
+  inviteTokenHash   String?             @unique @map("invite_token_hash")
+  inviteExpiresAt   DateTime?           @map("invite_expires_at") @db.Timestamptz(3)
+  invitedById       String?             @map("invited_by_id") @db.Uuid
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  roles             PlatformAdminRole[]
+  mfa               MFAEnrollment?      @relation("AdminMfa")
+
+  @@map("platform_admins")
+}
+
+model PlatformRole {
+  id          String              @id @default(uuid(7)) @db.Uuid
+  name        String              @unique
+  description String?
+  permissions String[]            // Permission.key values (tier = platform)
+  isSystem    Boolean             @default(false) @map("is_system")
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  admins      PlatformAdminRole[]
+
+  @@map("platform_roles")
+}
+
+model PlatformAdminRole {
+  adminId    String        @map("admin_id") @db.Uuid
+  roleId     String        @map("role_id") @db.Uuid
+  assignedBy String?       @map("assigned_by") @db.Uuid
+  assignedAt DateTime      @default(now()) @map("assigned_at") @db.Timestamptz(3)
+  admin      PlatformAdmin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  role       PlatformRole  @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@id([adminId, roleId])
+  @@map("platform_admin_roles")
+}
+
+enum PermissionTier {
+  platform
+  restaurant
+}
+
+model Permission {
+  key         String         @id
+  description String
+  tier        PermissionTier
+
+  @@map("permissions")
+}
+
+model MFAEnrollment {
+  id                  String         @id @default(uuid(7)) @db.Uuid
+  adminId             String?        @unique @map("admin_id") @db.Uuid
+  userId              String?        @unique @map("user_id") @db.Uuid
+  totpSecretEncrypted String         @map("totp_secret_encrypted")
+  recoveryCodeHashes  String[]       @map("recovery_code_hashes")
+  enrolledAt          DateTime?      @map("enrolled_at") @db.Timestamptz(3) // null until confirmed
+  lastUsedStep        Int?           @map("last_used_step") // replay guard for TOTP
+  resetById           String?        @map("reset_by") @db.Uuid
+  resetAt             DateTime?      @map("reset_at") @db.Timestamptz(3)
+  createdAt           DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  admin               PlatformAdmin? @relation("AdminMfa", fields: [adminId], references: [id], onDelete: Cascade)
+  user                User?          @relation("UserMfa", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("mfa_enrollments")
+}
+
+enum SubjectType {
+  admin
+  user
+}
+
+model RefreshToken {
+  id          String      @id @default(uuid(7)) @db.Uuid
+  subjectType SubjectType @map("subject_type")
+  subjectId   String      @map("subject_id") @db.Uuid
+  familyId    String      @map("family_id") @db.Uuid
+  tokenHash   String      @unique @map("token_hash")
+  expiresAt   DateTime    @map("expires_at") @db.Timestamptz(3)
+  revokedAt   DateTime?   @map("revoked_at") @db.Timestamptz(3)
+  replacedBy  String?     @map("replaced_by") @db.Uuid
+  userAgent   String?     @map("user_agent")
+  ip          String?
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([subjectType, subjectId])
+  @@index([familyId])
+  @@map("refresh_tokens")
+}
+
+model Notification {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  recipient String // email address or admin id
+  type      String // e.g. mfa_reset, email_verification
+  payload   Json
+  sentAt    DateTime? @map("sent_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("notifications")
+}
+
+// ---------------------------------------------------------------- plans & tenants
+
+enum BillingCycle {
+  monthly
+  yearly
+}
+
+model SubscriptionPlan {
+  id           String       @id @default(uuid(7)) @db.Uuid
+  code         String       @unique // standard | professional | premium
+  name         String
+  featureFlags String[]     @map("feature_flags")
+  limits       Json
+  pricePaise   Int          @map("price_paise")
+  billingCycle BillingCycle @default(monthly) @map("billing_cycle")
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  licenses     License[]
+
+  @@map("subscription_plans")
+}
+
+enum TenantStatus {
+  pending
+  active
+  suspended
+  blocked
+}
+
+// Registration before the owner's email is verified. Not tenant-scoped (no tenant exists yet).
+model RestaurantRegistration {
+  id              String    @id @default(uuid(7)) @db.Uuid
+  ownerEmail      String    @map("owner_email")
+  ownerName       String    @map("owner_name")
+  restaurantName  String    @map("restaurant_name")
+  gstin           String?
+  address         String?
+  planCode        String    @map("plan_code")
+  tokenHash       String    @unique @map("token_hash")
+  expiresAt       DateTime  @map("expires_at") @db.Timestamptz(3)
+  verifiedAt      DateTime? @map("verified_at") @db.Timestamptz(3)
+  tenantId        String?   @map("tenant_id") @db.Uuid
+  createdById     String    @map("created_by_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([ownerEmail])
+  @@map("restaurant_registrations")
+}
+
+model RestaurantTenant {
+  id           String       @id @default(uuid(7)) @db.Uuid
+  code         String       @unique // e.g. R000123
+  name         String
+  ownerEmail   String       @unique @map("owner_email")
+  gstin        String?
+  address      String?
+  status       TenantStatus @default(pending)
+  statusReason String?      @map("status_reason")
+  menuVersion  Int          @default(0) @map("menu_version")
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  franchises   Franchise[]
+  branches     Branch[]
+  licenses     License[]
+  users        User[]
+
+  @@map("restaurant_tenants")
+}
+
+model Franchise {
+  id             String           @id @default(uuid(7)) @db.Uuid
+  tenantId       String           @map("tenant_id") @db.Uuid
+  name           String
+  billingContact String?          @map("billing_contact")
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  tenant         RestaurantTenant @relation(fields: [tenantId], references: [id])
+  branches       Branch[]
+
+  @@index([tenantId])
+  @@map("franchises")
+}
+
+model Branch {
+  id          String           @id @default(uuid(7)) @db.Uuid
+  tenantId    String           @map("tenant_id") @db.Uuid
+  franchiseId String?          @map("franchise_id") @db.Uuid
+  code        String // e.g. BR01 — used in invoice numbers
+  name        String
+  address     String?
+  gstin       String?
+  settings    Json             @default("{}")
+  seq         BigInt           @default(0) // config cursor (set by trigger)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  tenant      RestaurantTenant @relation(fields: [tenantId], references: [id])
+  franchise   Franchise?       @relation(fields: [franchiseId], references: [id])
+
+  @@unique([tenantId, code])
+  @@map("branches")
+}
+
+enum LicenseStatus {
+  active
+  revoked
+  superseded
+}
+
+model License {
+  id          String           @id @default(uuid(7)) @db.Uuid
+  tenantId    String           @map("tenant_id") @db.Uuid
+  planId      String           @map("plan_id") @db.Uuid
+  startsAt    DateTime         @map("starts_at") @db.Timestamptz(3)
+  endsAt      DateTime         @map("ends_at") @db.Timestamptz(3)
+  graceDays   Int              @default(7) @map("grace_days")
+  status      LicenseStatus    @default(active)
+  signedToken String           @map("signed_token")
+  issuedBy    String           @map("issued_by") @db.Uuid
+  reason      String?
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  tenant      RestaurantTenant @relation(fields: [tenantId], references: [id])
+  plan        SubscriptionPlan @relation(fields: [planId], references: [id])
+  payments    PaymentRecord[]
+
+  @@index([tenantId, status])
+  @@map("licenses")
+}
+
+model PaymentRecord {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  licenseId   String?  @map("license_id") @db.Uuid
+  amountPaise Int      @map("amount_paise")
+  method      String // bank | upi | cash | other
+  reference   String?
+  paidAt      DateTime @map("paid_at") @db.Timestamptz(3)
+  recordedBy  String   @map("recorded_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  license     License? @relation(fields: [licenseId], references: [id])
+
+  @@index([tenantId])
+  @@map("payment_records")
+}
+
+// ---------------------------------------------------------------- people & devices
+
+enum UserStatus {
+  active
+  disabled
+}
+
+enum RestaurantRole {
+  owner
+  it_admin
+  cashier
+  waiter
+  chef
+  auditor
+}
+
+model User {
+  id               String               @id @default(uuid(7)) @db.Uuid
+  tenantId         String               @map("tenant_id") @db.Uuid
+  name             String
+  email            String?              @unique
+  phone            String?
+  passwordHash     String?              @map("password_hash")
+  pinHash          String?              @map("pin_hash")
+  status           UserStatus           @default(active)
+  failedLoginCount Int                  @default(0) @map("failed_login_count")
+  lockedUntil      DateTime?            @map("locked_until") @db.Timestamptz(3)
+  seq              BigInt               @default(0)
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant           RestaurantTenant     @relation(fields: [tenantId], references: [id])
+  roles            UserRoleAssignment[]
+  mfa              MFAEnrollment?       @relation("UserMfa")
+
+  @@index([tenantId])
+  @@map("users")
+}
+
+model UserRoleAssignment {
+  id               String         @id @default(uuid(7)) @db.Uuid
+  tenantId         String         @map("tenant_id") @db.Uuid
+  userId           String         @map("user_id") @db.Uuid
+  role             RestaurantRole
+  branchIds        String[]       @map("branch_ids") @db.Uuid // empty = all branches
+  extraPermissions String[]       @map("extra_permissions")
+  seq              BigInt         @default(0)
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@index([tenantId])
+  @@map("user_role_assignments")
+}
+
+enum DevicePlatform {
+  windows
+  android
+  web
+}
+
+model Device {
+  id              String         @id @default(uuid(7)) @db.Uuid
+  tenantId        String         @map("tenant_id") @db.Uuid
+  branchId        String         @map("branch_id") @db.Uuid
+  name            String
+  platform        DevicePlatform
+  isHub           Boolean        @default(false) @map("is_hub")
+  deviceTokenHash String         @unique @map("device_token_hash")
+  pairedAt        DateTime       @default(now()) @map("paired_at") @db.Timestamptz(3)
+  lastSeenAt      DateTime?      @map("last_seen_at") @db.Timestamptz(3)
+  revokedAt       DateTime?      @map("revoked_at") @db.Timestamptz(3)
+
+  @@index([tenantId, branchId])
+  @@map("devices")
+}
+
+// ---------------------------------------------------------------- layout & menu (cloud is writer)
+
+model Floor {
+  id        String  @id @default(uuid(7)) @db.Uuid
+  tenantId  String  @map("tenant_id") @db.Uuid
+  branchId  String  @map("branch_id") @db.Uuid
+  name      String
+  sortOrder Int     @default(0) @map("sort_order")
+  seq       BigInt  @default(0)
+  deleted   Boolean @default(false)
+  tables    Table[]
+
+  @@index([tenantId, branchId])
+  @@map("floors")
+}
+
+model Table {
+  id       String  @id @default(uuid(7)) @db.Uuid
+  tenantId String  @map("tenant_id") @db.Uuid
+  branchId String  @map("branch_id") @db.Uuid
+  floorId  String  @map("floor_id") @db.Uuid
+  name     String // number or name, e.g. "12"
+  seats    Int     @default(4)
+  layoutX  Int     @default(0) @map("layout_x")
+  layoutY  Int     @default(0) @map("layout_y")
+  seq      BigInt  @default(0)
+  deleted  Boolean @default(false)
+  floor    Floor   @relation(fields: [floorId], references: [id])
+
+  @@unique([branchId, name])
+  @@index([tenantId, branchId])
+  @@map("tables")
+}
+
+model TaxRule {
+  id       String     @id @default(uuid(7)) @db.Uuid
+  tenantId String     @map("tenant_id") @db.Uuid
+  name     String // e.g. "GST 5%"
+  rateBp   Int        @map("rate_bp") // basis points: 500 = 5% (split equally into CGST + SGST)
+  seq      BigInt     @default(0)
+  deleted  Boolean    @default(false)
+  items    MenuItem[]
+
+  @@index([tenantId])
+  @@map("tax_rules")
+}
+
+model MenuCategory {
+  id        String     @id @default(uuid(7)) @db.Uuid
+  tenantId  String     @map("tenant_id") @db.Uuid
+  branchId  String?    @map("branch_id") @db.Uuid // null = tenant-wide
+  name      String
+  sortOrder Int        @default(0) @map("sort_order")
+  seq       BigInt     @default(0)
+  deleted   Boolean    @default(false)
+  items     MenuItem[]
+
+  @@index([tenantId])
+  @@map("menu_categories")
+}
+
+model MenuItem {
+  id          String       @id @default(uuid(7)) @db.Uuid
+  tenantId    String       @map("tenant_id") @db.Uuid
+  categoryId  String       @map("category_id") @db.Uuid
+  name        String
+  description String?
+  unit        String       @default("plate")
+  quantity    Int          @default(1)
+  pricePaise  Int          @map("price_paise")
+  taxRuleId   String       @map("tax_rule_id") @db.Uuid
+  available   Boolean      @default(true)
+  isVeg       Boolean      @default(true) @map("is_veg")
+  imageId     String?      @map("image_id") @db.Uuid
+  plateColors Json?        @map("plate_colors") // { base, sauce, garnish } for the PlateIcon
+  seq         BigInt       @default(0)
+  deleted     Boolean      @default(false)
+  category    MenuCategory @relation(fields: [categoryId], references: [id])
+  taxRule     TaxRule      @relation(fields: [taxRuleId], references: [id])
+
+  @@index([tenantId])
+  @@map("menu_items")
+}
+
+// ---------------------------------------------------------------- live operations (hub is writer; cloud stores synced copies)
+
+enum OrderType {
+  dine_in
+  takeaway
+}
+
+enum OrderStatus {
+  open
+  billed
+  paid
+  cancelled
+}
+
+model Order {
+  id        String      @id @db.Uuid
+  tenantId  String      @map("tenant_id") @db.Uuid
+  branchId  String      @map("branch_id") @db.Uuid
+  type      OrderType
+  tableId   String?     @map("table_id") @db.Uuid
+  waiterId  String?     @map("waiter_id") @db.Uuid
+  status    OrderStatus
+  openedBy  String      @map("opened_by") @db.Uuid
+  openedAt  DateTime    @map("opened_at") @db.Timestamptz(3)
+  version   Int
+  lines     OrderLine[]
+
+  @@index([tenantId, branchId])
+  @@map("orders")
+}
+
+enum OrderLineStatus {
+  pending
+  sent
+  reversed
+}
+
+model OrderLine {
+  id                 String          @id @db.Uuid
+  tenantId           String          @map("tenant_id") @db.Uuid
+  branchId           String          @map("branch_id") @db.Uuid
+  orderId            String          @map("order_id") @db.Uuid
+  menuItemId         String          @map("menu_item_id") @db.Uuid
+  nameSnapshot       String          @map("name_snapshot")
+  priceSnapshotPaise Int             @map("price_snapshot_paise")
+  taxRateSnapshotBp  Int             @map("tax_rate_snapshot_bp")
+  qty                Int
+  notes              String?
+  status             OrderLineStatus
+  sentAt             DateTime?       @map("sent_at") @db.Timestamptz(3)
+  order              Order           @relation(fields: [orderId], references: [id])
+
+  @@index([tenantId, branchId])
+  @@map("order_lines")
+}
+
+model OrderStatusHistory {
+  id         String   @id @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  branchId   String   @map("branch_id") @db.Uuid
+  orderId    String   @map("order_id") @db.Uuid
+  fromStatus String?  @map("from_status")
+  toStatus   String   @map("to_status")
+  actor      String   @db.Uuid
+  at         DateTime @db.Timestamptz(3)
+
+  @@index([tenantId, branchId])
+  @@map("order_status_history")
+}
+
+model TableTransfer {
+  id          String   @id @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  branchId    String   @map("branch_id") @db.Uuid
+  orderId     String   @map("order_id") @db.Uuid
+  fromTableId String   @map("from_table_id") @db.Uuid
+  toTableId   String   @map("to_table_id") @db.Uuid
+  actor       String   @db.Uuid
+  at          DateTime @db.Timestamptz(3)
+
+  @@index([tenantId, branchId])
+  @@map("table_transfers")
+}
+
+enum BillStatus {
+  open
+  paid
+}
+
+model Bill {
+  id            String     @id @db.Uuid
+  tenantId      String     @map("tenant_id") @db.Uuid
+  branchId      String     @map("branch_id") @db.Uuid
+  orderId       String     @map("order_id") @db.Uuid
+  invoiceNo     String     @map("invoice_no")
+  subtotalPaise Int        @map("subtotal_paise")
+  discountPaise Int        @map("discount_paise")
+  cgstPaise     Int        @map("cgst_paise")
+  sgstPaise     Int        @map("sgst_paise")
+  tipPaise      Int        @map("tip_paise")
+  roundOffPaise Int        @map("round_off_paise")
+  totalPaise    Int        @map("total_paise")
+  status        BillStatus
+  closedAt      DateTime?  @map("closed_at") @db.Timestamptz(3)
+  createdAt     DateTime   @map("created_at") @db.Timestamptz(3)
+
+  @@unique([branchId, invoiceNo])
+  @@index([tenantId, branchId])
+  @@map("bills")
+}
+
+model BillAdjustment {
+  id          String   @id @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  branchId    String   @map("branch_id") @db.Uuid
+  billId      String   @map("bill_id") @db.Uuid
+  type        String // reversal | correction
+  amountPaise Int      @map("amount_paise") // signed: negative reduces the bill
+  reason      String
+  approvedBy  String?  @map("approved_by") @db.Uuid
+  actor       String   @db.Uuid
+  at          DateTime @db.Timestamptz(3)
+
+  @@index([tenantId, branchId])
+  @@map("bill_adjustments")
+}
+
+enum PaymentMode {
+  cash
+  upi
+  card
+}
+
+model Payment {
+  id             String      @id @db.Uuid
+  tenantId       String      @map("tenant_id") @db.Uuid
+  branchId       String      @map("branch_id") @db.Uuid
+  billId         String      @map("bill_id") @db.Uuid
+  mode           PaymentMode
+  amountPaise    Int         @map("amount_paise")
+  tenderedPaise  Int?        @map("tendered_paise")
+  reference      String?
+  idempotencyKey String      @map("idempotency_key")
+  at             DateTime    @db.Timestamptz(3)
+
+  @@unique([branchId, idempotencyKey])
+  @@index([tenantId, branchId])
+  @@map("payments")
+}
+
+model TipAllocation {
+  id          String @id @db.Uuid
+  tenantId    String @map("tenant_id") @db.Uuid
+  branchId    String @map("branch_id") @db.Uuid
+  billId      String @map("bill_id") @db.Uuid
+  waiterId    String @map("waiter_id") @db.Uuid
+  amountPaise Int    @map("amount_paise")
+
+  @@index([tenantId, branchId])
+  @@map("tip_allocations")
+}
+
+// ---------------------------------------------------------------- audit & sync
+
+model AuditEvent {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  tenantId   String?  @map("tenant_id") @db.Uuid // null = platform-level event
+  branchId   String?  @map("branch_id") @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  actorType  String?  @map("actor_type") // admin | user | device | system
+  action     String
+  objectType String?  @map("object_type")
+  objectId   String?  @map("object_id")
+  before     Json?
+  after      Json?
+  reason     String?
+  deviceId   String?  @map("device_id")
+  sessionId  String?  @map("session_id")
+  ip         String?
+  at         DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([tenantId, at])
+  @@index([action])
+  @@map("audit_events")
+}
+
+// Cloud-side ingest log of hub outbox events. event_id is the hub's UUIDv7; unique = exactly-once storage.
+model SyncEvent {
+  eventId    String   @id @map("event_id") @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  branchId   String   @map("branch_id") @db.Uuid
+  entity     String
+  entityId   String   @map("entity_id")
+  op         String
+  payload    Json
+  createdAt  DateTime @map("created_at") @db.Timestamptz(3) // when the hub created it
+  receivedAt DateTime @default(now()) @map("received_at") @db.Timestamptz(3)
+
+  @@index([tenantId, branchId])
+  @@map("sync_events")
+}
+
+model SyncConflict {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  branchId   String    @map("branch_id") @db.Uuid
+  eventId    String    @unique @map("event_id") @db.Uuid
+  reason     String
+  payload    Json
+  detectedAt DateTime  @default(now()) @map("detected_at") @db.Timestamptz(3)
+  resolvedBy String?   @map("resolved_by") @db.Uuid
+  resolution String?
+
+  @@index([tenantId, branchId])
+  @@map("sync_conflicts")
+}

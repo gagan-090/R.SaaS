@@ -1,0 +1,22 @@
+import { SetMetadata } from '@nestjs/common';
+import type { FeatureFlag, PermissionKey } from './permissions';
+
+export const IS_PUBLIC = 'isPublic';
+export const PERMISSIONS = 'permissions';
+export const AUTHENTICATED_ONLY = 'authenticatedOnly';
+export const ALLOW_ENROLL_TOKEN = 'allowEnrollToken';
+export const FEATURE = 'feature';
+export const AUDIT_ACTION = 'auditAction';
+
+/** No authentication required. */
+export const Public = () => SetMetadata(IS_PUBLIC, true);
+/** Requires ALL listed permissions. Every non-public route must declare permissions or @AuthenticatedOnly. */
+export const RequirePermissions = (...p: PermissionKey[]) => SetMetadata(PERMISSIONS, p);
+/** Any signed-in principal (used for /me routes). */
+export const AuthenticatedOnly = () => SetMetadata(AUTHENTICATED_ONLY, true);
+/** Route also accepts the short-lived MFA enrolment token (first-login MFA setup). */
+export const AllowEnrollmentToken = () => SetMetadata(ALLOW_ENROLL_TOKEN, true);
+/** Tenant route gated by a license feature flag; writes are refused when the license is read-only. */
+export const RequiresFeature = (flag: FeatureFlag) => SetMetadata(FEATURE, flag);
+/** Write route: AuditInterceptor records this action on success. */
+export const Audited = (action: string) => SetMetadata(AUDIT_ACTION, action);
