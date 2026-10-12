@@ -61,3 +61,18 @@ FY-based invoice numbers, GSTIN/reason validation. 38 golden vectors in `package
 reference. TS reconciliation port `apps/api/src/money/billing.ts` runs the same vectors.
 Test: `cd packages/core && dart test` → **+49: All tests passed!** (38 golden + 11 unit); `dart analyze --fatal-infos` → No issues.
 Test: `pnpm --filter @rsaas/api test -- test/golden.spec.ts` → **38 passed**. Bug found by vectors: TS returned `-0` round-off.
+
+### M5 Branch hub: Standard path — DONE (23:40 IST)
+Built: `packages/hub_server` (package `rsaas_hub`): drift/SQLite schema (orders, lines, tickets, bills, adjustments, payments, tips,
+invoice counters, audit, outbox, devices, sessions, pairing codes, synced config), shelf HTTP API at `/hub/v1` (Build Spec §09 Standard routes),
+WebSocket bus (`state.snapshot` + deltas), one-time pairing code → device token, self-signed TLS with fingerprint pinning, staff PIN sessions
+(Argon2id compatible with the cloud), offline Ed25519 license verification with grace/read-only, dine-in + takeaway with price/tax snapshots,
+add/edit lines, KOT, reversal with mandatory reason + PIN for sent lines, discounts behind `discount.apply` (+reason >10%), tips to a waiter,
+gap-free `BR01/26-27/000001` invoices, idempotent multi-mode payments, adjustments on paid bills, single-transaction table transfer,
+outbox push worker (batch 200, 5 s, backoff to 5 min) + config pull. Cloud: `/devices/register-hub`, `/sync/push` (dedupe), `/sync/pull` (cursor), `/sync/status`.
+Test: `cd packages/hub_server && dart test` → **+27: All tests passed!** (5 consecutive runs green) — AC-04 (incl. simultaneous transfers),
+AC-05, AC-06, AC-07-lite (incl. 5 concurrent retries of one key), batch pushed twice stored once, offline license, pairing, WebSocket, TLS pinning.
+Test: `pnpm --filter @rsaas/api test` → **73 passed** (adds `sync.spec.ts`: same batch pushed twice stored once on the real API).
+Bug found: same-millisecond UUIDv7 ordering was random → monotonic counter.
+Not done in M5: KDS status endpoint, inventory, shifts (Premium, later milestones); waiter "assigned tables" scoping (no assignment data yet);
+cloud-side projection of synced events into orders/bills tables (events are stored in `sync_events`; projection + reconciliation report is Day 10 work).

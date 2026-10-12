@@ -42,3 +42,4 @@ backups/
 # Local leftovers (see MORNING.md): duplicate PDF, original style file (copied to packages/ui_kit/STYLE.md)
 docs/*(1).pdf
 pakages/
+.hubdata/
