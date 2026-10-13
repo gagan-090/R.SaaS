@@ -63,4 +63,18 @@ describe('pending registrations', () => {
     const q = (await t.http().get(api('/restaurants/registrations?state=all')).set(auth(sa)).expect(200)).body;
     expect(q.items.find((i: { id: string }) => i.id === r.registrationId).lastEmailError).toContain('own email');
   });
+
+  it('owner password: 8+ characters with letters and numbers; audit shows who acted by name', async () => {
+    const r = await register(uniq('Password Place'));
+    const token = t.mailer.lastTokenFor(r.ownerEmail);
+    const tooShort = await t.http().post(api('/restaurants/verify-email')).send({ token, password: 'ab12cd3' }).expect(400);
+    expect(JSON.stringify(tooShort.body)).toContain('at least 8');
+    const noDigit = await t.http().post(api('/restaurants/verify-email')).send({ token, password: 'onlyletters' }).expect(400);
+    expect(JSON.stringify(noDigit.body)).toContain('letters and numbers');
+    const ok = (await t.http().post(api('/restaurants/verify-email')).send({ token, password: `ab${Date.now() % 1000}cdef` }).expect(201)).body;
+
+    const audit = (await t.http().get(api(`/platform/audit?tenantId=${ok.tenantId}`)).set(auth(sa)).expect(200)).body;
+    const created = audit.items.find((i: { action: string }) => i.action === 'restaurant.created');
+    expect(created).toMatchObject({ actorName: 'Owner', actorRole: 'owner', tenantName: expect.stringContaining('Password Place') });
+  });
 });

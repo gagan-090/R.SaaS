@@ -77,7 +77,7 @@ void main() {
     expect(find.text('${first['name']}'), findsOneWidget);
     await t.tap(find.byKey(const Key('filter-Status')));
     await t.pumpAndSettle();
-    await t.tap(find.text('suspended').last);
+    await t.tap(find.text('Suspended').last); // filters show words, not codes
     await t.pumpAndSettle();
     expect(fx.where('GET', '/restaurants').last.url.queryParameters['status'], 'suspended');
 
@@ -85,6 +85,13 @@ void main() {
     await t.pumpAndSettle();
     final detail = FixtureApi.fixture('GET_restaurants_id.json')! as Map;
     expect(find.text('${detail['name']}'), findsWidgets);
+    // people read words, not system codes
+    final features = ((detail['entitlement'] as Map?)?['features'] as List? ?? const []).cast<String>();
+    if (features.contains('orders.dinein')) {
+      expect(find.text('Dine-in orders'), findsOneWidget);
+      expect(find.text('orders.dinein'), findsNothing);
+    }
+    expect(find.text('${detail['status']}'), findsNothing, reason: 'status shown in Title Case');
     await t.tap(find.text('Suspend'));
     await t.pumpAndSettle();
     await t.tap(find.text('Suspend').last); // confirm without a reason → nothing sent

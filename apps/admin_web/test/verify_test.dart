@@ -11,7 +11,7 @@ import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 import 'fixture_api.dart';
 
 /// Built at runtime so no password literal sits in the repo (secret scan).
-final strong = ['Spice', 'route', DateTime.now().year].join('-');
+final strong = ['Spice', DateTime.now().year].join('');
 final other = '$strong-x';
 
 void main() {
@@ -33,7 +33,8 @@ void main() {
     await t.enterText(find.byKey(const Key('verify-password2')), 'short1');
     await t.tap(find.byKey(const Key('verify-submit')));
     await t.pumpAndSettle();
-    expect(find.text('Use at least 12 characters'), findsOneWidget);
+    expect(find.text('Use at least 8 characters (you have 6)'), findsOneWidget);
+    expect(find.text('6 characters'), findsOneWidget);
 
     await t.enterText(find.byKey(const Key('verify-password')), strong);
     await t.enterText(find.byKey(const Key('verify-password2')), other);

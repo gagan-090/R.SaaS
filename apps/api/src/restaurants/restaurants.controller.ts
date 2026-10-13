@@ -31,7 +31,12 @@ const RegisterBody = z.object({
 });
 const RegistrationQuery = z.object({ state: z.enum(['awaiting', 'expired', 'cancelled', 'all']).default('awaiting'), q: z.string().optional() });
 const CancelBody = z.object({ reason: z.string().trim().min(3).max(500) });
-const VerifyBody = z.object({ token: z.string().min(1), password: z.string().min(12).max(256) });
+const VerifyBody = z.object({
+  token: z.string().min(1),
+  // 8+ characters with a letter and a digit (same rule the console shows while typing)
+  password: z.string().min(8, 'Use at least 8 characters').max(256)
+    .refine((p) => /[A-Za-z]/.test(p) && /[0-9]/.test(p), 'Use letters and numbers'),
+});
 const ListQuery = z.object({
   q: z.string().optional(),
   status: z.nativeEnum(TenantStatus).optional(),

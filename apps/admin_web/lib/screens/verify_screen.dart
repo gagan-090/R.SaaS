@@ -21,11 +21,15 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
   String? _error;
   Json? _done;
 
+  static const minLength = 8;
+  bool get _longEnough => _pw.text.length >= minLength;
+  bool get _mixed => RegExp(r'[A-Za-z]').hasMatch(_pw.text) && RegExp(r'[0-9]').hasMatch(_pw.text);
+  bool get _matches => _pw.text.isNotEmpty && _pw.text == _pw2.text;
+
   String? _check() {
-    final p = _pw.text;
-    if (p.length < 12) return 'Use at least 12 characters';
-    if (!RegExp(r'[A-Za-z]').hasMatch(p) || !RegExp(r'[0-9]').hasMatch(p)) return 'Mix letters and numbers';
-    if (p != _pw2.text) return 'The two passwords do not match';
+    if (!_longEnough) return 'Use at least $minLength characters (you have ${_pw.text.length})';
+    if (!_mixed) return 'Use both letters and numbers';
+    if (!_matches) return 'The two passwords do not match';
     return null;
   }
 
@@ -51,7 +55,8 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
   @override
   Widget build(BuildContext context) {
     final p = context.hp;
-    final strength = _pw.text.length >= 16 ? 3 : (_pw.text.length >= 12 ? 2 : (_pw.text.isEmpty ? 0 : 1));
+    final met = [_longEnough, _mixed, _pw.text.length >= 12].where((x) => x).length;
+    final strength = _pw.text.isEmpty ? 0 : met.clamp(1, 3);
     Widget body;
     if (widget.token == null || widget.token!.isEmpty) {
       body = const EmptyState(icon: Icons.link_off_rounded, title: 'This link is incomplete', message: 'Open the link from your email again, or ask for a new one.');
@@ -88,7 +93,6 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
             onChanged: (_) => setState(() => _error = null),
             decoration: InputDecoration(
               labelText: 'New password',
-              helperText: '12+ characters, letters and numbers',
               suffixIcon: IconButton(tooltip: _show ? 'Hide' : 'Show', icon: Icon(_show ? Icons.visibility_off_outlined : Icons.visibility_outlined), onPressed: () => setState(() => _show = !_show)),
             ),
           ),
@@ -102,15 +106,36 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
               backgroundColor: p.raised,
             ),
           ),
+          const SizedBox(height: HPSpace.sm),
+          Row(children: [
+            Text(['', 'Weak', 'Good', 'Strong'][strength], style: HPType.label([p.muted, p.danger, HPColors.saffron, p.success][strength]).copyWith(fontSize: 12)),
+            const Spacer(),
+            Text('${_pw.text.length} characters', key: const Key('verify-count'), style: HPType.body(p.muted).copyWith(fontSize: 12)),
+          ]),
           const SizedBox(height: HPSpace.md),
           TextField(
             key: const Key('verify-password2'),
             controller: _pw2,
             obscureText: !_show,
             autofillHints: const [AutofillHints.newPassword],
+            onChanged: (_) => setState(() => _error = null),
             onSubmitted: (_) => _submit(),
             decoration: const InputDecoration(labelText: 'Repeat password'),
           ),
+          const SizedBox(height: HPSpace.md),
+          // live checklist: each rule turns green as soon as it is met
+          for (final (ok, text) in [(_longEnough, 'At least $minLength characters'), (_mixed, 'Letters and numbers'), (_matches, 'Both passwords match')])
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(children: [
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 150),
+                  child: Icon(ok ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded, key: ValueKey(ok), size: 18, color: ok ? p.success : p.faint),
+                ),
+                const SizedBox(width: HPSpace.sm),
+                Expanded(child: Text(text, style: HPType.body(ok ? p.text : p.muted))),
+              ]),
+            ),
           if (_error != null) Padding(padding: const EdgeInsets.only(top: HPSpace.md), child: Text(_error!, key: const Key('verify-error'), style: HPType.body(p.danger))),
           const SizedBox(height: HPSpace.x2),
           PrimaryButton(key: const Key('verify-submit'), label: 'Activate my restaurant', busy: _busy, onPressed: _submit),

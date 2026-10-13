@@ -222,7 +222,29 @@ export class PlatformController {
         tx.auditEvent.findMany({ where, orderBy: { at: 'desc' }, skip: (q.page - 1) * q.pageSize, take: q.pageSize }),
         tx.auditEvent.count({ where }),
       ]);
-      return { items, total, page: q.page, pageSize: q.pageSize };
+      // who did it, in words: name + role for staff, name for platform admins, restaurant name for the tenant
+      const userIds = [...new Set(items.filter((i) => i.actorType === 'user' && i.actorId).map((i) => i.actorId!))];
+      const adminIds = [...new Set(items.filter((i) => i.actorType === 'admin' && i.actorId).map((i) => i.actorId!))];
+      const tenantIds = [...new Set(items.filter((i) => i.tenantId).map((i) => i.tenantId!))];
+      const [users, admins, tenants] = await Promise.all([
+        tx.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true, email: true, roles: { select: { role: true } } } }),
+        tx.platformAdmin.findMany({ where: { id: { in: adminIds } }, select: { id: true, name: true, email: true } }),
+        tx.restaurantTenant.findMany({ where: { id: { in: tenantIds } }, select: { id: true, name: true } }),
+      ]);
+      const who = new Map<string, { name: string; detail: string | null }>([
+        ...users.map((u) => [u.id, { name: u.name.split(' (')[0], detail: u.roles[0]?.role ?? null }] as const),
+        ...admins.map((a) => [a.id, { name: a.name, detail: 'Platform admin' }] as const),
+      ]);
+      const tenantName = new Map(tenants.map((t) => [t.id, t.name]));
+      return {
+        items: items.map((i) => ({
+          ...i,
+          actorName: i.actorId ? (who.get(i.actorId)?.name ?? null) : null,
+          actorRole: i.actorId ? (who.get(i.actorId)?.detail ?? null) : null,
+          tenantName: i.tenantId ? (tenantName.get(i.tenantId) ?? null) : null,
+        })),
+        total, page: q.page, pageSize: q.pageSize,
+      };
     });
   }
 }

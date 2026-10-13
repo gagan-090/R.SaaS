@@ -128,13 +128,14 @@ class SuccessButton extends StatelessWidget {
 }
 
 class DangerButton extends StatelessWidget {
-  const DangerButton({super.key, required this.label, required this.onPressed, this.icon, this.busy = false});
+  const DangerButton({super.key, required this.label, required this.onPressed, this.icon, this.busy = false, this.height = 56});
   final String label;
   final VoidCallback? onPressed;
   final IconData? icon;
   final bool busy;
+  final double height;
   @override
-  Widget build(BuildContext context) => _HPButton(label: label, onPressed: onPressed, icon: icon, busy: busy, fill: context.hp.danger, textColor: HPColors.onChili);
+  Widget build(BuildContext context) => _HPButton(label: label, onPressed: onPressed, icon: icon, busy: busy, height: height, fill: context.hp.danger, textColor: HPColors.onChili);
 }
 
 // ------------------------------------------------------------------ status

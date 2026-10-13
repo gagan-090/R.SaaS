@@ -7,6 +7,7 @@ import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 import '../api/api_client.dart';
 import '../state/providers.dart';
 import '../widgets/common.dart';
+import '../widgets/labels.dart';
 
 /// P3 Dashboard: counts + recent audit events.
 class DashboardScreen extends ConsumerWidget {
@@ -86,8 +87,8 @@ class _AuditRow extends StatelessWidget {
   Widget build(BuildContext context) => ListTile(
         dense: true,
         contentPadding: EdgeInsets.zero,
-        title: Text('${e['action']}', style: HPType.label(context.hp.text)),
-        subtitle: Text('${e['actorType'] ?? 'system'} ${e['actorId'] ?? ''} · ${e['reason'] ?? ''}', maxLines: 1, overflow: TextOverflow.ellipsis),
+        title: Text(auditActionLabel(e['action']), style: HPType.label(context.hp.text)),
+        subtitle: Text(['by ${auditActor(e)}', if (e['tenantName'] != null) '${e['tenantName']}', if (e['reason'] != null) '“${e['reason']}”'].join(' · '), maxLines: 1, overflow: TextOverflow.ellipsis),
         trailing: Text(shortDate(e['at'])),
       );
 }
@@ -201,8 +202,8 @@ class _RestaurantsScreenState extends ConsumerState<RestaurantsScreen> {
                                 DataCell(Text('${r['name']}', style: HPType.label(context.hp.text))),
                                 DataCell(Text('${r['code']}', style: HPType.mono(context.hp.muted))),
                                 DataCell(Text('${r['ownerEmail']}')),
-                                DataCell(Text('${r['plan'] ?? '—'}')),
-                                DataCell(StatusChip(label: '${r['status']}', tone: toneForStatus(r['status'] as String?))),
+                                DataCell(Text(titleCase('${r['plan'] ?? '—'}'))),
+                                DataCell(StatusChip(label: statusLabel(r['status']), tone: toneForStatus(r['status'] as String?))),
                                 DataCell(Text(shortDate(r['licenseEndsAt']))),
                                 DataCell(Text('${r['branches']}')),
                               ]),
@@ -242,7 +243,7 @@ class _Drop extends StatelessWidget {
           isExpanded: true,
           initialValue: value,
           decoration: InputDecoration(labelText: label),
-          items: [const DropdownMenuItem(value: null, child: Text('Any')), for (final i in items) DropdownMenuItem(value: i, child: Text(i))],
+          items: [const DropdownMenuItem(value: null, child: Text('Any')), for (final i in items) DropdownMenuItem(value: i, child: Text(statusLabel(i)))],
           onChanged: onChanged,
         ),
       );
@@ -422,81 +423,134 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
     bool can(String p) => auth is SignedIn && auth.can(p);
+    final plans = ref.watch(activePlansProvider).valueOrNull ?? const <Json>[];
     return AsyncView<Map<String, dynamic>>(
       load: _load,
       builder: (c, r, _) {
+        final p = context.hp;
+        final narrow = isNarrowWeb(context);
         final status = r['status'] as String;
         final ent = (r['entitlement'] as Map?)?.cast<String, dynamic>() ?? const {};
         final lic = (r['currentLicense'] as Map?)?.cast<String, dynamic>();
-        return ListView(padding: const EdgeInsets.all(HPSpace.x4), children: [
-          Row(children: [
-            IconButton(tooltip: 'Back', onPressed: () => c.go('/restaurants'), icon: const Icon(Icons.arrow_back)),
-            Expanded(child: Text('${r['name']}', style: Theme.of(c).textTheme.headlineMedium)),
-            StatusChip(label: status, tone: toneForStatus(status)),
-            const SizedBox(width: HPSpace.sm),
-            StatusChip(label: 'License: ${ent['state'] ?? 'none'}', tone: toneForStatus('${ent['state']}')),
+        final plan = plans.where((x) => x['code'] == lic?['planCode']).firstOrNull;
+        final planName = '${plan?['name'] ?? lic?['planName'] ?? titleCase('${lic?['planCode'] ?? 'No plan'}')}';
+        final ends = DateTime.tryParse('${lic?['endsAt'] ?? ''}');
+        final daysLeft = ends?.difference(DateTime.now()).inDays;
+        final devices = (r['devices'] as List).cast<Map<String, dynamic>>();
+        final hub = devices.where((d) => d['isHub'] == true && d['revokedAt'] == null).firstOrNull;
+        final features = (ent['features'] as List? ?? const []).cast<String>();
+
+        Widget btn(Widget b) => SizedBox(height: 44, child: b);
+        final profile = SectionCard(title: 'Profile', child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _kv('Code', r['code']), _kv('Owner', r['ownerEmail']), _kv('GSTIN', r['gstin']), _kv('Address', r['address']),
+          if (r['statusReason'] != null) _kv('Status reason', r['statusReason']),
+          _kv('Created', shortDate(r['createdAt'])),
+          if (can('platform.restaurant.status')) ...[
+            const SizedBox(height: HPSpace.lg),
+            Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, children: [
+              if (status == 'pending') btn(SecondaryButton(label: 'Activate', icon: Icons.check_circle_outline, height: 44, onPressed: () => _status('activate'))),
+              if (status == 'active') btn(SecondaryButton(label: 'Suspend', icon: Icons.pause_circle_outline, height: 44, onPressed: () => _status('suspend'))),
+              if (status == 'suspended' || status == 'blocked') btn(SecondaryButton(label: 'Reactivate', icon: Icons.play_circle_outline, height: 44, onPressed: () => _status('reactivate'))),
+              if (status == 'active' || status == 'suspended') btn(DangerButton(label: 'Block', icon: Icons.block, height: 44, onPressed: () => _status('block'))),
+            ]),
+          ],
+        ]));
+        final license = SectionCard(title: 'License', child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (lic == null)
+            Text('No active license — the restaurant is read-only until one is issued.', style: HPType.body(p.muted))
+          else ...[
+            _kv('Plan', '$planName${plan == null ? '' : ' · ${formatPaise(plan['pricePaise'] as int).replaceAll('.00', '')}/${plan['billingCycle'] == 'yearly' ? 'year' : 'month'}'}'),
+            _kv('Started', shortDate(lic['startsAt'])),
+            _kv('Ends', '${shortDate(lic['endsAt'])}${daysLeft == null ? '' : daysLeft >= 0 ? ' · $daysLeft days left' : ' · ended ${-daysLeft} days ago'}'),
+            _kv('Grace period', '${lic['graceDays']} days after the end date'),
+            const SizedBox(height: HPSpace.md),
+            Text('INCLUDES', style: HPType.overline(p.muted)),
+            const SizedBox(height: HPSpace.sm),
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              for (final f in features)
+                Chip(
+                  avatar: Icon(Icons.check_rounded, size: 16, color: p.success),
+                  label: Text(featureLabel(f)),
+                  visualDensity: VisualDensity.compact,
+                ),
+            ]),
+          ],
+          if (can('platform.license.manage')) ...[
+            const SizedBox(height: HPSpace.lg),
+            Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, children: [
+              for (final (a, icon) in lic == null ? const [('issue', Icons.add_card_outlined)] : const [('renew', Icons.autorenew), ('upgrade', Icons.trending_up), ('downgrade', Icons.trending_down)])
+                btn(SecondaryButton(label: a[0].toUpperCase() + a.substring(1), icon: icon, height: 44, onPressed: () => _license(a, lic?['planCode'] as String?))),
+              if (lic != null) btn(DangerButton(label: 'Revoke', icon: Icons.cancel_outlined, height: 44, onPressed: () => _license('revoke', null))),
+            ]),
+          ],
+        ]));
+        final payments = SectionCard(
+          title: 'Subscription payments',
+          actions: [if (can('platform.payment.record')) TextButton.icon(onPressed: _payment, icon: const Icon(Icons.add), label: const Text('Record'))],
+          child: (r['payments'] as List).isEmpty
+              ? Text('No payments recorded yet.', style: HPType.body(p.muted))
+              : Column(children: [
+                  for (final pay in (r['payments'] as List).cast<Map<String, dynamic>>())
+                    ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.payments_outlined, color: p.success),
+                      title: Text(formatPaise(pay['amountPaise'] as int), style: HPType.label(p.text)),
+                      subtitle: Text('${titleCase('${pay['method']}')}${(pay['reference'] ?? '') == '' ? '' : ' · ${pay['reference']}'}', style: HPType.body(p.muted)),
+                      trailing: Text(shortDate(pay['paidAt']), style: HPType.body(p.muted)),
+                    ),
+                ]),
+        );
+        final branches = SectionCard(title: 'Branches & devices', child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          for (final b in (r['branches'] as List).cast<Map<String, dynamic>>())
+            ListTile(dense: true, contentPadding: EdgeInsets.zero, leading: Icon(Icons.storefront_outlined, color: p.muted), title: Text('${b['name']}', style: HPType.label(p.text)), subtitle: Text('Branch ${b['code']}', style: HPType.body(p.muted))),
+          for (final d in devices)
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(d['isHub'] == true ? Icons.router_rounded : Icons.phone_android_rounded, color: d['revokedAt'] == null ? p.text : p.faint),
+              title: Text('${d['name']}${d['isHub'] == true ? ' · Hub' : ''}', style: HPType.label(d['revokedAt'] == null ? p.text : p.faint)),
+              subtitle: Text('${titleCase('${d['platform']}')} · ${d['revokedAt'] != null ? 'revoked' : 'last seen ${shortDate(d['lastSeenAt'])}'}', style: HPType.body(p.muted)),
+            ),
+          if (devices.isEmpty) Text('No devices yet. The owner sets up the hub from the POS app.', style: HPType.body(p.muted)),
+        ]));
+
+        const gap = SizedBox(height: HPSpace.lg, width: HPSpace.lg);
+        return ListView(padding: EdgeInsets.all(narrow ? HPSpace.lg : HPSpace.x4), children: [
+          Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: HPSpace.md, runSpacing: HPSpace.sm, children: [
+            IconButton(tooltip: 'Back to restaurants', onPressed: () => c.go('/restaurants'), icon: const Icon(Icons.arrow_back)),
+            Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+              Text('${r['name']}', style: HPType.titleScreen(p.text).copyWith(fontSize: narrow ? 28 : 34)),
+              Text('${r['code']} · ${r['ownerEmail']}', style: HPType.body(p.muted)),
+            ]),
+            StatusChip(label: statusLabel(status), tone: toneForStatus(status)),
+            StatusChip(label: 'License: ${statusLabel(ent['state'])}', tone: toneForStatus('${ent['state']}')),
           ]),
           const SizedBox(height: HPSpace.x2),
-          Wrap(spacing: HPSpace.lg, runSpacing: HPSpace.lg, children: [
-            SizedBox(
-              width: 460,
-              child: SectionCard(title: 'Profile', child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                _kv('Code', r['code']), _kv('Owner', r['ownerEmail']), _kv('GSTIN', r['gstin']), _kv('Address', r['address']),
-                _kv('Status reason', r['statusReason']), _kv('Created', shortDate(r['createdAt'])),
-                if (can('platform.restaurant.status')) ...[
-                  const SizedBox(height: HPSpace.lg),
-                  Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, children: [
-                    if (status == 'pending') SecondaryButton(label: 'Activate', height: 44, onPressed: () => _status('activate')),
-                    if (status == 'active') SecondaryButton(label: 'Suspend', height: 44, onPressed: () => _status('suspend')),
-                    if (status == 'active' || status == 'suspended') DangerButton(label: 'Block', onPressed: () => _status('block')),
-                    if (status == 'suspended' || status == 'blocked') SecondaryButton(label: 'Reactivate', height: 44, onPressed: () => _status('reactivate')),
-                  ]),
-                ],
-              ])),
-            ),
-            SizedBox(
-              width: 460,
-              child: SectionCard(title: 'License (P7)', child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                if (lic == null) const Text('No active license — restaurant is read-only.') else ...[
-                  _kv('Plan', lic['planCode']), _kv('Starts', shortDate(lic['startsAt'])), _kv('Ends', shortDate(lic['endsAt'])), _kv('Grace', '${lic['graceDays']} days'),
-                  const SizedBox(height: HPSpace.sm),
-                  Wrap(spacing: 6, runSpacing: 6, children: [for (final f in (ent['features'] as List? ?? const [])) Chip(label: Text('$f'), visualDensity: VisualDensity.compact)]),
-                ],
-                if (can('platform.license.manage')) ...[
-                  const SizedBox(height: HPSpace.lg),
-                  Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, children: [
-                    for (final a in lic == null ? ['issue'] : ['renew', 'upgrade', 'downgrade'])
-                      SecondaryButton(label: a[0].toUpperCase() + a.substring(1), height: 44, onPressed: () => _license(a, lic?['planCode'] as String?)),
-                    if (lic != null) DangerButton(label: 'Revoke', onPressed: () => _license('revoke', null)),
-                  ]),
-                ],
-              ])),
-            ),
-            SizedBox(
-              width: 460,
-              child: SectionCard(
-                title: 'Payments',
-                actions: [if (can('platform.payment.record')) TextButton.icon(onPressed: _payment, icon: const Icon(Icons.add), label: const Text('Record'))],
-                child: (r['payments'] as List).isEmpty
-                    ? const Text('No payments recorded yet.')
-                    : Column(children: [
-                        for (final p in (r['payments'] as List).cast<Map<String, dynamic>>())
-                          ListTile(dense: true, contentPadding: EdgeInsets.zero, title: Text(formatPaise(p['amountPaise'] as int)), subtitle: Text('${p['method']} · ${p['reference'] ?? ''}'), trailing: Text(shortDate(p['paidAt']))),
-                      ]),
-              ),
-            ),
-            SizedBox(
-              width: 460,
-              child: SectionCard(title: 'Branches & devices', child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                for (final b in (r['branches'] as List).cast<Map<String, dynamic>>()) _kv('${b['code']}', b['name']),
-                const SizedBox(height: HPSpace.sm),
-                for (final d in (r['devices'] as List).cast<Map<String, dynamic>>()) _kv(d['isHub'] == true ? 'Hub' : 'Device', '${d['name']} (${d['platform']}) · last seen ${shortDate(d['lastSeenAt'])}'),
-                if ((r['devices'] as List).isEmpty) const Text('No devices paired yet.'),
-              ])),
-            ),
-          ]),
+          LayoutBuilder(builder: (c2, box) {
+            final cols = narrow ? 2 : 4;
+            final w = (box.maxWidth - HPSpace.lg * (cols - 1)) / cols;
+            return Wrap(spacing: HPSpace.lg, runSpacing: HPSpace.lg, children: [
+              SizedBox(width: w, child: KpiCard(label: 'Plan', value: planName, caption: plan == null ? null : '${formatPaise(plan['pricePaise'] as int).replaceAll('.00', '')} / ${plan['billingCycle'] == 'yearly' ? 'year' : 'month'}', icon: Icons.workspace_premium_outlined, tone: HPTone.saffron)),
+              SizedBox(width: w, child: KpiCard(label: 'License ends', value: ends == null ? '—' : shortDate(lic?['endsAt']), caption: daysLeft == null ? null : (daysLeft >= 0 ? '$daysLeft days left' : 'ended'), icon: Icons.event_outlined, tone: daysLeft != null && daysLeft < 7 ? HPTone.danger : HPTone.success)),
+              SizedBox(width: w, child: KpiCard(label: 'Branches', value: '${(r['branches'] as List).length}', icon: Icons.storefront_outlined)),
+              SizedBox(width: w, child: KpiCard(label: 'Devices', value: '${devices.where((d) => d['revokedAt'] == null).length}', caption: hub == null ? 'No hub yet' : 'Hub: ${hub['name']}', icon: Icons.router_outlined, tone: hub == null ? HPTone.neutral : HPTone.success)),
+            ]);
+          }),
           const SizedBox(height: HPSpace.lg),
-          SectionCard(title: 'Audit (this restaurant)', child: SizedBox(height: 360, child: AuditList(tenantId: widget.id))),
+          if (narrow) ...[profile, gap, license, gap, payments, gap, branches]
+          else
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(child: Column(children: [profile, gap, payments])),
+              gap,
+              Expanded(child: Column(children: [license, gap, branches])),
+            ]),
+          const SizedBox(height: HPSpace.lg),
+          SectionCard(
+            title: 'History',
+            actions: [TextButton(onPressed: () => c.go('/audit'), child: const Text('Open audit log'))],
+            child: AuditList(tenantId: widget.id, embedded: true),
+          ),
         ]);
       },
     );
@@ -505,39 +559,108 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
   Widget _kv(String k, Object? v) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(width: 120, child: Text(k, style: HPType.body(context.hp.muted))),
+          SizedBox(width: 130, child: Text(k, style: HPType.body(context.hp.muted))),
           Expanded(child: Text(v == null || '$v'.isEmpty ? '—' : '$v', style: HPType.body(context.hp.text))),
         ]),
       );
 }
 
-/// P11 audit list (shared by the audit viewer and the restaurant detail tab). Tap a row for before/after.
+/// P11 audit list (shared by the audit viewer and the restaurant detail page): what happened, who did it, when,
+/// why — tap a row to see exactly what changed.
 class AuditList extends ConsumerStatefulWidget {
-  const AuditList({super.key, this.tenantId, this.action});
+  const AuditList({super.key, this.tenantId, this.action, this.embedded = false});
   final String? tenantId;
   final String? action;
+
+  /// Inside another page: no own scrolling, shows the latest events.
+  final bool embedded;
   @override
   ConsumerState<AuditList> createState() => _AuditListState();
 }
 
 class _AuditListState extends ConsumerState<AuditList> {
+  static IconData _icon(String action) => switch (action.split('.').first) {
+        'auth' || 'mfa' => Icons.login_rounded,
+        'restaurant' || 'tenant' => Icons.storefront_outlined,
+        'license' || 'plan' || 'payment' => Icons.workspace_premium_outlined,
+        'menu' || 'tax_rule' => Icons.restaurant_menu_rounded,
+        'staff' => Icons.badge_outlined,
+        'device' => Icons.router_outlined,
+        'floor' || 'table' => Icons.table_restaurant_outlined,
+        _ => Icons.history_rounded,
+      };
+
+  static String _when(Object? iso) {
+    final t = DateTime.tryParse('${iso ?? ''}')?.toLocal();
+    if (t == null) return '';
+    final h = t.hour % 12 == 0 ? 12 : t.hour % 12;
+    return '${shortDate(iso)}, $h:${t.minute.toString().padLeft(2, '0')} ${t.hour < 12 ? 'AM' : 'PM'}';
+  }
+
+  static String _short(Object? v) {
+    if (v == null) return '—';
+    final s = v is String ? v : '$v';
+    return s.length > 60 ? '${s.substring(0, 57)}…' : s;
+  }
+
+  /// Field-by-field changes ("Status: active → suspended"); for creations just the new values.
+  static List<(String, String)> _changes(Map<String, dynamic> e) {
+    final before = (e['before'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final after = (e['after'] as Map?)?.cast<String, dynamic>() ?? const {};
+    const hidden = {'id', 'tenantId', 'branchId', 'seq', 'createdAt', 'updatedAt', 'signedToken', 'passwordHash', 'pinHash', 'tokenHash', 'deleted'};
+    final keys = {...before.keys, ...after.keys}.where((k) => !hidden.contains(k)).toList();
+    return [
+      for (final k in keys)
+        if ('${before[k]}' != '${after[k]}' || before.isEmpty)
+          (titleCase(k.replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}').toLowerCase()), before.isEmpty || !before.containsKey(k) ? _short(after[k]) : '${_short(before[k])} → ${_short(after[k])}'),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) => AsyncView<Map<String, dynamic>>(
         key: ValueKey('${widget.tenantId}|${widget.action}'),
         load: () => ref.read(apiProvider).audit(tenantId: widget.tenantId, action: widget.action),
         isEmpty: (d) => (d['items'] as List).isEmpty,
-        emptyTitle: 'No audit events',
-        builder: (c, d, _) => ListView(children: [
-          for (final e in (d['items'] as List).cast<Map<String, dynamic>>())
-            ExpansionTile(
-              tilePadding: EdgeInsets.zero,
-              title: Text('${e['action']}', style: HPType.label(context.hp.text)),
-              subtitle: Text('${shortDate(e['at'])} · ${e['actorType'] ?? 'system'} ${e['actorId'] ?? ''}${e['reason'] != null ? ' · “${e['reason']}”' : ''}'),
-              children: [
-                Align(alignment: Alignment.centerLeft, child: SelectableText('object: ${e['objectType']} ${e['objectId']}\nbefore: ${e['before']}\nafter:  ${e['after']}', style: HPType.mono(context.hp.muted))),
-              ],
-            ),
-        ]),
+        emptyTitle: 'No history yet',
+        builder: (c, d, _) {
+          final p = context.hp;
+          final items = (d['items'] as List).cast<Map<String, dynamic>>().take(widget.embedded ? 12 : 1000).toList();
+          final tiles = [
+            for (final e in items)
+              Theme(
+                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  leading: CircleAvatar(radius: 18, backgroundColor: p.raised, child: Icon(_icon('${e['action']}'), size: 18, color: p.muted)),
+                  title: Text(auditActionLabel(e['action']), style: HPType.label(p.text)),
+                  subtitle: Text(
+                    [
+                      'by ${auditActor(e)}',
+                      if (widget.tenantId == null && e['tenantName'] != null) '${e['tenantName']}',
+                      _when(e['at']),
+                      if (e['reason'] != null) '“${e['reason']}”',
+                    ].join(' · '),
+                    style: HPType.body(p.muted),
+                  ),
+                  childrenPadding: const EdgeInsets.only(left: 52, bottom: HPSpace.md),
+                  expandedCrossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final (k, v) in _changes(e))
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          SizedBox(width: 160, child: Text(k, style: HPType.body(p.muted))),
+                          Expanded(child: SelectableText(v, style: HPType.body(p.text))),
+                        ]),
+                      ),
+                    if (_changes(e).isEmpty) Text('No field changes recorded.', style: HPType.body(p.faint)),
+                    if (e['ip'] != null) Text('From ${e['ip']}', style: HPType.body(p.faint).copyWith(fontSize: 12)),
+                  ],
+                ),
+              ),
+          ];
+          return widget.embedded ? Column(children: tiles) : ListView(children: tiles);
+        },
       );
 }
 
