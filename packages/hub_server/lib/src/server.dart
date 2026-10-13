@@ -49,6 +49,16 @@ class HubServer {
     return a;
   }
 
+  /// A print request answers JSON when the printer took the job, otherwise the PDF itself (Build Spec §09).
+  Response _printed(PrintOutcome o) => o.pdf == null
+      ? _json(o.toJson())
+      : Response.ok(o.pdf, headers: {
+          'content-type': 'application/pdf',
+          'x-print-status': o.status,
+          'x-print-copy': '${o.copyNo}',
+          if (o.error != null) 'x-print-error': o.error!,
+        });
+
   int? _int(Object? v) => v is int ? v : null;
 
   Router get router {
@@ -123,7 +133,16 @@ class HubServer {
       final b = await _body(q);
       return _json(await hub.updateLine(a, id, lineId, qty: _int(b['qty']), notes: b['notes'] as String?, version: _int(b['version'])));
     });
-    r.post('/orders/<id>/kot', (Request q, String id) async => _json(await hub.sendKot(await _staff(q), id), 201));
+    r.post('/orders/<id>/kot', (Request q, String id) async {
+      final a = await _staff(q);
+      final kot = await hub.sendKot(a, id);
+      // Auto-print to the kitchen printer when one is set up; the KOT is committed either way.
+      final print = await hub.hasPrinter('kot')
+          ? (await hub.printDocument(a, 'kot', kot['ticketId']! as String)).toJson()
+          : {'status': 'no_printer'};
+      return _json({...kot, 'print': print}, 201);
+    });
+    r.post('/kot/<id>/print', (Request q, String id) async => _printed(await hub.printDocument(await _staff(q), 'kot', id, pdfOnly: (await _body(q))['pdf'] == true)));
     r.post('/orders/<id>/lines/<lineId>/reverse', (Request q, String id, String lineId) async {
       final a = await _staff(q);
       final b = await _body(q);
@@ -142,6 +161,7 @@ class HubServer {
     });
 
     // ---- bills
+    r.post('/bills/<id>/print', (Request q, String id) async => _printed(await hub.printDocument(await _staff(q), 'bill', id, pdfOnly: (await _body(q))['pdf'] == true)));
     r.post('/bills/<id>/payments', (Request q, String id) async {
       final a = await _staff(q);
       final b = await _body(q);
@@ -164,6 +184,17 @@ class HubServer {
       return _json(await hub.addAdjustment(a, id, amountPaise: amt, reason: b['reason'] as String?,
           approverUserId: b['approverUserId'] as String?, approverPin: b['approverPin'] as String?), 201);
     });
+
+    // ---- printers (T3)
+    r.get('/printers', (Request q) async {
+      (await _staff(q)).require('device.manage');
+      return _json({for (final e in (await hub.printerSettings()).entries) e.key: e.value.toJson()});
+    });
+    r.put('/printers', (Request q) async {
+      final a = await _staff(q);
+      return _json(await hub.setPrinterSettings(a, await _body(q)));
+    });
+    r.post('/printers/<target>/test', (Request q, String target) async => _json(await hub.testPrint(await _staff(q), target)));
 
     // ---- events (WebSocket): state.snapshot on connect, then deltas
     r.get('/events', (Request q) async {

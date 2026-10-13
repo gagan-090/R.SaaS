@@ -70,6 +70,14 @@ const _schemaV1 = <String>[
   'CREATE INDEX sync_outbox_pending ON sync_outbox(status, seq)',
 ];
 
+/// v2: print log (first print vs reprint/duplicate, and which jobs fell back to PDF).
+const _schemaV2 = <String>[
+  '''CREATE TABLE print_jobs (id TEXT PRIMARY KEY, doc_type TEXT NOT NULL CHECK (doc_type IN ('kot','bill','test')), object_id TEXT,
+       copy_no INTEGER NOT NULL, target TEXT, status TEXT NOT NULL CHECK (status IN ('printed','pdf','failed')), error TEXT,
+       actor TEXT NOT NULL, at TEXT NOT NULL)''',
+  'CREATE INDEX print_jobs_object ON print_jobs(doc_type, object_id)',
+];
+
 /// drift database without code generation: the schema is plain SQL above and queries go through
 /// [query]/[execute]. drift provides the executor, transactions (nested = savepoints) and migrations.
 class HubDatabase extends GeneratedDatabase {
@@ -85,13 +93,20 @@ class HubDatabase extends GeneratedDatabase {
   Iterable<DatabaseSchemaEntity> get allSchemaEntities => const [];
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) async {
-          for (final s in _schemaV1) {
+          for (final s in [..._schemaV1, ..._schemaV2]) {
             await customStatement(s);
+          }
+        },
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            for (final s in _schemaV2) {
+              await customStatement(s);
+            }
           }
         },
         beforeOpen: (details) async {

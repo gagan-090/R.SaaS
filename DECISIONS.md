@@ -34,3 +34,8 @@ Format: date · decision · why · alternative rejected.
 - 2026-10-13 · POS keeps its device setup (hub URL, pinned fingerprint, device token) in `flutter_secure_storage` (DPAPI on Windows, Keystore on Android) · the device token is a credential · shared_preferences in plain text.
 - 2026-10-13 · `/devices/register-hub` infers the branch when the tenant has exactly one, and returns `branchCode` + `licensePublicKey` · one-branch restaurants pair without picking a branch · always require `branchId`.
 - 2026-10-13 · POS `flutter build web` is a compile check only (the hub needs dart:io; the web build runs as a paired client without hub mode) · catches compile errors in CI without Windows/Android toolchains · no web build.
+- 2026-10-13 · Receipts are one line-based layout model rendered to ESC/POS and to PDF (Courier, same text) · the PDF fallback always matches the paper · separate PDF layouts.
+- 2026-10-13 · Thermal output is ASCII only (₹ printed as "Rs", other non-ASCII mapped or "?") · printer code pages vary; no mojibake · per-model code-page tables.
+- 2026-10-13 · Reprint marking comes from a `print_jobs` copy counter reserved in a transaction; reprints are audited · the first copy is the original even when it fell back to PDF · a boolean "printed" flag.
+- 2026-10-13 · A branch with only a bill printer gets KOTs on it too; printing failures never roll back the KOT or bill · single-printer restaurants work out of the box.
+- 2026-10-13 · Receipt times print in IST (`HubConfig.utcOffset`) while the hub stores UTC · consistent paper regardless of the PC's time zone · local time zone of the hub PC.

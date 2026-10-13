@@ -1,0 +1,35 @@
+       *** DUPLICATE ***
+   Demo Dhaba
+         MG Road, Pune
+     GSTIN: 27AAAPA1234A1Z5
+          TAX INVOICE
+--------------------------------
+Invoice: BR01/26-27/000001
+                12-10-2026 13:30
+Table 1            Waiter: Anita
+--------------------------------
+Item                      Amount
+Butter Chicken
+  2 x 340.00              680.00
+Garlic Naan
+  3 x 60.00               180.00
+Mango Lassi
+  1 x 120.00              120.00
+--------------------------------
+Subtotal                  980.00
+Discount                  -98.00
+CGST @ 2.5%                19.35
+SGST @ 2.5%                19.35
+CGST @ 6%                   6.48
+SGST @ 6%                   6.48
+Tip                        30.00
+Round off                  +0.34
+================================
+TOTAL  Rs                 964.00
+================================
+Paid by UPI               300.00
+Paid by CASH              664.00
+  Tendered              1,000.00
+  Change                  336.00
+
+    Thank you! Visit again.

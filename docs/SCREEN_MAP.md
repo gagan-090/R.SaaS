@@ -36,13 +36,13 @@ Every portal screen uses `AsyncView` for loading, empty and error states. Every 
 | C5 | Bill preview: lines, subtotal, discount, CGST, SGST, tip, round-off, total | cashier | All | `POST /orders/:id/bill` | Built |
 | C6 | Payment: cash keypad + change, UPI, card, split across modes | cashier | All | `POST /bills/:id/payments` (`Idempotency-Key`) | Built (tests: split UPI + cash with change; retry reuses the same idempotency key) |
 | C7 | Tip: waiter picker (defaults to the order's waiter) | cashier | All | `POST /bills/:id/tip` | Built (test: tip to a waiter) |
-| C8 | Bill history: today's bills, reprint | cashier | All | `GET /bills?date=` | Built (reprint waits for M8) |
+| C8 | Bill history: today's bills, reprint | cashier | All | `GET /bills?date=` | Built (reprint button not wired yet; hub route `POST /bills/:id/print` exists) |
 | C9 | Adjustment dialog (PIN) | cashier | All | `POST /bills/:id/adjustments` | Planned |
 | C10 | Shift summary | cashier | All | — | Planned |
 | W1–W4 | Waiter: my tables, take order, order status, my tips | waiter | Pro+ | same order routes | Planned (Day 12) |
 | K1–K4 | KDS queue, recipe editor, approval inbox, kitchen stock | chef | Premium | `POST /kds/tickets/:id/status` (not built) | Planned (Days 14–16) |
 | O1–O6 | Owner dashboard, reports, menu management, publish, staff, franchise invoice | owner | All / Premium | cloud tenant routes | Planned |
-| T1–T5 | Devices, floors & tables editor, printers, inventory, shifts | IT admin | All / Premium | cloud tenant routes | Planned |
+| T1–T5 | Devices, floors & tables editor, printers, inventory, shifts | IT admin | All / Premium | cloud tenant routes; printers: hub `GET/PUT /printers`, `POST /printers/:target/test` | Planned (T3 hub routes built in M8) |
 | A1–A2 | Audit log, read-only reports | auditor | Premium | `GET /audit` | Planned |
 
 Shared requirements: loading, empty and error states on every screen; Windows keyboard shortcuts for the cashier; touch targets of at least 48 dp on Android.

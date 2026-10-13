@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:rsaas_core/rsaas_core.dart';
 
@@ -7,6 +8,7 @@ import 'db.dart';
 import 'license.dart';
 import 'permissions.dart';
 import 'pin.dart';
+import 'printing.dart';
 import 'util.dart';
 
 /// Who is acting: a paired device plus (for staff actions) a signed-in user.
@@ -23,7 +25,13 @@ class Actor {
 }
 
 class HubConfig {
-  const HubConfig({required this.branchId, required this.branchCode, required this.licensePublicKey, this.discountReasonAboveBp = 1000});
+  const HubConfig({
+    required this.branchId,
+    required this.branchCode,
+    required this.licensePublicKey,
+    this.discountReasonAboveBp = 1000,
+    this.utcOffset = const Duration(hours: 5, minutes: 30),
+  });
   final String branchId;
   final String branchCode;
 
@@ -32,6 +40,21 @@ class HubConfig {
 
   /// Discounts above this percentage (basis points) need a reason (Chef's Defaults: 10%).
   final int discountReasonAboveBp;
+
+  /// Local time printed on KOTs and bills (IST by default; the hub clock itself stays UTC).
+  final Duration utcOffset;
+}
+
+/// Result of a print request: sent to the thermal printer, or a PDF to show/save (no printer, or it was unreachable).
+class PrintOutcome {
+  PrintOutcome({required this.status, required this.copyNo, this.target, this.error, this.pdf});
+  final String status; // printed | pdf
+  final int copyNo;
+  final String? target;
+  final String? error;
+  final Uint8List? pdf;
+  bool get reprint => copyNo > 1;
+  Map<String, Object?> toJson() => {'status': status, 'copyNo': copyNo, 'reprint': reprint, 'target': target, if (error != null) 'error': error};
 }
 
 /// A change other terminals should see (sent over the WebSocket bus after the transaction commits).
@@ -47,13 +70,15 @@ class HubEvent {
 /// Single writer for live operations in a branch. Every write runs in one SQLite transaction together with
 /// its outbox event(s) and audit event, so the cloud receives exactly what happened, once.
 class HubService {
-  HubService(this.db, this.config, {DateTime Function()? clock})
+  HubService(this.db, this.config, {DateTime Function()? clock, PrinterSender Function(PrinterSettings)? printerFor})
       : clock = clock ?? DateTime.now,
+        printerFor = printerFor ?? ((p) => TcpPrinterSender(p.host, port: p.port)),
         _verifier = LicenseVerifier(config.licensePublicKey);
 
   final HubDatabase db;
   final HubConfig config;
   final DateTime Function() clock;
+  final PrinterSender Function(PrinterSettings) printerFor;
   final LicenseVerifier _verifier;
   final _events = StreamController<HubEvent>.broadcast();
   Stream<HubEvent> get events => _events.stream;
@@ -735,6 +760,179 @@ class HubService {
       await _audit(a, 'bill.adjusted', objectType: 'bill', objectId: billId, after: row, reason: reason.trim());
       return row;
     });
+  }
+
+  // ------------------------------------------------------------------ printing (Build Spec §13)
+
+  String _local(String iso, {bool date = true}) {
+    final t = DateTime.parse(iso).toUtc().add(config.utcOffset);
+    String two(int n) => n.toString().padLeft(2, '0');
+    final hm = '${two(t.hour)}:${two(t.minute)}';
+    return date ? '${two(t.day)}-${two(t.month)}-${t.year} $hm' : hm;
+  }
+
+  /// Printer settings per target (`bill`, `kot`), stored on the hub (T3).
+  Future<Map<String, PrinterSettings>> printerSettings() async {
+    final raw = jsonDecode(await db.getMeta('printers') ?? '{}') as Map<String, Object?>;
+    return {
+      for (final e in raw.entries)
+        if (PrinterSettings.fromJson(e.value) case final p?) e.key: p,
+    };
+  }
+
+  Future<Map<String, Object?>> setPrinterSettings(Actor a, Map<String, Object?> body) async {
+    a.require('device.manage');
+    return _tx(() async {
+      final before = await printerSettings();
+      final next = {...before};
+      for (final target in const ['bill', 'kot']) {
+        if (!body.containsKey(target)) continue;
+        final v = body[target];
+        if (v == null) {
+          next.remove(target);
+          continue;
+        }
+        next[target] = PrinterSettings.fromJson(v) ??
+            (throw badRequest('bad_printer', '$target: host is required, port 1–65535, widthChars 48 (80 mm) or 32 (58 mm)'));
+      }
+      final json = {for (final e in next.entries) e.key: e.value.toJson()};
+      await db.setMeta('printers', jsonEncode(json));
+      await _audit(a, 'printers.updated', objectType: 'branch', objectId: config.branchId,
+          before: {for (final e in before.entries) e.key: e.value.toJson()}, after: json);
+      return json;
+    });
+  }
+
+  /// KOTs go to the kitchen printer; a branch with a single printer uses the bill printer for both.
+  Future<PrinterSettings?> _printerFor(String docType) async {
+    final p = await printerSettings();
+    return docType == 'kot' ? (p['kot'] ?? p['bill']) : p['bill'];
+  }
+
+  Future<bool> hasPrinter(String docType) async => await _printerFor(docType) != null;
+
+  Future<String> _where(Map<String, Object?> order) async {
+    if (order['type'] != 'dine_in') return 'TAKEAWAY';
+    final t = await db.selectOne('SELECT name FROM tables WHERE id = ?', [order['table_id']]);
+    return 'Table ${t?['name'] ?? '?'}';
+  }
+
+  Future<String?> _userName(Object? id) async =>
+      id == null ? null : (await db.selectOne('SELECT name FROM users WHERE id = ?', [id]))?['name'] as String?;
+
+  Future<Receipt> kotReceiptFor(String ticketId, {bool reprint = false, int width = 48}) async {
+    final k = await db.selectOne('SELECT * FROM kitchen_tickets WHERE id = ?', [ticketId]);
+    if (k == null) throw notFound('Kitchen ticket');
+    final o = await _order(k['order_id']! as String);
+    final ids = (jsonDecode(k['line_ids_json']! as String) as List).cast<String>().toSet();
+    final lines = (await _lines(o['id']! as String)).where((l) => ids.contains(l['id']));
+    return kotReceipt(
+      width: width,
+      kotNo: k['kot_no']! as int,
+      where: await _where(o),
+      waiter: await _userName(o['waiter_id']),
+      time: _local(k['created_at']! as String),
+      lines: [for (final l in lines) KotPrintLine(name: l['name_snapshot']! as String, qty: l['qty']! as int, notes: l['notes'] as String?)],
+      reprint: reprint,
+    );
+  }
+
+  Future<Receipt> billReceiptFor(String billId, {bool duplicate = false, int width = 48}) async {
+    final bill = await _bill(billId);
+    final o = await _order(bill['order_id']! as String);
+    final lines = (await _lines(o['id']! as String)).where((l) => l['status'] != 'reversed').toList();
+    final t = computeBill(_inputs(lines), discount: _discountOf(bill), tipPaise: bill['tip_paise']! as int);
+    final tenant = jsonDecode(await db.getMeta('tenant') ?? '{}') as Map<String, Object?>;
+    final branch = jsonDecode(await db.getMeta('branch') ?? '{}') as Map<String, Object?>;
+    final payments = await db.query('SELECT * FROM payments WHERE bill_id = ? ORDER BY at, id', [billId]);
+    return billReceipt(
+      width: width,
+      restaurantName: (tenant['name'] ?? branch['name'] ?? 'Restaurant') as String,
+      address: (branch['address'] ?? tenant['address']) as String?,
+      gstin: (branch['gstin'] ?? tenant['gstin']) as String?,
+      invoiceNo: bill['invoice_no']! as String,
+      dateTime: _local(bill['created_at']! as String),
+      where: await _where(o),
+      waiter: await _userName(o['waiter_id']),
+      lines: [
+        for (var i = 0; i < lines.length; i++)
+          BillPrintLine(
+            name: lines[i]['name_snapshot']! as String,
+            qty: lines[i]['qty']! as int,
+            ratePaise: lines[i]['price_snapshot_paise']! as int,
+            amountPaise: t.lines[i].amountPaise,
+            taxRateBp: lines[i]['tax_rate_snapshot_bp']! as int,
+            cgstPaise: t.lines[i].cgstPaise,
+            sgstPaise: t.lines[i].sgstPaise,
+          ),
+      ],
+      subtotalPaise: t.subtotalPaise,
+      discountPaise: t.discountPaise,
+      tipPaise: t.tipPaise,
+      roundOffPaise: t.roundOffPaise,
+      totalPaise: t.totalPaise,
+      payments: [
+        for (final p in payments)
+          PaymentPrintLine(mode: p['mode']! as String, amountPaise: p['amount_paise']! as int,
+              tenderedPaise: p['tendered_paise'] as int?, changePaise: (p['change_paise'] as int?) ?? 0),
+      ],
+      duplicate: duplicate,
+    );
+  }
+
+  /// Prints a KOT or bill. The copy number is reserved in a transaction, so the first copy is the original and every
+  /// later one carries REPRINT / DUPLICATE (and is audited). With no printer, or an unreachable one, the result is a PDF.
+  Future<PrintOutcome> printDocument(Actor a, String docType, String objectId, {bool pdfOnly = false}) async {
+    switch (docType) {
+      case 'bill':
+        a.require('payment.take');
+        await _bill(objectId);
+      case 'kot':
+        a.require('order.write');
+        if (await db.selectOne('SELECT id FROM kitchen_tickets WHERE id = ?', [objectId]) == null) throw notFound('Kitchen ticket');
+      default:
+        throw badRequest('bad_document', 'docType must be bill or kot');
+    }
+    final printer = pdfOnly ? null : await _printerFor(docType);
+    final jobId = uuidv7();
+    final copyNo = await _tx(() async {
+      final n = ((await db.selectOne('SELECT count(*) AS n FROM print_jobs WHERE doc_type = ? AND object_id = ?', [docType, objectId]))!['n']! as int) + 1;
+      await db.execute('INSERT INTO print_jobs(id, doc_type, object_id, copy_no, target, status, actor, at) VALUES (?,?,?,?,?,?,?,?)',
+          [jobId, docType, objectId, n, printer == null ? null : '${printer.host}:${printer.port}', 'pdf', a.id, nowIso(clock())]);
+      if (n > 1) await _audit(a, '$docType.reprinted', objectType: docType, objectId: objectId, after: {'copyNo': n});
+      return n;
+    });
+    final width = printer?.widthChars ?? 48;
+    final receipt = docType == 'bill'
+        ? await billReceiptFor(objectId, duplicate: copyNo > 1, width: width)
+        : await kotReceiptFor(objectId, reprint: copyNo > 1, width: width);
+    String? error;
+    if (printer != null) {
+      try {
+        await printerFor(printer).send(encodeEscPos(receipt));
+        await db.execute("UPDATE print_jobs SET status = 'printed' WHERE id = ?", [jobId]);
+        return PrintOutcome(status: 'printed', copyNo: copyNo, target: docType == 'kot' ? 'kot' : 'bill');
+      } catch (e) {
+        error = 'printer_unreachable';
+        await db.execute('UPDATE print_jobs SET error = ? WHERE id = ?', ['$e'.length > 200 ? '$e'.substring(0, 200) : '$e', jobId]);
+      }
+    }
+    return PrintOutcome(status: 'pdf', copyNo: copyNo, error: error ?? (pdfOnly ? null : 'no_printer'), pdf: await receiptPdf(receipt, title: '$docType $objectId'));
+  }
+
+  /// T3 test print: a sample layout to the chosen printer. Errors are reported, never swallowed.
+  Future<Map<String, Object?>> testPrint(Actor a, String target) async {
+    a.require('device.manage');
+    final p = (await printerSettings())[target] ?? (throw badRequest('printer_not_configured', 'No $target printer is set up'));
+    final r = testReceipt(width: p.widthChars, printerLabel: '${target.toUpperCase()} printer ${p.host}:${p.port}', time: _local(nowIso(clock())));
+    try {
+      await printerFor(p).send(encodeEscPos(r));
+    } catch (e) {
+      throw HubError(502, 'printer_unreachable', 'Could not reach the $target printer at ${p.host}:${p.port}');
+    }
+    await db.execute('INSERT INTO print_jobs(id, doc_type, object_id, copy_no, target, status, actor, at) VALUES (?,?,?,?,?,?,?,?)',
+        [uuidv7(), 'test', target, 1, '${p.host}:${p.port}', 'printed', a.id, nowIso(clock())]);
+    return {'status': 'printed', 'target': target};
   }
 
   Future<void> close() async {

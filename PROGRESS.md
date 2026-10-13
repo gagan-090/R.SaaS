@@ -87,7 +87,7 @@ Test: `cd packages/ui_kit && flutter analyze && flutter test` → No issues; **+
 Test: `cd apps/admin_web && flutter analyze && flutter test` → No issues; **+4: All tests passed!** (driven by the recorded contract fixtures)
 Build: `flutter build web --release --dart-define=API_BASE_URL=…` → **✓ Built build/web**.
 
-### M7 POS app (cashier path) — DONE with gaps (2026-10-13 ~10:00 IST)
+### M7 POS app (cashier path) — DONE with gaps (2026-10-13 06:50 IST)
 Built: `apps/pos_app` (`rsaas_pos`, Windows + Android, service theme). S1 device setup (pair by QR payload `rsaas-hub://pair?…` or IP + code,
 TLS fingerprint pinning, credentials in secure storage) or "this device is the hub" (embedded `rsaas_hub` on IO), S2 hub status with pairing QR,
 S3 staff tiles + PIN, S4 status bar, C1 table map, C2 order + KOT, C3 transfer, C4 reversal (reason; owner PIN for sent lines), C5 bill preview +
@@ -98,3 +98,17 @@ Test: `cd packages/hub_server && dart test` → **+28: All tests passed!**; `pnp
 Build: `flutter build web --release` → **✓ Built build/web** (compile check). `flutter build apk --debug` → **FAILED**: Android SDK licences not
 accepted, Gradle transform errors, then the disk filled (ENOSPC). Windows build needs a Windows PC.
 Not built: camera QR scanning, C9 adjustment dialog, C10 shift summary, waiter table scoping, KDS (chef sees a placeholder).
+
+### M8 Printing — DONE (2026-10-13 07:20 IST)
+Built in `packages/hub_server/lib/src/printing.dart`: one receipt layout model rendered as ESC/POS (ESC @, align, emphasis, double size,
+feed, partial cut; ASCII-only with ₹→Rs) for 80 mm / 48 chars or 58 mm / 32 chars, and as a PDF fallback (dart `pdf`, Courier on a roll).
+Customer tax invoice (name, address, GSTIN, invoice no. + date, table, waiter, item/qty/rate/amount, subtotal, discount, CGST/SGST per rate,
+tip, round-off, total, payment modes with tendered/change, DUPLICATE on reprints) and KOT (table/takeaway, waiter, time, qty + notes,
+no prices, REPRINT). `TcpPrinterSender` (raw TCP 9100). Hub: `print_jobs` table (schema v2 with upgrade), copy numbers reserved in a
+transaction, reprints audited (`bill.reprinted` / `kot.reprinted`), routes `POST /bills/:id/print`, `POST /kot/:id/print` (JSON when printed,
+otherwise the PDF with `X-Print-Status/Copy/Error`), KOT auto-prints on send, `GET/PUT /printers` + `POST /printers/:target/test` behind `device.manage`.
+Test: `cd packages/hub_server && dart analyze --fatal-infos && dart test` → No issues; **+36: All tests passed!** (8 new in `printing_test.dart`:
+snapshot receipts in `test/golden_receipts/` checked by hand against the maths, fake TCP 9100 printer receiving KOT + bill + DUPLICATE,
+unreachable printer → 502 on test print and PDF fallback on jobs, cashier cannot change printers, waiter cannot print bills).
+Not built: shift/day summary print (needs C10 shifts), franchise invoice PDF (cloud, Premium), POS buttons for reprint / PDF viewing
+(the hub routes exist; the POS UI does not call them yet).

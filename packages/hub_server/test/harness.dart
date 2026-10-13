@@ -139,6 +139,11 @@ class Harness {
     return Res(r.statusCode, r.body.isEmpty ? null : jsonDecode(r.body));
   }
 
+  Future<Res> put(String path, {String? session, Object? body}) async {
+    final r = await http.put(Uri.parse('$base$path'), headers: headers(session: session), body: jsonEncode(body ?? {}));
+    return Res(r.statusCode, r.body.isEmpty ? null : jsonDecode(r.body));
+  }
+
   Future<Res> get(String path, {String? session}) async {
     final r = await http.get(Uri.parse('$base$path'), headers: headers(session: session));
     return Res(r.statusCode, r.body.isEmpty ? null : jsonDecode(r.body));
