@@ -4,6 +4,7 @@ module.exports = {
   testRegex: 'test/.*\\.spec\\.ts$',
   transform: { '^.+\\.ts$': ['ts-jest', {}] },
   testEnvironment: 'node',
+  globalSetup: '<rootDir>/test/global-setup.ts',
   setupFiles: ['<rootDir>/test/setup-env.ts'],
   testTimeout: 60000,
 };
