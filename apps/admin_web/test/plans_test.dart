@@ -84,15 +84,16 @@ void main() {
     expect(jsonDecode(fx.where('PATCH', '/plans/id-standard').last.body), {'archived': true});
   });
 
-  testWidgets('appearance: Light overrides a dark device, Auto follows it again', (t) async {
+  testWidgets('appearance: white by default even on a dark device; Auto follows the device; Light goes back to white', (t) async {
     await superAdminOnPlans(t, brightness: Brightness.dark);
     Brightness now() => Theme.of(t.element(find.byType(Scaffold).last)).brightness;
+    expect(now(), Brightness.light);
+    expect(Theme.of(t.element(find.byType(Scaffold).last)).scaffoldBackgroundColor, HPColors.white);
+    await t.tap(find.byTooltip('Follow this device'));
+    await t.pumpAndSettle();
     expect(now(), Brightness.dark);
     await t.tap(find.byTooltip('Light'));
     await t.pumpAndSettle();
     expect(now(), Brightness.light);
-    await t.tap(find.byTooltip('Follow this device'));
-    await t.pumpAndSettle();
-    expect(now(), Brightness.dark);
   });
 }

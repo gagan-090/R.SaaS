@@ -431,6 +431,24 @@ void main() {
     expect((await http.get(Uri.parse('${h.base}/media/$photo'))).statusCode, 401, reason: 'paired devices only');
   });
 
+  test('restaurant logo (branding): prefetched, served offline, and in the branch info the POS themes itself from', () async {
+    const logo = 'a1b2c3d4-0000-7000-8000-00000000b0b0';
+    final pull = await h.configPull();
+    pull['tenant'] = {...(pull['tenant']! as Map<String, Object?>), 'branding': {'color': '#1A73E8', 'textSize': 'large', 'headingWeight': 'bold', 'headingCase': 'normal', 'logoImageId': logo}};
+    final cloud = FakeCloud()
+      ..pullBody = pull
+      ..media[logo] = [0x89, 0x50, 0x4e, 0x47, 9, 9];
+    final worker = SyncWorker(h.hub.db, h.hub, CloudClient('http://cloud', 'dev-token', client: cloud.client()));
+    await worker.pullOnce();
+    expect(cloud.mediaFetches, 1, reason: 'logo prefetched right after the pull');
+    final info = (await h.get('/branch')).json;
+    expect(((info['tenant']! as Map)['branding']! as Map)['color'], '#1A73E8');
+    cloud.offline = true;
+    final r = await http.get(Uri.parse('${h.base}/media/$logo'), headers: h.headers());
+    expect(r.statusCode, 200);
+    expect(r.bodyBytes, [0x89, 0x50, 0x4e, 0x47, 9, 9]);
+  });
+
   test('WebSocket: snapshot on connect, then live events', () async {
     final ws = IOWebSocketChannel.connect(Uri.parse('${h.base.replaceFirst('http', 'ws')}/events'), headers: {'x-device-token': h.deviceToken});
     final msgs = StreamIterator(ws.stream.map((m) => jsonDecode(m as String) as Map<String, Object?>));

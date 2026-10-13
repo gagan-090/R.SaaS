@@ -329,10 +329,13 @@ class HubService {
         ],
       };
 
-  /// Staff tiles for the PIN login screen — names and roles only, never PIN hashes.
+  /// Staff tiles for the PIN login screen — names, roles and whether a PIN is set; never PIN hashes.
   Future<List<Map<String, Object?>>> staff() async => [
-        for (final u in await db.query("SELECT id, name, roles_json FROM users WHERE status = 'active' ORDER BY name"))
-          {'id': u['id'], 'name': u['name'], 'roles': (jsonDecode(u['roles_json']! as String) as List).map((r) => (r as Map)['role']).toList()},
+        for (final u in await db.query("SELECT id, name, roles_json, pin_hash IS NOT NULL AS has_pin FROM users WHERE status = 'active' ORDER BY name"))
+          {
+            'id': u['id'], 'name': u['name'], 'hasPin': u['has_pin'] == 1 || u['has_pin'] == true,
+            'roles': (jsonDecode(u['roles_json']! as String) as List).map((r) => (r as Map)['role']).toList(),
+          },
       ];
 
   /// Branch header for receipts and the hub screen.
@@ -346,12 +349,18 @@ class HubService {
   /// Fetches a photo from the cloud by id; set by the sync worker. Null = offline / not available.
   Future<({String contentType, Uint8List bytes})?> Function(String id)? mediaFetcher;
 
-  /// A menu photo: from the local cache, else fetched once from the cloud and cached.
+  /// The restaurant's logo id (plan feature "branding"), from the last config pull.
+  Future<String?> _logoId() async {
+    final t = jsonDecode(await db.getMeta('tenant') ?? '{}') as Map<String, Object?>;
+    return (t['branding'] as Map?)?['logoImageId'] as String?;
+  }
+
+  /// A menu photo or the restaurant logo: from the local cache, else fetched once from the cloud and cached.
   Future<({String contentType, Uint8List bytes})?> media(String id) async {
     final row = await db.selectOne('SELECT content_type, bytes FROM media_cache WHERE id = ?', [id]);
     if (row != null) return (contentType: row['content_type']! as String, bytes: row['bytes']! as Uint8List);
-    final known = await db.selectOne('SELECT 1 AS x FROM items WHERE image_id = ?', [id]);
-    if (known == null || mediaFetcher == null) return null; // only photos of this restaurant's menu are proxied
+    final known = await db.selectOne('SELECT 1 AS x FROM items WHERE image_id = ?', [id]) ?? (await _logoId() == id ? const {'x': 1} : null);
+    if (known == null || mediaFetcher == null) return null; // only this restaurant's menu photos and logo are proxied
     final m = await mediaFetcher!(id);
     if (m == null) return null;
     await db.execute('INSERT OR REPLACE INTO media_cache(id, content_type, bytes, fetched_at) VALUES (?,?,?,?)', [id, m.contentType, m.bytes, nowIso(clock())]);
@@ -359,10 +368,14 @@ class HubService {
   }
 
   /// Photo ids on the live menu that are not cached yet (the sync worker prefetches them).
-  Future<List<String>> missingMedia() async => [
-        for (final r in await db.query('SELECT DISTINCT i.image_id AS id FROM items i LEFT JOIN media_cache m ON m.id = i.image_id WHERE i.deleted = 0 AND i.image_id IS NOT NULL AND m.id IS NULL'))
-          r['id']! as String,
-      ];
+  Future<List<String>> missingMedia() async {
+    final logo = await _logoId();
+    return [
+      for (final r in await db.query('SELECT DISTINCT i.image_id AS id FROM items i LEFT JOIN media_cache m ON m.id = i.image_id WHERE i.deleted = 0 AND i.image_id IS NOT NULL AND m.id IS NULL'))
+        r['id']! as String,
+      if (logo != null && await db.selectOne('SELECT 1 AS x FROM media_cache WHERE id = ?', [logo]) == null) logo,
+    ];
+  }
 
   Future<Map<String, Object?>> state() async {
     final rawLive = await db.query("SELECT * FROM orders WHERE status IN ('open','billed') ORDER BY opened_at");

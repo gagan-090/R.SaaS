@@ -77,14 +77,22 @@ final routerProvider = Provider<GoRouter>((ref) {
 class AdminApp extends ConsumerWidget {
   const AdminApp({super.key});
   @override
-  Widget build(BuildContext context, WidgetRef ref) => MaterialApp.router(
-        title: 'House Plating',
-        debugShowCheckedModeBanner: false,
-        theme: HPTheme.backOffice(),
-        darkTheme: HPTheme.backOffice(brightness: Brightness.dark),
-        themeMode: ref.watch(themeModeProvider), // Auto follows the device / browser; Light or Dark if chosen
-        routerConfig: ref.watch(routerProvider),
-      );
+  Widget build(BuildContext context, WidgetRef ref) {
+    // a restaurant with the "branding" plan feature sees its own colour and text style; everyone else House Plating
+    final brand = ref.watch(restaurantLookProvider).valueOrNull?.brand;
+    HPBrand.activate(brand);
+    return MaterialApp.router(
+      title: 'House Plating',
+      debugShowCheckedModeBanner: false,
+      theme: HPTheme.backOffice(brand: brand),
+      darkTheme: HPTheme.backOffice(brightness: Brightness.dark, brand: brand),
+      themeMode: ref.watch(themeModeProvider), // white (Light) by default; Auto follows the device; Dark if chosen
+      routerConfig: ref.watch(routerProvider),
+      builder: (c, child) => brand == null || brand.textScale == 1
+          ? child!
+          : MediaQuery(data: MediaQuery.of(c).copyWith(textScaler: TextScaler.linear(brand.textScale)), child: child!),
+    );
+  }
 }
 
 typedef NavItem = (String path, String label, IconData icon, String? permission);
@@ -125,16 +133,29 @@ class ConsoleShell extends ConsumerWidget {
     final narrow = isNarrowWeb(context);
     final p = context.hp;
 
+    final look = ref.watch(restaurantLookProvider).valueOrNull;
+    final logoId = look?.brand?.logoImageId;
     Widget sidebar({required bool inDrawer}) => SizedBox(
         width: inDrawer ? null : 248,
         child: Material(
           color: p.sidebar,
+          shape: inDrawer || p.isDark ? null : Border(right: BorderSide(color: p.line)),
           child: SafeArea(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(HPSpace.x2, HPSpace.x2, HPSpace.x2, HPSpace.x3),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('House\nPlating', style: HPType.titleScreen(_onSidebar(p)).copyWith(fontSize: 26, height: 1.05)),
+                  if (logoId != null) ...[
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 56, maxWidth: 180),
+                      child: Image.network(ref.read(apiProvider).mediaUrl(logoId), key: const Key('brand-logo'), fit: BoxFit.contain, errorBuilder: (_, _, _) => const SizedBox.shrink()),
+                    ),
+                    const SizedBox(height: HPSpace.md),
+                  ],
+                  if (look?.brand != null && look!.name.isNotEmpty)
+                    Text(HPType.heading(look.name), key: const Key('brand-name'), style: HPType.titleScreen(_onSidebar(p)).copyWith(fontSize: 22, height: 1.1))
+                  else
+                    Text('House\nPlating', style: HPType.titleScreen(_onSidebar(p)).copyWith(fontSize: 26, height: 1.05)),
                   const SizedBox(height: HPSpace.sm),
                   Text('$brand console'.toUpperCase(), style: HPType.overline(_onSidebar(p).withValues(alpha: .65)).copyWith(fontSize: 10)),
                 ]),
@@ -191,7 +212,7 @@ class ConsoleShell extends ConsumerWidget {
                       key: const Key('sign-out'),
                       tooltip: 'Sign out',
                       onPressed: () => ref.read(authProvider.notifier).logout(),
-                      icon: const Icon(Icons.logout_rounded, color: HPColors.saffron, size: 20),
+                      icon: Icon(Icons.logout_rounded, color: HPColors.saffron, size: 20),
                     ),
                   ]),
                 ),

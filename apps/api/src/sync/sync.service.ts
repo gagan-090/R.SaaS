@@ -4,6 +4,7 @@ import { sha256 } from '../common/crypto';
 import { unauthorized } from '../common/errors';
 import { DbService } from '../db/db.service';
 import { LicenseService } from '../licensing/license.service';
+import { effectiveBranding } from '../tenant/branding';
 
 /** Entities the hub is the single writer for (Kitchen Playbook §05). Anything else is rejected into sync_conflicts. */
 export const HUB_ENTITIES = [
@@ -95,7 +96,7 @@ export class SyncService {
       return {
         cursor: cursor.toString(),
         menuVersion: tenant.menuVersion,
-        tenant: { id: tenant.id, name: tenant.name, gstin: tenant.gstin, address: tenant.address, status: tenant.status },
+        tenant: { id: tenant.id, name: tenant.name, gstin: tenant.gstin, address: tenant.address, status: tenant.status, branding: effectiveBranding(tenant.branding, ent.features) },
         licenseToken: ent.token,
         branches: strip(branches), floors: strip(floors), tables: strip(tables), taxRules: strip(taxRules),
         categories: strip(categories), items: strip(items),

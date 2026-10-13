@@ -79,6 +79,19 @@ describe('restaurant console', () => {
       await t.http().post(api('/staff')).set(bearer(prem.ownerToken)).send({ name: 'dup', role: 'waiter', pin: '1234', email, password: 'whatever-123' }).expect(409);
     });
 
+    it('an owner without a PIN (signed up on the web) sets their own; /me reports it and the PIN never reaches audit', async () => {
+      await t.owner.user.update({ where: { id: std.ownerUserId }, data: { pinHash: null } });
+      expect((await t.http().get(api('/me')).set(bearer(std.ownerToken)).expect(200)).body).toMatchObject({ hasPin: false });
+      await t.http().put(api('/me/pin')).set(bearer(std.ownerToken)).send({ pin: '12' }).expect(400);
+      await t.http().put(api('/me/pin')).set(bearer(std.ownerToken)).send({ pin: '2468' }).expect(200);
+      const me = (await t.http().get(api('/me')).set(bearer(std.ownerToken)).expect(200)).body;
+      expect(me.hasPin).toBe(true);
+      expect(me.pinHash).toBeUndefined();
+      expect((await t.owner.user.findUniqueOrThrow({ where: { id: std.ownerUserId } })).pinHash).toBeTruthy();
+      const audit = await t.owner.auditEvent.findFirstOrThrow({ where: { action: 'staff.pin_set', objectId: std.ownerUserId } });
+      expect(JSON.stringify(audit)).not.toContain('2468');
+    });
+
     it('cashiers cannot manage staff', async () => {
       const cashier = await addStaff(t, prem.tenantId, 'cashier');
       await t.http().post(api('/staff')).set(bearer(cashier.token)).send({ name: 'x', role: 'waiter', pin: '1234' }).expect(403);

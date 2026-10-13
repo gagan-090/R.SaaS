@@ -128,9 +128,7 @@ class _TableMapScreenState extends ConsumerState<TableMapScreen> {
               final seated = all.where((t) => t['status'] == 'occupied').length;
               final billing = all.where((t) => t['status'] == 'bill_printed').length;
               final pad = narrow ? HPSpace.lg : HPSpace.x2;
-              return RefreshIndicator(
-                onRefresh: () async => setState(() => _refresh++),
-                child: CustomScrollView(slivers: [
+              return CustomScrollView(slivers: [
                   SliverPadding(
                     padding: EdgeInsets.fromLTRB(pad, HPSpace.sm, pad, HPSpace.md),
                     sliver: SliverToBoxAdapter(
@@ -214,8 +212,7 @@ class _TableMapScreenState extends ConsumerState<TableMapScreen> {
                       ]),
                     ),
                   ),
-                ]),
-              );
+                ]);
             },
           ),
         ),

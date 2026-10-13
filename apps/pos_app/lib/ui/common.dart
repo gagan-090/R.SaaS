@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 
 import '../hub/hub_api.dart';
+import '../state/app_state.dart';
 
 /// Phones and small tablets get single-column layouts below this width.
 const narrowBreakpoint = 720.0;
@@ -53,3 +55,33 @@ Color roleColor(BuildContext c, String? role) => switch (role) {
       'chef' => c.hp.danger,
       _ => c.hp.muted,
     };
+
+/// Pull down anywhere to refresh the whole screen — every role, every page, also empty and error states.
+/// Wraps the app's navigator: every vertical list can be pulled even when it is short, and areas without a list
+/// (empty states, the top bar) sit in a full-height scroll view so they can be pulled too. A refresh reconnects
+/// to the hub and bumps [refreshTickProvider]; screens reload their data from it.
+class PullToRefresh extends ConsumerWidget {
+  const PullToRefresh({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final behavior = ScrollConfiguration.of(context);
+    return RefreshIndicator(
+      key: const Key('pull-to-refresh'),
+      color: HPColors.saffron,
+      notificationPredicate: (n) => n.metrics.axis == Axis.vertical,
+      onRefresh: () async {
+        ref.invalidate(hubEventsProvider); // reconnect live updates
+        ref.read(refreshTickProvider.notifier).state++;
+        await Future<void>.delayed(const Duration(milliseconds: 500)); // let the spinner show while screens reload
+      },
+      child: ScrollConfiguration(
+        behavior: behavior.copyWith(physics: AlwaysScrollableScrollPhysics(parent: behavior.getScrollPhysics(context))),
+        child: LayoutBuilder(
+          builder: (c, box) => CustomScrollView(slivers: [SliverFillRemaining(hasScrollBody: true, child: SizedBox(height: box.maxHeight, child: child))]),
+        ),
+      ),
+    );
+  }
+}

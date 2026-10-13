@@ -37,14 +37,16 @@ class _BillScreenState extends ConsumerState<BillScreen> {
   @override
   void initState() {
     super.initState();
-    _api.order(widget.orderId).then((o) {
-      if (!mounted) return;
-      setState(() {
-        _order = o;
-        _bill = o['bill'] as Json?;
-      });
-    });
+    _reload();
   }
+
+  Future<void> _reload() => _api.order(widget.orderId).then((o) {
+        if (!mounted) return;
+        setState(() {
+          _order = o;
+          _bill = o['bill'] as Json?;
+        });
+      });
 
   int get _total => (_bill?['total_paise'] as int?) ?? 0;
   int get _remaining => _total - _paid;
@@ -138,6 +140,7 @@ class _BillScreenState extends ConsumerState<BillScreen> {
   Widget build(BuildContext context) {
     final session = ref.watch(sessionProvider);
     if (session == null) return const SizedBox.shrink(); // signing out: this screen is being closed
+    ref.listen(refreshTickProvider, (_, _) => _reload()); // pull-down-to-refresh; payments typed so far stay
     if (_order == null) return const Scaffold(body: LoadingState());
     final p = context.hp;
     final wide = MediaQuery.sizeOf(context).width >= 900;
@@ -381,9 +384,7 @@ class _BillHistoryScreenState extends ConsumerState<BillHistoryScreen> {
               final all = s.data!.reversed.toList();
               final paid = all.where((b) => b['status'] == 'paid').toList();
               final bills = all.where((b) => _q.isEmpty || '${b['invoice_no']}'.toLowerCase().contains(_q.toLowerCase())).toList();
-              return RefreshIndicator(
-                onRefresh: () async => setState(() => _refresh++),
-                child: ListView(padding: EdgeInsets.all(narrow ? HPSpace.lg : HPSpace.x2), children: [
+              return ListView(padding: EdgeInsets.all(narrow ? HPSpace.lg : HPSpace.x2), children: [
                   Wrap(spacing: HPSpace.md, runSpacing: HPSpace.md, children: [
                     SizedBox(width: narrow ? double.infinity : 260, child: KpiCard(label: 'Collected today', value: rupees(paid.fold(0, (n, b) => n + (b['total_paise'] as int))), caption: '${paid.length} paid bills', icon: Icons.payments_outlined, tone: HPTone.success)),
                     if (all.length > paid.length)
@@ -409,8 +410,7 @@ class _BillHistoryScreenState extends ConsumerState<BillHistoryScreen> {
                         ),
                       ),
                   Text(' ', style: HPType.body(p.muted)),
-                ]),
-              );
+                ]);
             },
           ),
         ),

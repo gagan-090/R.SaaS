@@ -1,46 +1,121 @@
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'tokens.dart';
 
-/// Typography (STYLE.md §4): Fraunces for what people read at a glance, DM Sans for what they act on,
-/// DM Mono for invoice numbers. Numbers use tabular figures.
+/// Typography: Arial everywhere — a plain, familiar face (no downloaded fonts, works offline).
+/// Where Arial is not available (Flutter web cannot use the computer's fonts; Android does not ship Arial) the
+/// bundled Liberation Sans takes over — it has Arial's exact letter widths. Numbers use tabular figures.
 abstract final class HPType {
-  /// Widget tests and offline builds set this to false to avoid fetching fonts at runtime.
-  static bool useGoogleFonts = true;
+  /// Kept for compatibility (tests set it); fonts are system fonts now, nothing is fetched at runtime.
+  static bool useGoogleFonts = false;
 
+  static const family = 'Arial';
+  static const fallback = ['packages/rsaas_ui_kit/LiberationSans', 'Helvetica Neue', 'Helvetica', 'Roboto', 'Segoe UI', 'sans-serif'];
   static const tabular = [FontFeature.tabularFigures()];
 
-  static TextStyle _f(String family, TextStyle s) {
-    if (!useGoogleFonts) return s.copyWith(fontFamily: family);
-    return switch (family) {
-      'Fraunces' => GoogleFonts.fraunces(textStyle: s),
-      'DM Mono' => GoogleFonts.dmMono(textStyle: s),
-      _ => GoogleFonts.dmSans(textStyle: s),
-    };
+  /// Heading weight and case — House Plating bold, or the restaurant's choice ([HPBrand.activate]).
+  static FontWeight headingWeight = FontWeight.w700;
+  static bool headingUpper = false;
+
+  /// A page or card title in the restaurant's heading case.
+  static String heading(String s) => headingUpper ? s.toUpperCase() : s;
+
+  static TextStyle _f(TextStyle s) => s.copyWith(fontFamily: family, fontFamilyFallback: fallback);
+
+  static TextStyle displayTotal([Color? c]) => _f(TextStyle(fontSize: 40, fontWeight: headingWeight, letterSpacing: -.5, height: 1.15, color: c, fontFeatures: tabular));
+  static TextStyle titleScreen([Color? c]) => _f(TextStyle(fontSize: 28, fontWeight: headingWeight, letterSpacing: headingUpper ? .6 : -.3, height: 1.2, color: c));
+  static TextStyle titleCard([Color? c]) => _f(TextStyle(fontSize: 18, fontWeight: headingWeight, letterSpacing: headingUpper ? .4 : 0, height: 1.25, color: c));
+  static TextStyle note([Color? c]) => _f(TextStyle(fontSize: 14, fontStyle: FontStyle.italic, fontWeight: FontWeight.w400, color: c ?? HPColors.saffronTint));
+  static TextStyle label([Color? c]) => _f(TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c, fontFeatures: tabular));
+  static TextStyle body([Color? c]) => _f(TextStyle(fontSize: 14, fontWeight: FontWeight.w400, height: 1.35, color: c, fontFeatures: tabular));
+  static TextStyle overline([Color? c]) => _f(TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: c));
+  static TextStyle mono([Color? c]) => _f(TextStyle(fontSize: 13, color: c, fontFeatures: tabular));
+}
+
+/// A restaurant's own look (plan feature "branding", set in the restaurant console): highlight colour, text size,
+/// heading weight and case, and a logo (media id). `null` everywhere means the House Plating look.
+@immutable
+class HPBrand {
+  const HPBrand({required this.color, this.textSize = 'standard', this.headingWeight = 'bold', this.headingCase = 'normal', this.logoImageId});
+  final Color color;
+  final String textSize, headingWeight, headingCase;
+  final String? logoImageId;
+
+  static HPBrand? fromJson(Object? j) {
+    if (j is! Map) return null;
+    final hex = '${j['color'] ?? ''}'.replaceAll('#', '');
+    if (!RegExp(r'^[0-9A-Fa-f]{6}$').hasMatch(hex)) return null;
+    return HPBrand(
+      color: Color(int.parse('FF$hex', radix: 16)),
+      textSize: '${j['textSize'] ?? 'standard'}',
+      headingWeight: '${j['headingWeight'] ?? 'bold'}',
+      headingCase: '${j['headingCase'] ?? 'normal'}',
+      logoImageId: j['logoImageId'] as String?,
+    );
   }
 
-  static TextStyle displayTotal([Color? c]) => _f('Fraunces', TextStyle(fontSize: 44, fontWeight: FontWeight.w700, letterSpacing: -1, color: c, fontFeatures: tabular));
-  static TextStyle titleScreen([Color? c]) => _f('Fraunces', TextStyle(fontSize: 30, fontWeight: FontWeight.w600, letterSpacing: -.5, color: c));
-  static TextStyle titleCard([Color? c]) => _f('Fraunces', TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: c));
-  static TextStyle note([Color? c]) => _f('Fraunces', TextStyle(fontSize: 15, fontStyle: FontStyle.italic, fontWeight: FontWeight.w500, color: c ?? HPColors.saffronTint));
-  static TextStyle label([Color? c]) => _f('DM Sans', TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: c, fontFeatures: tabular));
-  static TextStyle body([Color? c]) => _f('DM Sans', TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: c, fontFeatures: tabular));
-  static TextStyle overline([Color? c]) => _f('DM Sans', TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 2, color: c));
-  static TextStyle mono([Color? c]) => _f('DM Mono', TextStyle(fontSize: 13, color: c, fontFeatures: tabular));
+  String get hex => '#${(color.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}';
+
+  /// Multiplies every text size (wrap the app in `MediaQuery(textScaler: …)`).
+  double get textScale => switch (textSize) { 'compact' => .92, 'large' => 1.12, _ => 1.0 };
+  FontWeight get weight => switch (headingWeight) { 'regular' => FontWeight.w400, 'heavy' => FontWeight.w900, _ => FontWeight.w700 };
+
+  /// Text on a fill of [c]: dark on light colours, white on dark ones.
+  static Color onColor(Color c) => c.computeLuminance() > .45 ? HPColors.whiteInk : HPColors.white;
+
+  /// The brand colour adjusted so text and icons in it stay readable on the page (darker on white, lighter on dark).
+  /// Steps the lightness until the contrast with the page reaches 4.5:1 (WCAG AA for text).
+  Color inkOn({required bool dark}) {
+    final ground = dark ? HPPalette.serviceDark.ground : HPColors.white;
+    double contrast(Color a) {
+      final la = a.computeLuminance(), lb = ground.computeLuminance();
+      return (la > lb ? la + .05 : lb + .05) / (la > lb ? lb + .05 : la + .05);
+    }
+
+    var h = HSLColor.fromColor(color);
+    for (var i = 0; i < 40 && contrast(h.toColor()) < 4.5; i++) {
+      h = h.withLightness((h.lightness + (dark ? .025 : -.025)).clamp(0.0, 1.0));
+    }
+    return h.toColor();
+  }
+
+  /// This brand's colours on top of a House Plating palette.
+  HPPalette apply(HPPalette p) {
+    final fill = p.isDark ? inkOn(dark: true) : color;
+    return p.copyWith(accent: fill, onAccent: onColor(fill), accentInk: inkOn(dark: p.isDark), brand: fill, onBrand: onColor(fill));
+  }
+
+  /// Makes this brand (or the House Plating look when null) current for [HPColors.saffron] and heading styles.
+  /// Call before building the theme; widgets pick it up on their next build.
+  static void activate(HPBrand? b) {
+    HPColors.saffron = b?.color ?? HPColors.amber;
+    HPColors.onSaffron = b == null ? HPColors.onAmber : onColor(b.color);
+    HPType.headingWeight = b?.weight ?? FontWeight.w700;
+    HPType.headingUpper = b?.headingCase == 'upper';
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is HPBrand && other.color == color && other.textSize == textSize && other.headingWeight == headingWeight && other.headingCase == headingCase && other.logoImageId == logoImageId;
+  @override
+  int get hashCode => Object.hash(color, textSize, headingWeight, headingCase, logoImageId);
 }
 
 /// Two themes, one system (STYLE.md §2) — each in a dark and a light variant so apps can follow the device
 /// (`themeMode: ThemeMode.system`). Colours come from [HPPalette]; screens read them with `context.hp`.
 abstract final class HPTheme {
   /// Service: cashier POS, table map, payment, waiter, KDS, hub screen. Dark = Midnight Masala, light = Daylight.
-  static ThemeData service({Brightness brightness = Brightness.dark}) =>
-      build(brightness == Brightness.dark ? HPPalette.serviceDark : HPPalette.serviceLight);
+  static ThemeData service({Brightness brightness = Brightness.dark, HPBrand? brand}) {
+    final p = brightness == Brightness.dark ? HPPalette.serviceDark : HPPalette.serviceLight;
+    return build(brand?.apply(p) ?? p);
+  }
 
   /// Back office: Super Admin portal, restaurant console, owner reports.
-  static ThemeData backOffice({Brightness brightness = Brightness.light}) =>
-      build(brightness == Brightness.dark ? HPPalette.backOfficeDark : HPPalette.backOfficeLight);
+  static ThemeData backOffice({Brightness brightness = Brightness.light, HPBrand? brand}) {
+    final p = brightness == Brightness.dark ? HPPalette.backOfficeDark : HPPalette.backOfficeLight;
+    return build(brand?.apply(p) ?? p);
+  }
 
   static ThemeData build(HPPalette p) {
     final brightness = p.isDark ? Brightness.dark : Brightness.light;
@@ -67,7 +142,7 @@ abstract final class HPTheme {
       primaryContainer: p.accent.withValues(alpha: .18),
       onPrimaryContainer: p.text,
     );
-    final base = ThemeData(useMaterial3: true, colorScheme: scheme, scaffoldBackgroundColor: p.ground, brightness: brightness, splashFactory: InkSparkle.splashFactory);
+    final base = ThemeData(useMaterial3: true, colorScheme: scheme, scaffoldBackgroundColor: p.ground, brightness: brightness, splashFactory: InkSparkle.splashFactory, fontFamily: HPType.family, fontFamilyFallback: HPType.fallback);
     final shape16 = RoundedRectangleBorder(borderRadius: BorderRadius.circular(HPRadius.button));
     return base.copyWith(
       extensions: [p],

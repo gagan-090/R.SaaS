@@ -34,7 +34,12 @@ class FakeRestaurantApi {
     'permissions': ['restaurant.profile.read', 'restaurant.profile.manage', 'license.read', 'staff.read', 'staff.manage', 'device.manage', 'floor.read', 'floor.manage', 'menu.read', 'menu.publish', 'reports.read'],
   };
 
+  bool brandingInPlan = false;
+  Map<String, dynamic>? brand; // saved look
+  static const brandDefaults = {'color': '#6B1F2A', 'textSize': 'standard', 'headingWeight': 'bold', 'headingCase': 'normal', 'logoImageId': null};
+
   Map<String, dynamic> overview() => {
+        'branding': brandingInPlan ? brand : null,
         'restaurant': {'id': 't1', 'code': 'R000000', 'name': 'Demo Dhaba', 'gstin': '27AAAPA1234A1Z5', 'address': 'MG Road, Pune', 'status': 'active'},
         'branches': [{'id': 'b1', 'code': 'BR01', 'name': 'MG Road'}],
         'license': {'state': 'active', 'plan': 'premium', 'planName': 'Premium', 'features': ['menu', 'tables', 'roles.extended', 'kds'], 'limits': {}, 'endsAt': '2026-11-12T00:00:00Z'},
@@ -91,6 +96,12 @@ class FakeRestaurantApi {
             out = me;
           case ('GET', '/tenant/overview'):
             out = overview();
+          case ('GET', '/tenant/branding'):
+            out = {'enabled': brandingInPlan, 'branding': brandingInPlan ? brand : null, 'saved': brand ?? brandDefaults, 'defaults': brandDefaults};
+          case ('PUT', '/tenant/branding'):
+            if (!brandingInPlan) return http.Response('{"code":"feature_not_in_plan","message":"Not in your plan"}', 403);
+            brand = {...brandDefaults, ...?brand, ...body};
+            out = brand;
           case ('GET', '/tenant/dashboard'):
             lastRange = req.url.queryParameters['range'];
             out = dashboard();
@@ -138,6 +149,9 @@ class FakeRestaurantApi {
             status = 201;
           case ('GET', '/devices'):
             out = devices;
+          case ('PUT', '/me/pin'):
+            staff.firstWhere((x) => x['id'] == me['id'])['hasPin'] = true;
+            out = {'id': me['id'], 'hasPin': true};
           default:
             if (req.method == 'PATCH' && path.startsWith('/menu/items/')) {
               final it = items.firstWhere((i) => i['id'] == path.split('/').last);
@@ -216,7 +230,8 @@ void main() {
       }
       expect(find.byKey(const Key('nav-Restaurants')), findsNothing);
       final theme = Theme.of(t.element(find.byType(Scaffold).first));
-      expect(theme.brightness, brightness, reason: 'follows the device setting');
+      expect(theme.brightness, Brightness.light, reason: 'the white theme is the default, whatever the device uses');
+      expect(theme.scaffoldBackgroundColor, HPColors.white);
     });
 
     testWidgets('[$tag] menu: add a category and a dish; price in rupees is sent as paise; sold-out toggle', (t) async {
@@ -270,6 +285,27 @@ void main() {
       await t.tap(find.widgetWithText(DangerButton, 'Turn off'));
       await t.pumpAndSettle();
       expect(api.staff.firstWhere((u) => u['name'] == 'Anita')['status'], 'disabled');
+    });
+
+    testWidgets('[$tag] staff: an owner with no PIN is told so and sets their own', (t) async {
+      final api = await start(t, size: size, brightness: brightness);
+      api.staff.first['hasPin'] = false;
+      await go(t, 'Staff', size: size);
+      expect(find.byKey(const Key('no-pin-banner')), findsOneWidget);
+      expect(find.text('No PIN'), findsOneWidget);
+      await t.tap(find.byKey(const Key('set-my-pin')));
+      await t.pumpAndSettle();
+      await t.enterText(find.byKey(const Key('my-pin')), '2468');
+      await t.enterText(find.byKey(const Key('my-pin-again')), '2469');
+      await t.tap(find.byKey(const Key('save-my-pin')));
+      await t.pumpAndSettle();
+      expect(find.text('The two PINs do not match'), findsOneWidget);
+      await t.enterText(find.byKey(const Key('my-pin-again')), '2468');
+      await t.tap(find.byKey(const Key('save-my-pin')));
+      await t.pumpAndSettle();
+      expect(api.last('PUT', '/me/pin'), {'pin': '2468'});
+      expect(find.byKey(const Key('no-pin-banner')), findsNothing);
+      expect(find.text('PIN set'), findsOneWidget);
     });
 
     testWidgets('[$tag] floors & tables: add a floor and a 6-seat table', (t) async {
@@ -347,5 +383,42 @@ void main() {
     expect(find.text('Kitchen display'), findsOneWidget);
     expect(find.text('kds'), findsNothing);
     expect(find.text('roles.extended'), findsNothing);
+  });
+
+  group('your look (branding)', () {
+    tearDown(() => HPBrand.activate(null)); // the highlight colour and heading style are app-wide
+
+    testWidgets('not in the plan: the card says how to get it and nothing can be saved', (t) async {
+      await start(t);
+      await go(t, 'Settings', size: desktop);
+      await t.scrollUntilVisible(find.byKey(const Key('branding-locked')), 300, scrollable: find.byType(Scrollable).last);
+      expect(find.text('Custom branding is not in your plan'), findsOneWidget);
+      expect(find.byKey(const Key('save-branding')), findsNothing);
+    });
+
+    testWidgets('in the plan: colour, size and heading style are saved and the console switches to them', (t) async {
+      final api = await start(t);
+      api.brandingInPlan = true;
+      await go(t, 'Settings', size: desktop);
+      await t.scrollUntilVisible(find.byKey(const Key('save-branding')), 300, scrollable: find.byType(Scrollable).last);
+      await t.tap(find.byKey(const Key('swatch-#1A73E8')));
+      await t.tap(find.text('Large'));
+      await t.tap(find.text('AA'));
+      await t.pumpAndSettle();
+      expect(find.text('SEND TO KITCHEN'), findsOneWidget); // live preview
+      await t.enterText(find.byKey(const Key('brand-hex')), 'blue');
+      await t.tap(find.byKey(const Key('save-branding')));
+      await t.pumpAndSettle();
+      expect(find.text('Use a colour like #1A73E8'), findsOneWidget);
+      await t.tap(find.byKey(const Key('swatch-#1A73E8')));
+      await t.tap(find.byKey(const Key('save-branding')));
+      await t.pumpAndSettle();
+      expect(api.last('PUT', '/tenant/branding'), {'color': '#1A73E8', 'textSize': 'large', 'headingWeight': 'bold', 'headingCase': 'upper'});
+      expect(find.byKey(const Key('brand-name')), findsOneWidget); // sidebar shows the restaurant, not House Plating
+      expect(find.text('DEMO DHABA'), findsWidgets);
+      expect(HPColors.saffron, const Color(0xFF1A73E8));
+      expect(Theme.of(t.element(find.byType(Scaffold).first)).colorScheme.primary, const Color(0xFF1A73E8));
+      expect(MediaQuery.of(t.element(find.byType(Scaffold).first)).textScaler, const TextScaler.linear(1.12));
+    });
   });
 }

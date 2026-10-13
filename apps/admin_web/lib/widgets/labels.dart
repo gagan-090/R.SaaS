@@ -61,6 +61,7 @@ const _actions = {
   'device.revoked': 'Device revoked',
   'staff.created': 'Staff member added',
   'staff.updated': 'Staff member changed',
+  'staff.pin_set': 'Set their own POS PIN',
   'menu.item_created': 'Dish added',
   'menu.item_updated': 'Dish changed',
   'menu.item_deleted': 'Dish deleted',

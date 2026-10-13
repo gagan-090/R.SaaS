@@ -112,13 +112,14 @@ export const FEATURE_FLAGS = {
   'menu.approval': 'Chef approval workflow',
   inventory: 'Departments, stock, receipts, transfers, wastage, consumption',
   shifts: 'Shift templates, breaks, attendance',
+  branding: "Restaurant's own colour, logo and text style on the console, POS and bills",
 } as const;
 export type FeatureFlag = keyof typeof FEATURE_FLAGS;
 
 const STANDARD: FeatureFlag[] = ['tables', 'orders.dinein', 'orders.takeaway', 'menu', 'billing', 'offline.single'];
 const PROFESSIONAL: FeatureFlag[] = [...STANDARD, 'floors', 'multi_cashier', 'waiter_app', 'lan_hub'];
 const PREMIUM: FeatureFlag[] = [
-  ...PROFESSIONAL, 'franchise', 'roles.extended', 'kds', 'recipes', 'menu.approval', 'inventory', 'shifts',
+  ...PROFESSIONAL, 'franchise', 'roles.extended', 'kds', 'recipes', 'menu.approval', 'inventory', 'shifts', 'branding',
 ];
 
 /** Seeded plans. Prices are placeholders until the client supplies them (Chef's Defaults). */

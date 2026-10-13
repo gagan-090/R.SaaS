@@ -16,6 +16,16 @@ PreparedImage prepareDishPhoto(Uint8List raw, {int size = 640, int quality = 82}
   return (contentType: 'image/jpeg', base64: base64Encode(jpg), bytes: jpg);
 }
 
+/// A restaurant logo for `PUT /tenant/branding/logo`: longest side at most 512 px, PNG so transparency survives.
+PreparedImage prepareLogo(Uint8List raw, {int maxSide = 512}) {
+  final decoded = img.decodeImage(raw);
+  if (decoded == null) throw const FormatException('That file is not an image we can read (use JPG, PNG or WebP).');
+  final big = decoded.width > maxSide || decoded.height > maxSide;
+  final out = !big ? decoded : (decoded.width >= decoded.height ? img.copyResize(decoded, width: maxSide) : img.copyResize(decoded, height: maxSide));
+  final png = img.encodePng(out);
+  return (contentType: 'image/png', base64: base64Encode(png), bytes: png);
+}
+
 /// Opens the file chooser for one image. Null when the user cancels.
 Future<Uint8List?> pickPhoto() async {
   final r = await FilePicker.pickFiles(type: FileType.image, withData: true);

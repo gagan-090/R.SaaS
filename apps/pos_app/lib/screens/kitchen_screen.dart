@@ -112,13 +112,10 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                 Expanded(
                   child: shown.isEmpty
                       ? EmptyState(title: 'Nothing here', icon: Icons.check_circle_outline_rounded, message: 'No ${_filter == 'all' ? '' : '$_filter '}tickets right now.')
-                      : RefreshIndicator(
-                          onRefresh: () async => setState(() => _refresh++),
-                          child: ListView(padding: const EdgeInsets.fromLTRB(HPSpace.lg, 0, HPSpace.lg, HPSpace.lg), children: [
+                      : ListView(padding: const EdgeInsets.fromLTRB(HPSpace.lg, 0, HPSpace.lg, HPSpace.lg), children: [
                             for (final t in shown) Padding(padding: const EdgeInsets.only(bottom: HPSpace.md), child: card(t)),
                             Text(' ', style: HPType.body(p.muted)),
                           ]),
-                        ),
                 ),
               ]);
             },

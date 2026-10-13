@@ -34,8 +34,8 @@ class _AuthFrame extends ConsumerWidget {
                       Container(
                         width: 36,
                         height: 36,
-                        decoration: const BoxDecoration(color: HPColors.saffron, shape: BoxShape.circle),
-                        child: const Icon(Icons.restaurant_rounded, size: 20, color: HPColors.onSaffron),
+                        decoration: BoxDecoration(color: HPColors.saffron, shape: BoxShape.circle),
+                        child: Icon(Icons.restaurant_rounded, size: 20, color: HPColors.onSaffron),
                       ),
                       const SizedBox(width: HPSpace.sm),
                       Text('HOUSE PLATING', style: HPType.overline(context.hp.accentInk)),

@@ -516,7 +516,7 @@ class TableTile extends StatelessWidget {
 
   (Color, Color, String) _style(HPPalette p) => switch (state) {
         TableState.free => (Colors.transparent, p.muted, 'Free'),
-        TableState.ordering => (HPColors.saffron, HPColors.onSaffron, 'Ordering'),
+        TableState.ordering => (HPColors.amber, HPColors.onAmber, 'Ordering'),
         TableState.served => (p.success, p.isDark ? HPColors.onCardamom : HPColors.paperCard, 'Served'),
         TableState.billPrinted => (p.danger, HPColors.onChili, 'Bill printed'),
         TableState.reserved => (p.pending, p.isDark ? HPColors.onJamun : HPColors.paperCard, 'Reserved'),

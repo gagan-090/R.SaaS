@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api/api_client.dart';
@@ -88,20 +89,21 @@ final activePlansProvider = FutureProvider<List<Json>>((ref) async => (await ref
 
 /// Light / dark / follow the device. Remembered on this device (browser storage on the web).
 class ThemeModeNotifier extends Notifier<ThemeMode> {
-  static const _key = 'appearance';
+  // v2: the white (Light) theme became the default on 13 Oct 2026, so earlier "Auto" choices start over
+  static const _key = 'appearance.v2';
 
   @override
   ThemeMode build() {
     _load();
-    return ThemeMode.system;
+    return ThemeMode.light;
   }
 
   Future<void> _load() async {
     try {
       final v = (await SharedPreferences.getInstance()).getString(_key);
-      if (v != null) state = ThemeMode.values.firstWhere((m) => m.name == v, orElse: () => ThemeMode.system);
+      if (v != null) state = ThemeMode.values.firstWhere((m) => m.name == v, orElse: () => ThemeMode.light);
     } catch (_) {
-      // storage unavailable (private window, tests): stay on "follow the device"
+      // storage unavailable (private window, tests): stay on the white theme
     }
   }
 
@@ -114,3 +116,15 @@ class ThemeModeNotifier extends Notifier<ThemeMode> {
 }
 
 final themeModeProvider = NotifierProvider<ThemeModeNotifier, ThemeMode>(ThemeModeNotifier.new);
+
+/// The signed-in restaurant's name and look. `brand` is null unless its plan includes "branding" and the owner set one;
+/// Super Admins always see House Plating. Bump [brandRefreshProvider] after saving branding.
+typedef RestaurantLook = ({String name, HPBrand? brand});
+final brandRefreshProvider = StateProvider<int>((ref) => 0);
+final restaurantLookProvider = FutureProvider<RestaurantLook?>((ref) async {
+  ref.watch(brandRefreshProvider);
+  final a = ref.watch(authProvider);
+  if (a is! SignedIn || !a.isRestaurant || !a.can('restaurant.profile.read')) return null;
+  final o = await ref.read(apiProvider).overview();
+  return (name: '${(o['restaurant'] as Map?)?['name'] ?? ''}', brand: HPBrand.fromJson(o['branding']));
+});

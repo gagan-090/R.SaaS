@@ -147,13 +147,53 @@ void main() {
     expect(find.text('Demo Dhaba · MG Road'), findsOneWidget);
   });
 
+  testWidgets('S3: someone with no PIN is told how to set one; once the hub has it, the pad opens', (t) async {
+    final hub = await start(t);
+    final owner = hub.staffList.firstWhere((u) => u['id'] == 'u-own');
+    owner.remove('pin'); // e.g. signed up on the web and never set one
+    await t.tap(find.byKey(const Key('staff-Owner'))); // the list on screen is older
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('not-you')));
+    await t.pumpAndSettle();
+    expect(find.text('No PIN yet'), findsOneWidget);
+    await t.tap(find.byKey(const Key('staff-Owner')));
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('no-pin-help')), findsOneWidget);
+    expect(find.textContaining('Set my PIN'), findsOneWidget);
+    await t.tap(find.widgetWithText(PrimaryButton, 'OK'));
+    await t.pumpAndSettle();
+    expect(find.text('No PIN yet'), findsOneWidget);
+    owner['pin'] = '9999'; // set in the web console, pulled by the hub
+    await t.tap(find.byKey(const Key('staff-Owner')));
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('pin-dots')), findsOneWidget);
+  });
+
+  testWidgets('pull down to refresh: works on the sign-in names and on an empty kitchen', (t) async {
+    final hub = await start(t, size: phone, brightness: Brightness.light);
+    hub.staffList.add({'id': 'u-new', 'name': 'Meera', 'roles': ['waiter'], 'pin': '4444'});
+    expect(find.byKey(const Key('staff-Meera')), findsNothing);
+    await t.fling(find.text('Who is working?'), const Offset(0, 500), 1500);
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('staff-Meera')), findsOneWidget); // new staff arrive without restarting
+
+    await signIn(t, 'Kunal', '7777');
+    expect(find.text('No tickets'), findsOneWidget);
+    final before = hub.kdsLoads;
+    await t.fling(find.text('No tickets'), const Offset(0, 500), 1500); // not a list: still pulls
+    await t.pumpAndSettle();
+    expect(hub.kdsLoads, greaterThan(before));
+    expect(find.text('No tickets'), findsOneWidget);
+  });
+
   for (final (size, brightness) in [(tablet, Brightness.dark), (phone, Brightness.light), (bigPhone, Brightness.dark)]) {
     final tag = '${size.width.toInt()}x${size.height.toInt()} ${brightness.name}';
     final narrow = size != tablet;
 
-    testWidgets('[$tag] theme follows the device; every role lands on its own tabs', (t) async {
+    testWidgets('[$tag] white theme by default on any device; every role lands on its own tabs', (t) async {
       await start(t, size: size, brightness: brightness);
-      expect(Theme.of(t.element(find.byType(Scaffold).first)).brightness, brightness);
+      expect(Theme.of(t.element(find.byType(Scaffold).first)).brightness, Brightness.light);
+      expect(Theme.of(t.element(find.byType(Scaffold).first)).scaffoldBackgroundColor, HPColors.white);
       await signIn(t, 'Owner', '9999');
       expect(navTabs(t), ['Tables', 'Kitchen', 'Bills', 'More']);
       expect(find.byKey(const Key('new-takeaway')), findsOneWidget);
@@ -439,6 +479,24 @@ void main() {
     await t.pumpAndSettle();
     expect(hub.adjustments.single['approver'], 'u-own');
     expect(hub.adjustments.single['pin'], '9999');
+  });
+
+  testWidgets('restaurant branding from the hub: own colour, text size, heading case and logo for every role', (t) async {
+    addTearDown(() => HPBrand.activate(null));
+    final hub = await start(t, size: phone, brightness: Brightness.light);
+    expect(find.byKey(const Key('brand-name')), findsNothing); // House Plating look
+    hub.branding = {'color': '#1A73E8', 'textSize': 'large', 'headingWeight': 'heavy', 'headingCase': 'upper', 'logoImageId': 'logo-1'};
+    await t.fling(find.text('WHO IS WORKING?').evaluate().isEmpty ? find.text('Who is working?') : find.text('WHO IS WORKING?'), const Offset(0, 500), 1500);
+    await t.pumpAndSettle();
+    expect(find.text('DEMO DHABA'), findsOneWidget);
+    expect(find.text('WHO IS WORKING?'), findsOneWidget);
+    expect(hub.mediaRequests, contains('logo-1'));
+    expect(HPColors.saffron, const Color(0xFF1A73E8));
+    final ctx = t.element(find.byType(Scaffold).first);
+    expect(Theme.of(ctx).colorScheme.primary, const Color(0xFF1A73E8));
+    expect(MediaQuery.of(ctx).textScaler, const TextScaler.linear(1.12));
+    await signIn(t, 'Kunal', '7777'); // chef: the kitchen is branded too
+    expect(find.text('KITCHEN'), findsWidgets);
   });
 
   testWidgets('appearance: Dark from More overrides a light device; Auto follows it again', (t) async {

@@ -227,6 +227,10 @@ class _OrderScreenState extends ConsumerState<OrderScreen> {
       final d = next.valueOrNull?['data'];
       if (d is Map && d['orderId'] == widget.orderId) _load();
     });
+    ref.listen(refreshTickProvider, (_, _) {
+      _menu = null; // pull-down-to-refresh: menu and order again
+      _load();
+    });
     if (_error != null) return Scaffold(body: Column(children: [const PosTopBar(title: 'Order'), Expanded(child: ErrorState(message: errText(_error!), onRetry: _load))]));
     if (_order == null || _menu == null) return const Scaffold(body: LoadingState());
     final o = _order!;

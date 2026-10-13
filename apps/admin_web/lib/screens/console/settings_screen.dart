@@ -6,6 +6,7 @@ import '../../api/api_client.dart';
 import '../../state/providers.dart';
 import '../../widgets/common.dart';
 import '../../widgets/labels.dart';
+import 'branding_card.dart';
 
 /// Restaurant settings: what prints on every bill (name, address, GSTIN), the plan, and GST rates.
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -142,14 +143,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
     return PageFrame(
       title: 'Settings',
-      subtitle: 'Restaurant details, plan and taxes',
-      child: narrow
-          ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [profile, const SizedBox(height: HPSpace.lg), plan, const SizedBox(height: HPSpace.lg), taxes])
-          : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(flex: 3, child: profile),
-              const SizedBox(width: HPSpace.lg),
-              Expanded(flex: 2, child: Column(children: [plan, const SizedBox(height: HPSpace.lg), taxes])),
-            ]),
+      subtitle: 'Restaurant details, your look, plan and taxes',
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        narrow
+            ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [profile, const SizedBox(height: HPSpace.lg), plan, const SizedBox(height: HPSpace.lg), taxes])
+            : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(flex: 3, child: profile),
+                const SizedBox(width: HPSpace.lg),
+                Expanded(flex: 2, child: Column(children: [plan, const SizedBox(height: HPSpace.lg), taxes])),
+              ]),
+        const SizedBox(height: HPSpace.lg),
+        const BrandingCard(),
+      ]),
     );
   }
 }

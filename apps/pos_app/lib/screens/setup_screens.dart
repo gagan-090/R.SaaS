@@ -12,6 +12,7 @@ import '../hub/hub_api.dart';
 import '../hub/hub_mode.dart';
 import '../state/app_state.dart';
 import '../ui/common.dart';
+import '../ui/media.dart';
 import '../ui/shell.dart';
 
 /// Pairs with a hub: overridable so tests do not open sockets.
@@ -26,8 +27,8 @@ class _Brand extends StatelessWidget {
         Container(
           width: 40,
           height: 40,
-          decoration: const BoxDecoration(color: HPColors.saffron, shape: BoxShape.circle),
-          child: const Icon(Icons.restaurant_rounded, color: HPColors.onSaffron, size: 22),
+          decoration: BoxDecoration(color: HPColors.saffron, shape: BoxShape.circle),
+          child: Icon(Icons.restaurant_rounded, color: HPColors.onSaffron, size: 22),
         ),
         const SizedBox(width: HPSpace.sm),
         Text('HOUSE PLATING', style: HPType.overline(context.hp.accentInk)),
@@ -45,8 +46,10 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
   final _payload = TextEditingController(), _ip = TextEditingController(), _port = TextEditingController(text: '8443'),
       _code = TextEditingController(), _fp = TextEditingController(), _name = TextEditingController(text: 'Cashier terminal');
   final _cloud = TextEditingController(text: const String.fromEnvironment('API_BASE_URL', defaultValue: 'http://localhost:3000/api/v1')),
-      _email = TextEditingController(), _password = TextEditingController(), _mfa = TextEditingController();
-  bool _busy = false, _needMfa = false, _manual = false, _showPassword = false;
+      _email = TextEditingController(), _password = TextEditingController(), _mfa = TextEditingController(),
+      _newPin = TextEditingController(), _newPinAgain = TextEditingController();
+  bool _busy = false, _needMfa = false, _needPin = false, _manual = false, _showPassword = false;
+  String? _access; // kept while the owner chooses a PIN, so they do not sign in twice
   late bool _asHub = HubHost.supported;
   String? _challenge, _error;
 
@@ -79,11 +82,16 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
       _error = null;
     });
     final base = _cloud.text.trim().replaceAll(RegExp(r'/$'), '');
-    Future<Map<String, dynamic>> post(String path, Object body, {String? bearer}) async {
+    Future<Map<String, dynamic>> call(String method, String path, {Object? body, String? bearer}) async {
       final http.Response r;
       try {
-        r = await http
-            .post(Uri.parse('$base$path'), headers: {'content-type': 'application/json', if (bearer != null) 'authorization': 'Bearer $bearer'}, body: jsonEncode(body))
+        final headers = {'content-type': 'application/json', if (bearer != null) 'authorization': 'Bearer $bearer'};
+        final uri = Uri.parse('$base$path');
+        r = await (switch (method) {
+          'GET' => http.get(uri, headers: headers),
+          'PUT' => http.put(uri, headers: headers, body: jsonEncode(body)),
+          _ => http.post(uri, headers: headers, body: jsonEncode(body)),
+        })
             .timeout(const Duration(seconds: 15));
       } catch (_) {
         throw HubApiException(0, 'unreachable', 'Cannot reach $base — check the address and that this device is on the same Wi-Fi');
@@ -93,20 +101,40 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
       return j;
     }
 
+    Future<Map<String, dynamic>> post(String path, Object body, {String? bearer}) => call('POST', path, body: body, bearer: bearer);
+
     try {
-      String access;
-      if (_needMfa) {
-        access = (await post('/auth/mfa/verify', {'challengeToken': _challenge, 'code': _mfa.text.trim()}))['accessToken'] as String;
-      } else {
-        final l = await post('/auth/login', {'email': _email.text.trim(), 'password': _password.text});
-        if (l['status'] == 'mfa_required') {
+      var access = _access;
+      if (access == null) {
+        if (_needMfa) {
+          access = (await post('/auth/mfa/verify', {'challengeToken': _challenge, 'code': _mfa.text.trim()}))['accessToken'] as String;
+        } else {
+          final l = await post('/auth/login', {'email': _email.text.trim(), 'password': _password.text});
+          if (l['status'] == 'mfa_required') {
+            setState(() {
+              _needMfa = true;
+              _challenge = l['challengeToken'] as String;
+            });
+            return;
+          }
+          access = l['accessToken'] as String;
+        }
+      }
+      if (!_needPin) {
+        // The POS signs everyone in with a PIN. An owner who signed up on the web has none yet: choose it now.
+        final me = await call('GET', '/me', bearer: access);
+        if (me['hasPin'] == false) {
           setState(() {
-            _needMfa = true;
-            _challenge = l['challengeToken'] as String;
+            _access = access;
+            _needPin = true;
           });
           return;
         }
-        access = l['accessToken'] as String;
+      } else {
+        final pin = _newPin.text.trim();
+        if (!RegExp(r'^\d{4,8}$').hasMatch(pin)) throw HubApiException(400, 'pin', 'PIN must be 4–8 digits');
+        if (pin != _newPinAgain.text.trim()) throw HubApiException(400, 'pin', 'The two PINs do not match');
+        await call('PUT', '/me/pin', body: {'pin': pin}, bearer: access);
       }
       final reg = await post('/devices/register-hub', {'name': _name.text.trim(), 'platform': _platform}, bearer: access);
       final cfg = HubHostConfig(cloudUrl: base, cloudDeviceToken: reg['deviceToken'] as String, branchId: reg['branchId'] as String,
@@ -216,6 +244,23 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
               ),
               onSubmitted: (_) => _becomeHub(),
             ),
+            if (_needPin) ...[
+              const SizedBox(height: HPSpace.lg),
+              Container(
+                key: const Key('choose-pin'),
+                padding: const EdgeInsets.all(HPSpace.md),
+                decoration: BoxDecoration(color: HPColors.saffron.withValues(alpha: .14), borderRadius: BorderRadius.circular(12)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  Text('Choose your POS PIN', style: HPType.titleCard(p.text)),
+                  const SizedBox(height: 2),
+                  Text('You have no PIN yet. Everyone signs in on this device with a PIN, 4 to 8 digits.', style: HPType.body(p.muted)),
+                  const SizedBox(height: HPSpace.md),
+                  TextField(key: const Key('new-pin'), controller: _newPin, autofocus: true, obscureText: true, maxLength: 8, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: const InputDecoration(labelText: 'New PIN', counterText: '', prefixIcon: Icon(Icons.pin_outlined))),
+                  const SizedBox(height: HPSpace.sm),
+                  TextField(key: const Key('new-pin-again'), controller: _newPinAgain, obscureText: true, maxLength: 8, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: const InputDecoration(labelText: 'Type it again', counterText: '', prefixIcon: Icon(Icons.pin_outlined)), onSubmitted: (_) => _becomeHub()),
+                ]),
+              ),
+            ],
             if (_needMfa) ...[
               const SizedBox(height: HPSpace.md),
               TextField(controller: _mfa, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Authenticator code', prefixIcon: Icon(Icons.verified_user_outlined))),
@@ -223,7 +268,7 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
             const SizedBox(height: HPSpace.md),
             TextField(controller: _name, decoration: const InputDecoration(labelText: 'Name of this device', prefixIcon: Icon(Icons.devices_rounded))),
             const SizedBox(height: HPSpace.x2),
-            PrimaryButton(key: const Key('make-hub'), label: 'Make this the hub', icon: Icons.power_settings_new_rounded, busy: _busy, onPressed: _becomeHub),
+            PrimaryButton(key: const Key('make-hub'), label: _needPin ? 'Save PIN and make this the hub' : 'Make this the hub', icon: Icons.power_settings_new_rounded, busy: _busy, onPressed: _becomeHub),
           ]),
         ),
       );
@@ -440,6 +485,46 @@ class _StaffLoginScreenState extends ConsumerState<StaffLoginScreen> with Single
     }
   }
 
+  /// Someone without a PIN cannot use the pad: re-check (the hub pulls new PINs about every minute) and explain.
+  Future<void> _pick(Json u) async {
+    HapticFeedback.selectionClick();
+    var user = u;
+    if (u['hasPin'] == false) {
+      final fresh = await ref.read(hubApiProvider)!.staff();
+      user = fresh.firstWhere((x) => x['id'] == u['id'], orElse: () => u);
+      if (mounted) {
+        setState(() {
+          _staff = Future.value(fresh);
+        });
+      }
+      if (user['hasPin'] == false) {
+        if (!mounted) return;
+        final owner = (user['roles'] as List).contains('owner');
+        await showDialog<void>(
+          context: context,
+          builder: (d) => HPDialog(
+            title: '${'${user['name']}'.split(' (').first} has no PIN yet',
+            actions: [PrimaryButton(label: 'OK', height: 56, onPressed: () => Navigator.pop(d))],
+            child: Text(
+              owner
+                  ? 'Open the web console → Staff and tap "Set my PIN". This device gets it in about a minute; then tap your name again.'
+                  : 'Ask the owner to set a PIN for you in the web console → Staff. This device gets it in about a minute.',
+              key: const Key('no-pin-help'),
+              style: HPType.body(context.hp.text),
+            ),
+          ),
+        );
+        return;
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _user = user;
+      _pin = '';
+      _error = null;
+    });
+  }
+
   void _key(String d) {
     if (_pin.length >= 8) return;
     setState(() {
@@ -452,6 +537,10 @@ class _StaffLoginScreenState extends ConsumerState<StaffLoginScreen> with Single
   Widget build(BuildContext context) {
     final api = ref.watch(hubApiProvider)!;
     _staff ??= api.staff();
+    // pull-down-to-refresh: new staff and new PINs from the hub
+    ref.listen(refreshTickProvider, (_, _) => setState(() {
+          _staff = api.staff();
+        }));
     final p = context.hp;
     final narrow = isNarrow(context);
     return Scaffold(
@@ -483,7 +572,13 @@ class _StaffLoginScreenState extends ConsumerState<StaffLoginScreen> with Single
   }
 
   Widget _pickUser(List<Json> staff, HPPalette p, bool narrow) => Column(key: const ValueKey('pick'), children: [
-        Text('Who is working?', style: HPType.titleScreen(p.text), textAlign: TextAlign.center),
+        const BrandLogo(height: 72, maxWidth: 220),
+        if (ref.watch(posLookProvider).valueOrNull case (:final name, :final brand) when brand != null && name.isNotEmpty) ...[
+          const SizedBox(height: HPSpace.sm),
+          Text(HPType.heading(name), key: const Key('brand-name'), style: HPType.titleCard(p.accentInk), textAlign: TextAlign.center),
+        ],
+        const SizedBox(height: HPSpace.md),
+        Text(HPType.heading('Who is working?'), style: HPType.titleScreen(p.text), textAlign: TextAlign.center),
         const SizedBox(height: HPSpace.xs),
         Text('Tap your name, then enter your PIN', style: HPType.body(p.muted)),
         SizedBox(height: narrow ? HPSpace.lg : HPSpace.x2),
@@ -498,14 +593,7 @@ class _StaffLoginScreenState extends ConsumerState<StaffLoginScreen> with Single
                 child: InkWell(
                   key: Key('staff-${'${u['name']}'.split(' (').first}'),
                   borderRadius: BorderRadius.circular(HPRadius.card),
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    setState(() {
-                      _user = u;
-                      _pin = '';
-                      _error = null;
-                    });
-                  },
+                  onTap: () => _pick(u),
                   child: Padding(
                     padding: EdgeInsets.symmetric(vertical: narrow ? HPSpace.md : HPSpace.lg, horizontal: HPSpace.sm),
                     child: Column(children: [
@@ -513,6 +601,7 @@ class _StaffLoginScreenState extends ConsumerState<StaffLoginScreen> with Single
                       const SizedBox(height: HPSpace.sm),
                       Text('${u['name']}'.split(' (').first, style: HPType.label(p.text), overflow: TextOverflow.ellipsis),
                       Text(roleLabel(u['roles'] as List), style: HPType.body(p.muted).copyWith(fontSize: 12), overflow: TextOverflow.ellipsis),
+                      if (u['hasPin'] == false) Text('No PIN yet', style: HPType.body(p.danger).copyWith(fontSize: 12, fontWeight: FontWeight.w700)),
                     ]),
                   ),
                 ),
@@ -557,7 +646,15 @@ class _StaffLoginScreenState extends ConsumerState<StaffLoginScreen> with Single
         NumericKeypad(onKey: _key, onBackspace: () => setState(() => _pin = _pin.isEmpty ? '' : _pin.substring(0, _pin.length - 1)), onClear: () => setState(() => _pin = '')),
         const SizedBox(height: HPSpace.lg),
         PrimaryButton(label: 'Sign in', busy: _busy, onPressed: _pin.length >= 4 ? _submit : null),
-        TextButton(onPressed: () => setState(() => _user = null), child: const Text('Not you?')),
+        TextButton(
+          key: const Key('not-you'),
+          // back to the names, refreshed: new staff and new PINs arrive from the hub
+          onPressed: () => setState(() {
+            _user = null;
+            _staff = ref.read(hubApiProvider)!.staff();
+          }),
+          child: const Text('Not you?'),
+        ),
       ]),
     );
   }

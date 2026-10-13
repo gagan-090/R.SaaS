@@ -12,7 +12,14 @@ abstract final class HPColors {
   static const ghee = Color(0xFFF6EBDD);
   static const husk = Color(0xFFB8A595);
   static const smoke = Color(0xFF8F7D6E);
-  static const saffron = Color(0xFFF0A93B);
+  /// Highlight colour (selected navigation, avatars, main buttons on the POS). House Plating saffron by default;
+  /// a restaurant with the "branding" plan feature replaces it with its own colour ([HPBrand.activate]).
+  static Color saffron = amber;
+  static Color onSaffron = onAmber;
+
+  /// Fixed warning / "in progress" colour for statuses — never replaced by a brand colour, so it keeps its meaning.
+  static const amber = Color(0xFFF0A93B);
+  static const onAmber = Color(0xFF1A0F0C);
   static const saffronTint = Color(0xFFF5C779);
   static const chili = Color(0xFFE2553E);
   static const cardamom = Color(0xFF7FB685);
@@ -27,8 +34,15 @@ abstract final class HPColors {
   static const inkMuted = Color(0xFF6F6155);
   static const olive = Color(0xFF55663A);
   static const vegGreen = Color(0xFF4CAF50);
+  // white theme (default light look)
+  static const white = Color(0xFFFFFFFF);
+  static const whiteRaised = Color(0xFFF4F5F7);
+  static const whiteLine = Color(0xFFE5E7EB);
+  static const whiteOutline = Color(0xFFCBD0D6);
+  static const whiteInk = Color(0xFF16181D);
+  static const whiteMuted = Color(0xFF5B616B);
+  static const whiteFaint = Color(0xFF8C939D);
   // text on filled colours
-  static const onSaffron = Color(0xFF1A0F0C);
   static const onCardamom = Color(0xFF10210F);
   static const onJamun = Color(0xFF1E1028);
   static const onChili = Color(0xFFFFF1EA);
@@ -49,14 +63,14 @@ enum HPTone { neutral, saffron, success, danger, pending }
 extension HPToneColors on HPTone {
   Color get color => switch (this) {
         HPTone.neutral => HPColors.husk,
-        HPTone.saffron => HPColors.saffron,
+        HPTone.saffron => HPColors.amber,
         HPTone.success => HPColors.cardamom,
         HPTone.danger => HPColors.chili,
         HPTone.pending => HPColors.jamun,
       };
   Color get onColor => switch (this) {
         HPTone.neutral => HPColors.espresso,
-        HPTone.saffron => HPColors.onSaffron,
+        HPTone.saffron => HPColors.onAmber,
         HPTone.success => HPColors.onCardamom,
         HPTone.danger => HPColors.onChili,
         HPTone.pending => HPColors.onJamun,
@@ -126,32 +140,32 @@ class HPPalette extends ThemeExtension<HPPalette> {
   /// Midnight Masala — service, dark.
   static const serviceDark = HPPalette(
     ground: HPColors.espresso, surface: HPColors.ember, raised: HPColors.emberRaised, line: HPColors.clayLine, outline: HPColors.outline,
-    text: HPColors.ghee, muted: HPColors.husk, faint: HPColors.smoke, accent: HPColors.saffron, onAccent: HPColors.onSaffron,
-    accentInk: HPColors.saffron, success: HPColors.cardamom, danger: HPColors.chili, pending: HPColors.jamun, note: HPColors.saffronTint,
-    brand: HPColors.saffron, onBrand: HPColors.onSaffron, sidebar: HPColors.kitchen, isDark: true,
+    text: HPColors.ghee, muted: HPColors.husk, faint: HPColors.smoke, accent: HPColors.amber, onAccent: HPColors.onAmber,
+    accentInk: HPColors.amber, success: HPColors.cardamom, danger: HPColors.chili, pending: HPColors.jamun, note: HPColors.saffronTint,
+    brand: HPColors.amber, onBrand: HPColors.onAmber, sidebar: HPColors.kitchen, isDark: true,
   );
 
-  /// Daylight — service, light (same layout, paper ground; saffron stays the fill, text accents darken for contrast).
+  /// White — service, light (the default): white pages and cards, grey lines; saffron stays the fill.
   static const serviceLight = HPPalette(
-    ground: HPColors.paper, surface: HPColors.paperCard, raised: Color(0xFFF3EADB), line: HPColors.paperLine, outline: Color(0xFFCDBDA4),
-    text: HPColors.ink, muted: HPColors.inkMuted, faint: Color(0xFF9A8B7C), accent: HPColors.saffron, onAccent: HPColors.onSaffron,
-    accentInk: Color(0xFF9A5A00), success: Color(0xFF3E7D46), danger: Color(0xFFC2402B), pending: Color(0xFF7B52A8), note: Color(0xFF9A5A00),
-    brand: HPColors.saffron, onBrand: HPColors.onSaffron, sidebar: Color(0xFFF3EADB), isDark: false,
+    ground: HPColors.white, surface: HPColors.white, raised: HPColors.whiteRaised, line: HPColors.whiteLine, outline: HPColors.whiteOutline,
+    text: HPColors.whiteInk, muted: HPColors.whiteMuted, faint: HPColors.whiteFaint, accent: HPColors.amber, onAccent: HPColors.onAmber,
+    accentInk: Color(0xFF9A5A00), success: Color(0xFF2E7D32), danger: Color(0xFFC62828), pending: Color(0xFF6A3FA0), note: Color(0xFF9A5A00),
+    brand: HPColors.amber, onBrand: HPColors.onAmber, sidebar: HPColors.white, isDark: false,
   );
 
-  /// Back office, light (wine brand).
+  /// Back office, light (the default): white pages, white sidebar, wine accent.
   static const backOfficeLight = HPPalette(
-    ground: HPColors.paper, surface: HPColors.paperCard, raised: Color(0xFFF3EADB), line: HPColors.paperLine, outline: Color(0xFFCDBDA4),
-    text: HPColors.ink, muted: HPColors.inkMuted, faint: Color(0xFF9A8B7C), accent: HPColors.wine, onAccent: HPColors.paper,
-    accentInk: HPColors.wine, success: Color(0xFF3E7D46), danger: Color(0xFFC2402B), pending: Color(0xFF7B52A8), note: Color(0xFF9A5A00),
-    brand: HPColors.wine, onBrand: HPColors.paper, sidebar: HPColors.wineDeep, isDark: false,
+    ground: HPColors.white, surface: HPColors.white, raised: HPColors.whiteRaised, line: HPColors.whiteLine, outline: HPColors.whiteOutline,
+    text: HPColors.whiteInk, muted: HPColors.whiteMuted, faint: HPColors.whiteFaint, accent: HPColors.wine, onAccent: HPColors.white,
+    accentInk: HPColors.wine, success: Color(0xFF2E7D32), danger: Color(0xFFC62828), pending: Color(0xFF6A3FA0), note: Color(0xFF9A5A00),
+    brand: HPColors.wine, onBrand: HPColors.white, sidebar: HPColors.white, isDark: false,
   );
 
   /// Back office, dark (follows the device at night).
   static const backOfficeDark = HPPalette(
     ground: Color(0xFF120B0C), surface: Color(0xFF1C1314), raised: Color(0xFF281B1D), line: Color(0xFF3A2A2C), outline: Color(0xFF4D3A3D),
-    text: HPColors.ghee, muted: HPColors.husk, faint: HPColors.smoke, accent: HPColors.saffron, onAccent: HPColors.onSaffron,
-    accentInk: HPColors.saffron, success: HPColors.cardamom, danger: HPColors.chili, pending: HPColors.jamun, note: HPColors.saffronTint,
+    text: HPColors.ghee, muted: HPColors.husk, faint: HPColors.smoke, accent: HPColors.amber, onAccent: HPColors.onAmber,
+    accentInk: HPColors.amber, success: HPColors.cardamom, danger: HPColors.chili, pending: HPColors.jamun, note: HPColors.saffronTint,
     brand: Color(0xFFD9707F), onBrand: Color(0xFF1E0A0E), sidebar: Color(0xFF0C0708), isDark: true,
   );
 
@@ -165,10 +179,10 @@ class HPPalette extends ThemeExtension<HPPalette> {
       };
 
   @override
-  HPPalette copyWith({Color? ground, Color? surface, Color? accent}) => HPPalette(
+  HPPalette copyWith({Color? ground, Color? surface, Color? accent, Color? onAccent, Color? accentInk, Color? brand, Color? onBrand}) => HPPalette(
         ground: ground ?? this.ground, surface: surface ?? this.surface, raised: raised, line: line, outline: outline, text: text, muted: muted,
-        faint: faint, accent: accent ?? this.accent, onAccent: onAccent, accentInk: accentInk, success: success, danger: danger, pending: pending,
-        note: note, brand: brand, onBrand: onBrand, sidebar: sidebar, isDark: isDark,
+        faint: faint, accent: accent ?? this.accent, onAccent: onAccent ?? this.onAccent, accentInk: accentInk ?? this.accentInk, success: success,
+        danger: danger, pending: pending, note: note, brand: brand ?? this.brand, onBrand: onBrand ?? this.onBrand, sidebar: sidebar, isDark: isDark,
       );
 
   @override

@@ -193,6 +193,7 @@ model RestaurantTenant {
   status       TenantStatus @default(pending)
   statusReason String?      @map("status_reason")
   menuVersion  Int          @default(0) @map("menu_version")
+  branding     Json? // plan feature "branding": { color, logoImageId, textSize, headingWeight, headingCase }
   createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
   franchises   Franchise[]

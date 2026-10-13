@@ -166,6 +166,13 @@ class ApiClient {
   /// Public URL of a menu photo (no auth needed; ids are unguessable).
   String mediaUrl(String id) => '$_base/media/$id';
 
+  // ---- branding (plan feature "branding")
+  Future<Json> branding() async => await _send('GET', '/tenant/branding') as Json;
+  Future<Json> setBranding(Json body) async => await _send('PUT', '/tenant/branding', body: body) as Json;
+  Future<Json> setLogo(String contentType, String dataBase64) async =>
+      await _send('PUT', '/tenant/branding/logo', body: {'contentType': contentType, 'dataBase64': dataBase64}) as Json;
+  Future<void> removeLogo() async => _send('DELETE', '/tenant/branding/logo');
+
   Future<List<dynamic>> floors() async => await _send('GET', '/floors') as List<dynamic>;
   Future<Json> createFloor(String branchId, String name, {int sortOrder = 0}) async =>
       await _send('POST', '/floors', body: {'branchId': branchId, 'name': name, 'sortOrder': sortOrder}) as Json;
@@ -178,6 +185,7 @@ class ApiClient {
   Future<List<dynamic>> staff() async => await _send('GET', '/staff') as List<dynamic>;
   Future<Json> createStaff(Json body) async => await _send('POST', '/staff', body: body) as Json;
   Future<Json> updateStaff(String id, Json body) async => await _send('PATCH', '/staff/$id', body: body) as Json;
+  Future<void> setMyPin(String pin) async => _send('PUT', '/me/pin', body: {'pin': pin});
 
   Future<List<dynamic>> devices() async => await _send('GET', '/devices') as List<dynamic>;
   Future<Json> revokeDevice(String id, String reason) async => await _send('POST', '/devices/$id/revoke', body: {'reason': reason}) as Json;

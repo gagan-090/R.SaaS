@@ -8,6 +8,7 @@ import { badRequest, conflict, notFound } from '../common/errors';
 import { FEATURE_FLAGS } from '../common/permissions';
 import { apiBody, zbody, ZodPipe } from '../common/validation';
 import { DbService } from '../db/db.service';
+import { LicenseService } from '../licensing/license.service';
 
 const flags = Object.keys(FEATURE_FLAGS);
 const PlanBody = z.object({
@@ -25,7 +26,7 @@ const ListQuery = z.object({ includeArchived: z.enum(['true', 'false']).default(
 @ApiBearerAuth()
 @Controller('plans')
 export class PlansController {
-  constructor(private db: DbService) {}
+  constructor(private db: DbService, private licenses: LicenseService) {}
 
   @RequirePermissions('platform.restaurant.read')
   @Get()
@@ -60,12 +61,22 @@ export class PlansController {
   @ApiBody(apiBody(PlanPatch))
   async update(@Param('id', ParseUUIDPipe) id: string, @Body(zbody(PlanPatch)) b: z.infer<typeof PlanPatch>, @AuditCtx() audit: AuditDetails) {
     if (Object.keys(b).length === 0) throw badRequest('empty_patch', 'Nothing to update');
-    const { before, after } = await this.db.platform(async (tx) => {
+    const { before, after, licensesUpdated } = await this.db.platform(async (tx) => {
       const before = await tx.subscriptionPlan.findUnique({ where: { id } });
       if (!before) throw notFound('Plan');
-      return { before, after: await tx.subscriptionPlan.update({ where: { id }, data: b }) };
+      const after = await tx.subscriptionPlan.update({ where: { id }, data: b });
+      // Features and limits apply to restaurants already on this plan: re-sign their active licenses (same dates).
+      // Hubs receive the new token on their next pull (about a minute).
+      let licensesUpdated = 0;
+      if (b.featureFlags || b.limits) {
+        for (const lic of await tx.license.findMany({ where: { planId: id, status: 'active' } })) {
+          await tx.license.update({ where: { id: lic.id }, data: { signedToken: this.licenses.buildToken(lic, after) } });
+          licensesUpdated++;
+        }
+      }
+      return { before, after, licensesUpdated };
     });
-    Object.assign(audit, { objectType: 'plan', objectId: id, before, after });
-    return after;
+    Object.assign(audit, { objectType: 'plan', objectId: id, before, after: { ...after, licensesUpdated } });
+    return { ...after, licensesUpdated };
   }
 }

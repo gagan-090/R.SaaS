@@ -49,7 +49,7 @@ class FakeHubApi extends HubApi {
   @override
   Future<Json> health() async => {'status': 'ok'};
   @override
-  Future<List<Json>> staff() async => [for (final s in staffList) {'id': s['id'], 'name': s['name'], 'roles': s['roles']}];
+  Future<List<Json>> staff() async => [for (final s in staffList) {'id': s['id'], 'name': s['name'], 'roles': s['roles'], 'hasPin': s['pin'] != null}];
   @override
   Future<Json> login(String userId, String pin) async {
     final u = staffList.firstWhere((s) => s['id'] == userId);
@@ -97,7 +97,8 @@ class FakeHubApi extends HubApi {
   Future<Json> menu() async => {'categories': [{'id': 'c1', 'name': 'Mains'}], 'items': items};
 
   @override
-  Future<Json> branch() async => {'tenant': {'name': 'Demo Dhaba'}, 'branch': {'name': 'Demo Dhaba — MG Road', 'code': 'BR01'}};
+  Future<Json> branch() async => {'tenant': {'name': 'Demo Dhaba', 'branding': ?branding}, 'branch': {'name': 'Demo Dhaba — MG Road', 'code': 'BR01'}};
+  Json? branding; // plan feature "branding", as pulled from the cloud
 
   final mediaRequests = <String>[];
   @override
@@ -161,8 +162,12 @@ class FakeHubApi extends HubApi {
     return {'ticketId': k['id'], 'kotNo': k['kotNo']};
   }
 
+  int kdsLoads = 0;
   @override
-  Future<List<Json>> kdsTickets() async => tickets.where((k) => k['status'] != 'served').toList();
+  Future<List<Json>> kdsTickets() async {
+    kdsLoads++;
+    return tickets.where((k) => k['status'] != 'served').toList();
+  }
 
   @override
   Future<Json> setTicketStatus(String ticketId, String status) async {

@@ -9,6 +9,7 @@ import '../screens/more_screens.dart';
 import '../screens/tables_screen.dart';
 import '../state/app_state.dart';
 import 'common.dart';
+import 'media.dart';
 
 /// Signs the current person out of this terminal: closes every open screen first, then clears the session,
 /// so no screen ever rebuilds without a user.
@@ -47,7 +48,7 @@ class PosTopBar extends ConsumerWidget {
                 if (canPop) IconButton(tooltip: 'Back', icon: const Icon(Icons.arrow_back_rounded), onPressed: () => Navigator.of(context).maybePop()) else const SizedBox(width: HPSpace.sm),
                 Expanded(
                   child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(title, style: HPType.titleCard(p.text).copyWith(fontSize: narrow ? 21 : 24), overflow: TextOverflow.ellipsis, maxLines: 1),
+                    Text(HPType.heading(title), style: HPType.titleCard(p.text).copyWith(fontSize: narrow ? 21 : 24), overflow: TextOverflow.ellipsis, maxLines: 1),
                     if (subtitle != null) Text(subtitle!, style: HPType.body(p.muted).copyWith(fontSize: 12.5), overflow: TextOverflow.ellipsis, maxLines: 1),
                   ]),
                 ),
@@ -169,6 +170,8 @@ class _PosShellState extends ConsumerState<PosShell> {
     final s = ref.watch(sessionProvider);
     if (s == null) return const SizedBox.shrink();
     final dest = _destinations(s);
+    // pull-down-to-refresh rebuilds the open tab from scratch, like opening it again
+    ref.listen(refreshTickProvider, (_, _) => _select(dest, _index.clamp(0, dest.length - 1)));
     final i = _index.clamp(0, dest.length - 1);
     final kds = ref.watch(_kdsCount);
     Widget icon(_Dest d, {bool selected = false}) {
@@ -197,11 +200,15 @@ class _PosShellState extends ConsumerState<PosShell> {
           minWidth: 88,
           leading: Padding(
             padding: const EdgeInsets.symmetric(vertical: HPSpace.lg),
-            child: Container(
-              width: 44,
+            child: BrandLogo(
               height: 44,
-              decoration: const BoxDecoration(color: HPColors.saffron, shape: BoxShape.circle),
-              child: const Icon(Icons.restaurant_rounded, color: HPColors.onSaffron),
+              maxWidth: 72,
+              fallback: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(color: HPColors.saffron, shape: BoxShape.circle),
+                child: Icon(Icons.restaurant_rounded, color: HPColors.onSaffron),
+              ),
             ),
           ),
           destinations: [

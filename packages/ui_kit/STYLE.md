@@ -25,6 +25,14 @@ You are designing and building screens for a restaurant billing and POS product 
 
 The kitchen display uses an even darker ground, `#0C0807`, for glare in bright kitchens.
 
+**White is the default** (owner decision, 13 Oct 2026): every app and role opens in the light theme — white `#FFFFFF`
+pages, cards and sidebar, grey lines `#E5E7EB`, ink `#16181D`. The dark themes stay available (Appearance → Auto / Dark).
+
+**Restaurant branding** (plan feature `branding`, switched on per plan by the Super Admin): the owner picks a colour,
+logo and text style in Console → Settings → Your look. `HPBrand.apply` puts the colour on the palette (text uses a
+shade with ≥ 4.5:1 contrast), `HPBrand.activate` makes it the highlight (`HPColors.saffron`) and sets heading weight and
+case; the app wraps itself in the brand's text scale. Status colours (`HPColors.amber`, tones) never change with a brand.
+
 ## 3. Colour tokens
 
 Use these names in code (`HPColors.saffron`, etc.). Never hard-code hex values in a screen.
@@ -61,18 +69,21 @@ Text that sits on a filled colour uses a dark text colour: `#1A0F0C` on saffron,
 
 ## 4. Typography
 
-Use the Flutter `google_fonts` package (Fraunces, DM Sans, DM Mono). All numbers use tabular figures (`FontFeature.tabularFigures()`) so prices line up.
+**Arial everywhere** (owner decision, 13 Oct 2026): one plain, familiar system face for titles, numbers and body text,
+Where Arial is missing — Flutter web (it cannot use the computer's fonts) and Android — the bundled **Liberation Sans**
+(SIL OFL, `fonts/`) takes over: it has Arial's exact letter widths. No fonts are downloaded at runtime, so screens look
+the same offline. All numbers use tabular figures (`FontFeature.tabularFigures()`).
 
-| Token | Font | Size / weight | Use |
-| --- | --- | --- | --- |
-| `displayTotal` | Fraunces | 40–56 / 700, letter-spacing −1 | Amount to pay, KPI numbers |
-| `titleScreen` | Fraunces | 30–34 / 600, letter-spacing −0.5 | Screen titles ("Table 12") |
-| `titleCard` | Fraunces | 19–26 / 600–700 | Dish names, ticket headers, table numbers |
-| `note` | Fraunces italic | 14–22 / 500, saffron tint `#F5C779` | Kitchen notes ("less spicy") |
-| `label` | DM Sans | 15–17 / 600–700 | Buttons, chips, list items |
-| `body` | DM Sans | 14–15 / 400–500 | Secondary info |
-| `overline` | DM Sans | 12 / 700, uppercase, letter-spacing 2 | Section labels ("In the kitchen · KOT #14") |
-| `mono` | DM Mono | 13–14 / 400 | Invoice numbers, receipts |
+| Token | Size / weight | Use |
+| --- | --- | --- |
+| `displayTotal` | 40 / 700 | Amount to pay, KPI numbers |
+| `titleScreen` | 28 / 700 | Screen titles ("Table 12") |
+| `titleCard` | 18 / 700 | Dish names, ticket headers, table numbers |
+| `note` | 14 / 400 italic, saffron tint | Kitchen notes ("less spicy") |
+| `label` | 15 / 600 | Buttons, chips, list items |
+| `body` | 14 / 400 | Secondary info |
+| `overline` | 12 / 700, uppercase, letter-spacing 1.2 | Section labels |
+| `mono` | 13 / 400 tabular | Invoice numbers, receipts |
 
 ## 5. Shape, spacing, depth
 
@@ -176,7 +187,7 @@ For a new dish, pick the base colour from the dish itself, a contrasting sauce, 
 ## 12. Don'ts
 
 - No stock food photos, emoji, gradient washes across whole screens, or neon.
-- No Inter or Roboto, and no pure black (`#000`) or pure white (`#FFF`) grounds.
+- No pure black (`#000`) or pure white (`#FFF`) grounds.
 - No more than one saffron primary per region, and no red-versus-green-only status.
 - No tiny text on the kitchen display.
 - No modal spinners that block service.

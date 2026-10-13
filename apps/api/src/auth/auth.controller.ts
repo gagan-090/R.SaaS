@@ -89,10 +89,11 @@ export class AuthController {
     const profile = await this.db.platform(async (tx) =>
       a.type === 'admin'
         ? tx.platformAdmin.findUnique({ where: { id: a.id }, select: { id: true, email: true, name: true, mfa: { select: { enrolledAt: true } } } })
-        : tx.user.findUnique({ where: { id: a.id }, select: { id: true, email: true, name: true, tenantId: true, mfa: { select: { enrolledAt: true } } } }),
+        : tx.user.findUnique({ where: { id: a.id }, select: { id: true, email: true, name: true, tenantId: true, pinHash: true, mfa: { select: { enrolledAt: true } } } }),
     );
+    const hasPin = profile && 'pinHash' in profile ? !!profile.pinHash : undefined;
     return {
-      type: a.type, ...profile, mfaEnrolled: !!profile?.mfa?.enrolledAt, mfa: undefined,
+      type: a.type, ...profile, mfaEnrolled: !!profile?.mfa?.enrolledAt, mfa: undefined, pinHash: undefined, ...(hasPin === undefined ? {} : { hasPin }),
       roles: a.roles, permissions: [...a.permissions].sort(), branchIds: a.branchIds,
     };
   }

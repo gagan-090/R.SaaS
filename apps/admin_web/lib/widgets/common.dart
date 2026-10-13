@@ -44,7 +44,7 @@ class PageFrame extends StatelessWidget {
       spacing: HPSpace.lg,
       children: [
         Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-          Text(title, style: HPType.titleScreen(context.hp.text).copyWith(fontSize: narrow ? 28 : 36)),
+          Text(HPType.heading(title), style: HPType.titleScreen(context.hp.text).copyWith(fontSize: narrow ? 28 : 36)),
           if (subtitle != null) ...[const SizedBox(height: 4), Text(subtitle!, style: HPType.body(context.hp.muted).copyWith(fontSize: 15))],
         ]),
         if (actions.isNotEmpty) Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, children: actions),

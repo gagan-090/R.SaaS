@@ -20,6 +20,7 @@ const featureGroups = <(String, List<(String, String)>)>[
   ('Premium', [
     ('franchise', 'Multiple branches'), ('roles.extended', 'Chef, IT admin, auditor roles'), ('kds', 'Kitchen display'),
     ('recipes', 'Recipes'), ('menu.approval', 'Chef approval of menu changes'), ('inventory', 'Inventory'), ('shifts', 'Shifts & attendance'),
+    ('branding', 'Custom branding (logo, colour, text style)'),
   ]),
 ];
 
@@ -242,12 +243,15 @@ class _PlanEditorState extends State<PlanEditor> {
     });
     final body = {'name': _name.text.trim(), 'pricePaise': (rupees * 100).round(), 'billingCycle': _cycle, 'featureFlags': _features.toList(), 'limits': limits};
     try {
+      var n = 0;
       if (_isNew) {
         await widget.api.createPlan({...body, 'code': _code.text.trim()});
       } else {
-        await widget.api.updatePlan(widget.plan!['id'] as String, body);
+        n = ((await widget.api.updatePlan(widget.plan!['id'] as String, body))['licensesUpdated'] as int?) ?? 0;
       }
-      if (mounted) Navigator.pop(context, _isNew ? '${body['name']} added' : '${body['name']} saved');
+      if (mounted) {
+        Navigator.pop(context, _isNew ? '${body['name']} added' : '${body['name']} saved${n > 0 ? ' — $n restaurant${n == 1 ? '' : 's'} on this plan updated now' : ''}');
+      }
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } finally {

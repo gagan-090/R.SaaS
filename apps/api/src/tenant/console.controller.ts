@@ -4,7 +4,7 @@ import type { Response } from 'express';
 import { z } from 'zod';
 import type { Actor, AuditDetails } from '../common/actor';
 import { AuditCtx, CurrentActor } from '../common/actor';
-import { Audited, Public, RequirePermissions, RequiresFeature } from '../common/decorators';
+import { Audited, AuthenticatedOnly, Public, RequirePermissions, RequiresFeature } from '../common/decorators';
 import { badRequest, conflict, forbidden, notFound } from '../common/errors';
 import { EXTENDED_ROLES, type RestaurantRoleName } from '../common/permissions';
 import { uuidv7 } from '../common/uuid';
@@ -12,6 +12,7 @@ import { apiBody, zbody, ZodPipe } from '../common/validation';
 import { hashPassword } from '../auth/auth.service';
 import { DbService, Tx } from '../db/db.service';
 import { LicenseService } from '../licensing/license.service';
+import { BrandingBody, DEFAULT_BRANDING, decodeImage, effectiveBranding, ImageBody } from './branding';
 
 /** Roles an owner / IT admin can give staff from the console. The owner account itself is created at onboarding. */
 const STAFF_ROLES = ['it_admin', 'cashier', 'waiter', 'chef', 'auditor'] as const;
@@ -36,12 +37,8 @@ const StaffPatch = z.object({
   status: z.enum(['active', 'disabled']).optional(),
   canDiscount: z.boolean().optional(),
 });
+const MyPinBody = z.object({ pin: Pin });
 const CategoryPatch = z.object({ name: z.string().trim().min(1).max(60).optional(), sortOrder: z.number().int().optional() });
-const ImageBody = z.object({
-  contentType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
-  // the console resizes before upload; 1.5 MB of base64 ≈ 1.1 MB image
-  dataBase64: z.string().min(16).max(1_600_000),
-});
 const RevokeBody = z.object({ reason: z.string().trim().min(3).max(500) });
 const DashboardQuery = z.object({
   range: z.enum(['today', '7d', '30d']).optional(),
@@ -91,6 +88,7 @@ export class ConsoleController {
         restaurant: { id: tenant.id, code: tenant.code, name: tenant.name, gstin: tenant.gstin, address: tenant.address, status: tenant.status },
         branches: branches.map((b) => ({ id: b.id, code: b.code, name: b.name, address: b.address, gstin: b.gstin })),
         license: { state: ent.state, plan: plan?.code ?? null, planName: plan?.name ?? null, features: ent.features, limits: ent.limits, endsAt: ent.license?.endsAt ?? null },
+        branding: effectiveBranding(tenant.branding, ent.features),
         counts: { items, categories, tables, staff, devices: devices.length },
         hub: hub ? { online: !!hub.lastSeenAt && Date.now() - hub.lastSeenAt.getTime() < 3 * 60_000, lastSeenAt: hub.lastSeenAt } : null,
       };
@@ -323,6 +321,73 @@ export class ConsoleController {
     });
   }
 
+  // ---------------- branding (plan feature "branding", switched on per plan by the Super Admin)
+
+  @RequirePermissions('restaurant.profile.read')
+  @Get('tenant/branding')
+  branding(@CurrentActor() a: Actor) {
+    return this.t(a, async (tx) => {
+      const [tenant, ent] = await Promise.all([tx.restaurantTenant.findUniqueOrThrow({ where: { id: a.tenantId } }), this.licenses.entitlement(tx, a.tenantId!)]);
+      const enabled = ent.features.includes('branding');
+      const stored = effectiveBranding(tenant.branding, ['branding']);
+      return { enabled, branding: enabled ? stored : null, saved: stored ?? DEFAULT_BRANDING, defaults: DEFAULT_BRANDING };
+    });
+  }
+
+  @RequirePermissions('restaurant.profile.manage')
+  @RequiresFeature('branding')
+  @Audited('tenant.branding_updated')
+  @Put('tenant/branding')
+  @ApiBody(apiBody(BrandingBody))
+  async setBranding(@CurrentActor() a: Actor, @Body(zbody(BrandingBody)) b: z.infer<typeof BrandingBody>, @AuditCtx() audit: AuditDetails) {
+    const r = await this.t(a, async (tx) => {
+      const t = await tx.restaurantTenant.findUniqueOrThrow({ where: { id: a.tenantId } });
+      const before = effectiveBranding(t.branding, ['branding']);
+      const after = { ...DEFAULT_BRANDING, ...before, ...b, color: b.color.toUpperCase() };
+      await tx.restaurantTenant.update({ where: { id: a.tenantId }, data: { branding: after } });
+      return { before, after };
+    });
+    Object.assign(audit, { objectType: 'restaurant', objectId: a.tenantId, before: r.before, after: r.after });
+    return r.after;
+  }
+
+  @RequirePermissions('restaurant.profile.manage')
+  @RequiresFeature('branding')
+  @Audited('tenant.logo_set')
+  @Put('tenant/branding/logo')
+  @ApiBody(apiBody(ImageBody))
+  async setLogo(@CurrentActor() a: Actor, @Body(zbody(ImageBody)) b: z.infer<typeof ImageBody>, @AuditCtx() audit: AuditDetails) {
+    const bytes = decodeImage(b);
+    const r = await this.t(a, async (tx) => {
+      const t = await tx.restaurantTenant.findUniqueOrThrow({ where: { id: a.tenantId } });
+      const cur = effectiveBranding(t.branding, ['branding']) ?? DEFAULT_BRANDING;
+      const mediaId = uuidv7();
+      await tx.media.create({ data: { id: mediaId, tenantId: a.tenantId!, contentType: b.contentType, bytes, sizeBytes: bytes.length } });
+      await tx.restaurantTenant.update({ where: { id: a.tenantId }, data: { branding: { ...cur, logoImageId: mediaId } } });
+      if (cur.logoImageId) await tx.media.deleteMany({ where: { id: cur.logoImageId } });
+      return { previous: cur.logoImageId, logoImageId: mediaId };
+    });
+    Object.assign(audit, { objectType: 'restaurant', objectId: a.tenantId, before: { logoImageId: r.previous }, after: { logoImageId: r.logoImageId, bytes: bytes.length } });
+    return { logoImageId: r.logoImageId, logoUrl: `/api/v1/media/${r.logoImageId}` };
+  }
+
+  @RequirePermissions('restaurant.profile.manage')
+  @RequiresFeature('branding')
+  @Audited('tenant.logo_removed')
+  @Delete('tenant/branding/logo')
+  @HttpCode(204)
+  async removeLogo(@CurrentActor() a: Actor, @AuditCtx() audit: AuditDetails) {
+    const prev = await this.t(a, async (tx) => {
+      const t = await tx.restaurantTenant.findUniqueOrThrow({ where: { id: a.tenantId } });
+      const cur = effectiveBranding(t.branding, ['branding']);
+      if (!cur?.logoImageId) return null;
+      await tx.restaurantTenant.update({ where: { id: a.tenantId }, data: { branding: { ...cur, logoImageId: null } } });
+      await tx.media.deleteMany({ where: { id: cur.logoImageId } });
+      return cur.logoImageId;
+    });
+    Object.assign(audit, { objectType: 'restaurant', objectId: a.tenantId, before: { logoImageId: prev } });
+  }
+
   // ---------------- staff
 
   @RequirePermissions('staff.read')
@@ -401,6 +466,20 @@ export class ConsoleController {
     });
     Object.assign(audit, { objectType: 'user', objectId: id, before: r.before, after: r.after });
     return { id, ...r.after };
+  }
+
+  /** Anyone with a restaurant account sets their own POS PIN — the owner created at sign-up has none yet. */
+  @AuthenticatedOnly()
+  @Audited('staff.pin_set')
+  @Put('me/pin')
+  @HttpCode(200)
+  @ApiBody(apiBody(MyPinBody))
+  async setMyPin(@CurrentActor() a: Actor, @Body(zbody(MyPinBody)) b: z.infer<typeof MyPinBody>, @AuditCtx() audit: AuditDetails) {
+    const pinHash = await hashPassword(b.pin);
+    const u = await this.t(a, (tx) => tx.user.update({ where: { id: a.id }, data: { pinHash }, select: { id: true, name: true } }));
+    // never audit the PIN itself
+    Object.assign(audit, { objectType: 'user', objectId: u.id, after: { name: u.name, pinChanged: true } });
+    return { id: u.id, hasPin: true };
   }
 
   // ---------------- devices & hubs
@@ -493,14 +572,7 @@ export class ConsoleController {
   @Put('menu/items/:id/image')
   @ApiBody(apiBody(ImageBody))
   async setImage(@CurrentActor() a: Actor, @Param('id', ParseUUIDPipe) id: string, @Body(zbody(ImageBody)) b: z.infer<typeof ImageBody>, @AuditCtx() audit: AuditDetails) {
-    const bytes = Buffer.from(b.dataBase64, 'base64');
-    if (bytes.length < 64 || bytes.length > 1_200_000) throw badRequest('bad_image', 'Image must be between 64 bytes and 1.2 MB');
-    const magic: Record<string, (x: Buffer) => boolean> = {
-      'image/jpeg': (x) => x[0] === 0xff && x[1] === 0xd8,
-      'image/png': (x) => x.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
-      'image/webp': (x) => x.subarray(0, 4).toString('ascii') === 'RIFF' && x.subarray(8, 12).toString('ascii') === 'WEBP',
-    };
-    if (!magic[b.contentType](bytes)) throw badRequest('bad_image', `File is not a valid ${b.contentType}`);
+    const bytes = decodeImage(b);
     const r = await this.t(a, async (tx) => {
       const it = await tx.menuItem.findUnique({ where: { id } });
       if (!it || it.deleted) throw notFound('Menu item');

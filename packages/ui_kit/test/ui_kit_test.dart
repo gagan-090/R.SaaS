@@ -160,4 +160,27 @@ void main() {
       expect(rich.text.style?.color, p.onAccent);
     }
   });
+
+  test('any brand colour stays readable: links/totals darken on white, lighten on dark; fill text flips', () {
+    double contrast(Color a, Color b) {
+      final la = a.computeLuminance(), lb = b.computeLuminance();
+      return (math.max(la, lb) + .05) / (math.min(la, lb) + .05);
+    }
+
+    for (final hex in ['#FFEB3B', '#F0A93B', '#1A73E8', '#212121', '#6B1F2A', '#00E5FF']) {
+      final b = HPBrand.fromJson({'color': hex})!;
+      for (final base in [HPPalette.backOfficeLight, HPPalette.serviceLight, HPPalette.serviceDark, HPPalette.backOfficeDark]) {
+        final p = b.apply(base);
+        expect(contrast(p.accentInk, p.ground), greaterThan(3.0), reason: '$hex text on ${base.isDark ? 'dark' : 'white'}');
+        expect(contrast(p.onAccent, p.accent), greaterThan(3.0), reason: '$hex button text');
+      }
+    }
+    expect(HPBrand.fromJson({'color': 'blue'}), isNull);
+    expect(HPBrand.fromJson({'color': '#1a73e8'})!.hex, '#1A73E8');
+    HPBrand.activate(HPBrand.fromJson({'color': '#1A73E8', 'headingCase': 'upper', 'headingWeight': 'heavy'}));
+    expect((HPColors.saffron, HPType.heading('Bills'), HPType.titleScreen().fontWeight), (const Color(0xFF1A73E8), 'BILLS', FontWeight.w900));
+    expect(HPTone.saffron.color, HPColors.amber, reason: 'warning statuses keep their colour');
+    HPBrand.activate(null);
+    expect((HPColors.saffron, HPType.heading('Bills')), (HPColors.amber, 'Bills'));
+  });
 }

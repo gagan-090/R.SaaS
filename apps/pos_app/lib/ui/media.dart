@@ -10,6 +10,7 @@ import '../state/app_state.dart';
 /// Photo bytes by image id, fetched once per app session from the hub (which caches them from the cloud).
 final _photoCache = Provider<Map<String, Future<Uint8List?>>>((ref) {
   ref.watch(hubApiProvider); // a new hub pairing starts a fresh cache
+  ref.watch(refreshTickProvider); // pull-down-to-refresh fetches photos again
   return {};
 });
 
@@ -68,5 +69,28 @@ class MenuDishCard extends ConsumerWidget {
     if (id == null || api == null) return card(null);
     final f = ref.watch(_photoCache).putIfAbsent(id, () => api.media(id));
     return FutureBuilder<Uint8List?>(future: f, builder: (_, s) => card(s.data == null ? null : MemoryImage(s.data!)));
+  }
+}
+
+/// The restaurant's logo (plan feature "branding"), served and cached by the hub; [fallback] when there is none.
+class BrandLogo extends ConsumerWidget {
+  const BrandLogo({super.key, required this.height, this.maxWidth = 160, this.fallback = const SizedBox.shrink()});
+  final double height, maxWidth;
+  final Widget fallback;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final id = ref.watch(posLookProvider).valueOrNull?.brand?.logoImageId;
+    final api = ref.watch(hubApiProvider);
+    if (id == null || api == null) return fallback;
+    final f = ref.watch(_photoCache).putIfAbsent(id, () => api.media(id));
+    return FutureBuilder<Uint8List?>(
+      future: f,
+      builder: (_, s) => s.data == null
+          ? fallback
+          : ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: height, maxWidth: maxWidth),
+              child: Image.memory(s.data!, key: const Key('brand-logo'), fit: BoxFit.contain),
+            ),
+    );
   }
 }

@@ -4,6 +4,7 @@ import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 
 import 'screens/setup_screens.dart';
 import 'state/app_state.dart';
+import 'ui/common.dart';
 import 'ui/shell.dart';
 
 /// Device setup → staff PIN login → the role's home (tables, kitchen, setup). One app for every role;
@@ -14,12 +15,20 @@ class PosApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final setup = ref.watch(setupProvider);
     final session = ref.watch(sessionProvider);
+    // a restaurant with the "branding" plan feature gets its own colour and text style on every role's screens
+    final brand = ref.watch(posLookProvider).valueOrNull?.brand;
+    HPBrand.activate(brand);
     return MaterialApp(
       title: 'House Plating POS',
       debugShowCheckedModeBanner: false,
-      theme: HPTheme.service(brightness: Brightness.light),
-      darkTheme: HPTheme.service(),
-      themeMode: ref.watch(themeModeProvider), // Auto (device setting) unless Light / Dark is chosen in More
+      theme: HPTheme.service(brightness: Brightness.light, brand: brand),
+      darkTheme: HPTheme.service(brand: brand),
+      themeMode: ref.watch(themeModeProvider), // white (Light) by default; Auto or Dark can be chosen in More
+      builder: (context, child) {
+        final page = PullToRefresh(child: child ?? const SizedBox.shrink());
+        if (brand == null || brand.textScale == 1) return page;
+        return MediaQuery(data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(brand.textScale)), child: page);
+      },
       home: AnimatedSwitcher(
         duration: const Duration(milliseconds: 220),
         child: setup.when(

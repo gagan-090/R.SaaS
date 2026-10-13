@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 
@@ -66,6 +67,15 @@ class _StaffScreenState extends ConsumerState<StaffScreen> {
     }
   }
 
+  /// Your own POS PIN — the owner who signed up on the web has none until they set it here (or on the POS).
+  Future<void> _setMyPin() async {
+    final ok = await showDialog<bool>(context: context, builder: (_) => _MyPinDialog(api: _api));
+    if (ok == true) {
+      await _load();
+      if (mounted) showDone(context, 'PIN saved — use it on the POS in about a minute');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_error != null) return ErrorState(message: '$_error', onRetry: _load);
@@ -77,9 +87,11 @@ class _StaffScreenState extends ConsumerState<StaffScreen> {
     for (final u in active) {
       byRole['${u['role']}'] = (byRole['${u['role']}'] ?? 0) + 1;
     }
+    final myId = _me?.me['id'];
+    final mine = active.where((u) => u['id'] == myId).firstOrNull;
     return PageFrame(
       title: 'Staff',
-      subtitle: '${active.length} people can sign in on the POS with their PIN',
+      subtitle: '${active.length} ${active.length == 1 ? 'person' : 'people'} on the team · everyone signs in on the POS with a PIN',
       actions: [if (_canEdit) PrimaryButton(key: const Key('add-staff'), label: 'Add person', icon: Icons.person_add_alt_1_rounded, height: 48, onPressed: () => _edit())],
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, children: [
@@ -90,12 +102,34 @@ class _StaffScreenState extends ConsumerState<StaffScreen> {
             padding: const EdgeInsets.only(top: HPSpace.md),
             child: Text('Chef, IT admin and auditor roles come with the Premium plan.', style: HPType.body(p.muted)),
           ),
+        if (mine != null && mine['hasPin'] != true) ...[
+          const SizedBox(height: HPSpace.lg),
+          Card(
+            key: const Key('no-pin-banner'),
+            color: HPColors.saffron.withValues(alpha: .14),
+            child: Padding(
+              padding: const EdgeInsets.all(HPSpace.lg),
+              child: Wrap(spacing: HPSpace.lg, runSpacing: HPSpace.md, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                Icon(Icons.pin_outlined, color: p.accentInk),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('You have no POS PIN yet', style: HPType.titleCard(p.text)),
+                    const SizedBox(height: 2),
+                    Text('The POS asks everyone, including the owner, for a PIN. Set yours to sign in there.', style: HPType.body(p.muted)),
+                  ]),
+                ),
+                PrimaryButton(key: const Key('set-my-pin'), label: 'Set my PIN', icon: Icons.pin_rounded, height: 48, onPressed: _setMyPin),
+              ]),
+            ),
+          ),
+        ],
         const SizedBox(height: HPSpace.lg),
         Card(
           child: Column(children: [
             for (final (i, u) in active.indexed) ...[
               if (i > 0) const Divider(indent: 72),
-              _StaffRow(user: u, onTap: _canEdit && u['role'] != 'owner' ? () => _edit(u) : null),
+              _StaffRow(user: u, onTap: u['id'] == myId ? _setMyPin : _canEdit && u['role'] != 'owner' ? () => _edit(u) : null),
             ],
           ]),
         ),
@@ -268,6 +302,55 @@ class _StaffEditorState extends State<_StaffEditor> {
           ],
         ],
         if (_error != null) Padding(padding: const EdgeInsets.only(top: HPSpace.sm), child: Text(_error!, key: const Key('staff-error'), style: HPType.body(p.danger))),
+      ]),
+    );
+  }
+}
+
+class _MyPinDialog extends StatefulWidget {
+  const _MyPinDialog({required this.api});
+  final ApiClient api;
+  @override
+  State<_MyPinDialog> createState() => _MyPinDialogState();
+}
+
+class _MyPinDialogState extends State<_MyPinDialog> {
+  final _pin = TextEditingController(), _again = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  Future<void> _save() async {
+    final pin = _pin.text.trim();
+    if (!RegExp(r'^\d{4,8}$').hasMatch(pin)) return setState(() => _error = 'PIN must be 4–8 digits');
+    if (pin != _again.text.trim()) return setState(() => _error = 'The two PINs do not match');
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await widget.api.setMyPin(pin);
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.hp;
+    InputDecoration deco(String label) => InputDecoration(labelText: label, counterText: '');
+    return HPDialog(
+      title: 'Your POS PIN',
+      actions: [SecondaryButton(label: 'Cancel', onPressed: () => Navigator.pop(context)), PrimaryButton(key: const Key('save-my-pin'), label: 'Save PIN', busy: _busy, height: 56, onPressed: _save)],
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text('4 to 8 digits. You enter it on the POS after tapping your name.', style: HPType.body(p.muted)),
+        const SizedBox(height: HPSpace.md),
+        TextField(key: const Key('my-pin'), controller: _pin, autofocus: true, obscureText: true, maxLength: 8, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: deco('New PIN')),
+        const SizedBox(height: HPSpace.sm),
+        TextField(key: const Key('my-pin-again'), controller: _again, obscureText: true, maxLength: 8, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: deco('Type it again'), onSubmitted: (_) => _save()),
+        if (_error != null) ...[const SizedBox(height: HPSpace.sm), Text(_error!, style: HPType.body(p.danger))],
       ]),
     );
   }

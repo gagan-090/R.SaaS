@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../hub/hub_api.dart';
@@ -124,27 +126,32 @@ final hubEventsProvider = StreamProvider<Json>((ref) {
   return api.events();
 });
 
+/// Bumped by pull-down-to-refresh (anywhere in the app): screens reload their data and photos.
+final refreshTickProvider = StateProvider<int>((ref) => 0);
+
 final hubTickProvider = Provider<int>((ref) {
   ref.watch(hubEventsProvider);
+  ref.watch(refreshTickProvider);
   return DateTime.now().microsecondsSinceEpoch;
 });
 
 /// Light / dark / follow the device. Remembered on this device (browser storage on the web).
 class ThemeModeNotifier extends Notifier<ThemeMode> {
-  static const _key = 'appearance';
+  // v2: the white (Light) theme became the default on 13 Oct 2026, so earlier "Auto" choices start over
+  static const _key = 'appearance.v2';
 
   @override
   ThemeMode build() {
     _load();
-    return ThemeMode.system;
+    return ThemeMode.light;
   }
 
   Future<void> _load() async {
     try {
       final v = (await SharedPreferences.getInstance()).getString(_key);
-      if (v != null) state = ThemeMode.values.firstWhere((m) => m.name == v, orElse: () => ThemeMode.system);
+      if (v != null) state = ThemeMode.values.firstWhere((m) => m.name == v, orElse: () => ThemeMode.light);
     } catch (_) {
-      // storage unavailable (private window, tests): stay on "follow the device"
+      // storage unavailable (private window, tests): stay on the white theme
     }
   }
 
@@ -157,3 +164,20 @@ class ThemeModeNotifier extends Notifier<ThemeMode> {
 }
 
 final themeModeProvider = NotifierProvider<ThemeModeNotifier, ThemeMode>(ThemeModeNotifier.new);
+
+/// The restaurant's name and look from the hub (plan feature "branding", set in the web console). `brand` is null
+/// for the House Plating look. Checked again every minute and on pull-down-to-refresh; the hub pulls it from the cloud.
+typedef PosLook = ({String name, HPBrand? brand});
+final posLookProvider = FutureProvider<PosLook?>((ref) async {
+  ref.watch(refreshTickProvider);
+  final api = ref.watch(hubApiProvider);
+  if (api == null) return null;
+  final again = Timer(const Duration(seconds: 60), ref.invalidateSelf);
+  ref.onDispose(again.cancel);
+  try {
+    final tenant = (await api.branch())['tenant'] as Map?;
+    return (name: '${tenant?['name'] ?? ''}', brand: HPBrand.fromJson(tenant?['branding']));
+  } catch (_) {
+    return null; // hub unreachable: keep the House Plating look
+  }
+});
