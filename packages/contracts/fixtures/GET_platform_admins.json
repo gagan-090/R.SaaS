@@ -969,11 +969,11 @@
       ]
     },
     {
-      "id": "01a13139-b7ea-7590-ba4c-f8248731cb71",
-      "email": "admin-mv5jo1ly-fd5eba@example.test",
-      "name": "admin-mv5jo1ly-fd5eba@example.test",
+      "id": "01a13139-b7ea-7a03-bf7c-b0221384a7bf",
+      "email": "admin-mv5jo1mn-4234b5@example.test",
+      "name": "admin-mv5jo1mn-4234b5@example.test",
       "status": "active",
-      "lastLoginAt": "2026-10-12T17:47:08.971Z",
+      "lastLoginAt": "2026-10-12T17:47:09.454Z",
       "mfaEnrolled": true,
       "roles": [
         {
@@ -983,11 +983,11 @@
       ]
     },
     {
-      "id": "01a13139-b7ea-7a03-bf7c-b0221384a7bf",
-      "email": "admin-mv5jo1mn-4234b5@example.test",
-      "name": "admin-mv5jo1mn-4234b5@example.test",
+      "id": "01a13139-b7ea-7590-ba4c-f8248731cb71",
+      "email": "admin-mv5jo1ly-fd5eba@example.test",
+      "name": "admin-mv5jo1ly-fd5eba@example.test",
       "status": "active",
-      "lastLoginAt": "2026-10-12T17:47:09.454Z",
+      "lastLoginAt": "2026-10-12T17:47:08.971Z",
       "mfaEnrolled": true,
       "roles": [
         {
@@ -1912,6 +1912,972 @@
       "name": "admin-mv5jteyx-65eecb@example.test",
       "status": "active",
       "lastLoginAt": "2026-10-12T17:51:18.709Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d6-73a3-bc48-433e2853727a",
+          "name": "Platform Auditor"
+        }
+      ]
+    },
+    {
+      "id": "01a1313d-8bae-7623-9a5a-0bf2c1af654b",
+      "email": "admin-mv5jtfoe-b1fca2@example.test",
+      "name": "Neha Support",
+      "status": "disabled",
+      "lastLoginAt": null,
+      "mfaEnrolled": false,
+      "roles": [
+        {
+          "id": "01a1312f-28d6-73a3-bc48-433e2853727a",
+          "name": "Platform Auditor"
+        },
+        {
+          "id": "01a1312f-28d5-7a02-8354-baacc55f2420",
+          "name": "Onboarding Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1313d-8c80-7fe3-a4f1-a0507a64a8e5",
+      "email": "admin-mv5jtfsk-039a43@example.test",
+      "name": "admin-mv5jtfsk-039a43@example.test",
+      "status": "active",
+      "lastLoginAt": null,
+      "mfaEnrolled": false,
+      "roles": [
+        {
+          "id": "01a1312f-28d6-73a3-bc48-433e2853727a",
+          "name": "Platform Auditor"
+        }
+      ]
+    },
+    {
+      "id": "01a1313e-2bb2-79f3-966d-1a91447a25bc",
+      "email": "admin-mv5jub60-fa88e6@example.test",
+      "name": "admin-mv5jub60-fa88e6@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:52:00.877Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1313e-2dbc-7b23-b605-ce01525fa1d2",
+      "email": "admin-mv5jubnh-1bc55a@example.test",
+      "name": "admin-mv5jubnh-1bc55a@example.test",
+      "status": "active",
+      "lastLoginAt": null,
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1313e-2ea0-7542-8b4c-adb4ff302775",
+      "email": "admin-mv5jubto-7e9959@example.test",
+      "name": "admin-mv5jubto-7e9959@example.test",
+      "status": "active",
+      "lastLoginAt": null,
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1313e-3075-71a0-8f60-dd93d7176d83",
+      "email": "admin-mv5juc6t-9a64c6@example.test",
+      "name": "admin-mv5juc6t-9a64c6@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:52:01.731Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1313e-313a-75d2-a8ab-aab6deb16fd1",
+      "email": "admin-mv5juccb-59f4a9@example.test",
+      "name": "admin-mv5juccb-59f4a9@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:52:01.924Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1313e-31f1-79a1-9570-3d12de49180b",
+      "email": "admin-mv5juchf-e3fda6@example.test",
+      "name": "admin-mv5juchf-e3fda6@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:52:02.829Z",
+      "mfaEnrolled": false,
+      "roles": [
+        {
+          "id": "01a1312f-28d5-7a02-8354-baacc55f2420",
+          "name": "Onboarding Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1313e-3232-7e83-b761-3929cce5eb3f",
+      "email": "admin-mv5jucj8-6e645b@example.test",
+      "name": "admin-mv5jucj8-6e645b@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:52:02.236Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d5-7a02-8354-baacc55f2420",
+          "name": "Onboarding Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1313e-3276-74e1-85ef-12c70ed14597",
+      "email": "admin-mv5jucl1-9bb398@example.test",
+      "name": "admin-mv5jucl1-9bb398@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:52:02.321Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1313e-336b-77d2-b0d5-536e044c049f",
+      "email": "admin-mv5jucrw-66fdf9@example.test",
+      "name": "admin-mv5jucrw-66fdf9@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:52:02.482Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1313e-3556-75f0-84bf-df0a022391a8",
+      "email": "admin-mv5jud5k-c64b31@example.test",
+      "name": "admin-mv5jud5k-c64b31@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:52:02.977Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1313e-3616-7190-a7f1-b242e6f954a6",
+      "email": "admin-mv5jud9z-6119a6@example.test",
+      "name": "admin-mv5jud9z-6119a6@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:52:03.167Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1313e-3688-7473-b6da-9c603d7d60b9",
+      "email": "inv-mv5judfg-ab6049@example.test",
+      "name": "Invitee",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:52:03.325Z",
+      "mfaEnrolled": false,
+      "roles": [
+        {
+          "id": "01a1312f-28d6-73a3-bc48-433e2853727a",
+          "name": "Platform Auditor"
+        }
+      ]
+    },
+    {
+      "id": "01a1313e-3742-7c32-88ca-cd71d704f720",
+      "email": "admin-mv5judj6-16c5d4@example.test",
+      "name": "admin-mv5judj6-16c5d4@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:52:03.547Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d5-7a02-8354-baacc55f2420",
+          "name": "Onboarding Admin"
+        },
+        {
+          "id": "01a1312f-28d6-73a3-bc48-433e2853727a",
+          "name": "Platform Auditor"
+        },
+        {
+          "id": "01a1313e-378e-7bd1-860c-c4ecb303cffb",
+          "name": "RoleAdmin-mv5judn2-c13f75"
+        }
+      ]
+    },
+    {
+      "id": "01a1313e-378b-7632-80d1-c6019ecedab7",
+      "email": "admin-mv5judl1-5888a3@example.test",
+      "name": "admin-mv5judl1-5888a3@example.test",
+      "status": "active",
+      "lastLoginAt": null,
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1313e-383d-7823-ae6f-1d861bbeb314",
+      "email": "admin-mv5judq4-b35456@example.test",
+      "name": "admin-mv5judq4-b35456@example.test",
+      "status": "active",
+      "lastLoginAt": null,
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d6-73a3-bc48-433e2853727a",
+          "name": "Platform Auditor"
+        }
+      ]
+    },
+    {
+      "id": "01a1313e-38c8-7150-a9d2-280a1e625de5",
+      "email": "admin-mv5judu0-412c9c@example.test",
+      "name": "admin-mv5judu0-412c9c@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:52:03.853Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1313e-3a0b-7af2-a458-872b0c8fda09",
+      "email": "admin-mv5jue2z-386229@example.test",
+      "name": "admin-mv5jue2z-386229@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:52:04.182Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1313e-3b50-7532-a719-0e84f61c1355",
+      "email": "admin-mv5juebj-3b228e@example.test",
+      "name": "admin-mv5juebj-3b228e@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:52:04.518Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d6-73a3-bc48-433e2853727a",
+          "name": "Platform Auditor"
+        }
+      ]
+    },
+    {
+      "id": "01a1313e-4109-7d71-9ad2-2fac23da533f",
+      "email": "admin-mv5juffl-a3e5d1@example.test",
+      "name": "admin-mv5juffl-a3e5d1@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:52:06.037Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1313e-4c2d-79d1-9a40-1ceec8403df1",
+      "email": "admin-mv5juhmj-b47792@example.test",
+      "name": "admin-mv5juhmj-b47792@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:52:08.859Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a13143-12b9-7cb3-a8ed-8d01d25d245b",
+      "email": "admin-mv5k173j-89cec9@example.test",
+      "name": "admin-mv5k173j-89cec9@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:57:22.107Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a13143-1484-7ba3-a2fd-192418d5a3ca",
+      "email": "admin-mv5k17ih-976b20@example.test",
+      "name": "admin-mv5k17ih-976b20@example.test",
+      "status": "active",
+      "lastLoginAt": null,
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a13143-1544-7060-aee6-237d83b46c64",
+      "email": "admin-mv5k17nz-0b648d@example.test",
+      "name": "admin-mv5k17nz-0b648d@example.test",
+      "status": "active",
+      "lastLoginAt": null,
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a13143-16c5-7e40-b91d-efb2ed651de4",
+      "email": "admin-mv5k17yo-c8eff2@example.test",
+      "name": "admin-mv5k17yo-c8eff2@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:57:22.825Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a13143-176e-7611-a07b-db602adc2d24",
+      "email": "admin-mv5k183b-65d04c@example.test",
+      "name": "admin-mv5k183b-65d04c@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:57:22.990Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a13143-180b-7c32-98da-a21658a04cde",
+      "email": "admin-mv5k187k-cefc05@example.test",
+      "name": "admin-mv5k187k-cefc05@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:57:23.796Z",
+      "mfaEnrolled": false,
+      "roles": [
+        {
+          "id": "01a1312f-28d5-7a02-8354-baacc55f2420",
+          "name": "Onboarding Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a13143-184b-7301-b430-bc127864f152",
+      "email": "admin-mv5k189d-0bb902@example.test",
+      "name": "admin-mv5k189d-0bb902@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:57:23.266Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d5-7a02-8354-baacc55f2420",
+          "name": "Onboarding Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a13143-1884-7cd1-8a20-e6c40d5fe36c",
+      "email": "admin-mv5k18b1-38dc11@example.test",
+      "name": "admin-mv5k18b1-38dc11@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:57:23.344Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a13143-195e-7d30-8e96-172b6d3d4d58",
+      "email": "admin-mv5k18h3-086032@example.test",
+      "name": "admin-mv5k18h3-086032@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:57:23.493Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a13143-1b14-74f0-8501-cf9235ccfeac",
+      "email": "admin-mv5k18t8-4a50e2@example.test",
+      "name": "admin-mv5k18t8-4a50e2@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:57:23.921Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a13143-1ba3-7642-9fe1-46aaa3a4e6ca",
+      "email": "admin-mv5k18x7-31a22e@example.test",
+      "name": "admin-mv5k18x7-31a22e@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:57:24.064Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a13143-1c02-71b1-92df-c38c0b6f4e35",
+      "email": "inv-mv5k1913-6ea77a@example.test",
+      "name": "Invitee",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:57:24.197Z",
+      "mfaEnrolled": false,
+      "roles": [
+        {
+          "id": "01a1312f-28d6-73a3-bc48-433e2853727a",
+          "name": "Platform Auditor"
+        }
+      ]
+    },
+    {
+      "id": "01a13143-1c9f-7740-be38-d38c0fa039e9",
+      "email": "admin-mv5k194a-ebc952@example.test",
+      "name": "admin-mv5k194a-ebc952@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:57:24.405Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d5-7a02-8354-baacc55f2420",
+          "name": "Onboarding Admin"
+        },
+        {
+          "id": "01a1312f-28d6-73a3-bc48-433e2853727a",
+          "name": "Platform Auditor"
+        },
+        {
+          "id": "01a13143-1cdb-7601-b602-41bcf85219a4",
+          "name": "RoleAdmin-mv5k197f-7d7877"
+        }
+      ]
+    },
+    {
+      "id": "01a13143-1cd9-7e50-a354-8e6eeb864e2b",
+      "email": "admin-mv5k195u-c82082@example.test",
+      "name": "admin-mv5k195u-c82082@example.test",
+      "status": "active",
+      "lastLoginAt": null,
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a13143-1d84-7221-b88e-24c16dc4e30b",
+      "email": "admin-mv5k19ak-75d8fe@example.test",
+      "name": "admin-mv5k19ak-75d8fe@example.test",
+      "status": "active",
+      "lastLoginAt": null,
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d6-73a3-bc48-433e2853727a",
+          "name": "Platform Auditor"
+        }
+      ]
+    },
+    {
+      "id": "01a13143-1df5-7113-b1fd-96cc74988d9e",
+      "email": "admin-mv5k19dp-c0fd72@example.test",
+      "name": "admin-mv5k19dp-c0fd72@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:57:24.655Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a13143-1f3c-7963-9f7c-2b3423485eff",
+      "email": "admin-mv5k19mt-b00cd1@example.test",
+      "name": "admin-mv5k19mt-b00cd1@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:57:24.989Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a13143-202f-78f3-9d6a-830c022322be",
+      "email": "admin-mv5k19tf-103691@example.test",
+      "name": "admin-mv5k19tf-103691@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:57:25.227Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d6-73a3-bc48-433e2853727a",
+          "name": "Platform Auditor"
+        }
+      ]
+    },
+    {
+      "id": "01a13143-24d4-70b1-af6f-fa1c86345976",
+      "email": "admin-mv5k1apw-026b3f@example.test",
+      "name": "admin-mv5k1apw-026b3f@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:57:26.464Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a13143-2dab-73e2-9c1e-494590f191f1",
+      "email": "admin-mv5k1cgc-dc48b3@example.test",
+      "name": "admin-mv5k1cgc-dc48b3@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T17:57:28.719Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1314e-1762-79b3-a106-6bccb3fe135c",
+      "email": "admin-mv5kgoaa-4f0764@example.test",
+      "name": "admin-mv5kgoaa-4f0764@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T18:09:23.948Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1314e-8e6d-7cb3-8cf9-835394eac2b6",
+      "email": "admin-mv5khbtp-b95607@example.test",
+      "name": "admin-mv5khbtp-b95607@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T18:09:54.587Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1314e-8fdc-7b42-8885-af12a3e9f98f",
+      "email": "admin-mv5khc4p-87273b@example.test",
+      "name": "admin-mv5khc4p-87273b@example.test",
+      "status": "active",
+      "lastLoginAt": null,
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1314e-908c-79b3-8bb0-e2a6433435a4",
+      "email": "admin-mv5khc9k-bfd70c@example.test",
+      "name": "admin-mv5khc9k-bfd70c@example.test",
+      "status": "active",
+      "lastLoginAt": null,
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1314e-91f6-72c1-87db-0530b9ab3b27",
+      "email": "admin-mv5khcjk-bec164@example.test",
+      "name": "admin-mv5khcjk-bec164@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T18:09:55.250Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1314e-928d-7890-b09d-1d6b81d4464a",
+      "email": "admin-mv5khcnw-ef301a@example.test",
+      "name": "admin-mv5khcnw-ef301a@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T18:09:55.397Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1314e-931a-7800-9a32-194fee2f5d0f",
+      "email": "admin-mv5khcrt-5f3658@example.test",
+      "name": "admin-mv5khcrt-5f3658@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T18:09:56.121Z",
+      "mfaEnrolled": false,
+      "roles": [
+        {
+          "id": "01a1312f-28d5-7a02-8354-baacc55f2420",
+          "name": "Onboarding Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1314e-9350-7e92-84cf-464f799a8919",
+      "email": "admin-mv5khct9-e8ce3e@example.test",
+      "name": "admin-mv5khct9-e8ce3e@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T18:09:55.648Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d5-7a02-8354-baacc55f2420",
+          "name": "Onboarding Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1314e-9386-7ce3-a969-7be45d6a7ff8",
+      "email": "admin-mv5khcur-81b6b8@example.test",
+      "name": "admin-mv5khcur-81b6b8@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T18:09:55.716Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1314e-944c-7131-b179-cceb7feefa16",
+      "email": "admin-mv5khd0b-26faec@example.test",
+      "name": "admin-mv5khd0b-26faec@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T18:09:55.843Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1314e-95d6-7ff2-84c9-ca452231697c",
+      "email": "admin-mv5khdb6-ee4e7e@example.test",
+      "name": "admin-mv5khdb6-ee4e7e@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T18:09:56.241Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1314e-9655-7d43-b199-723a58166fb1",
+      "email": "admin-mv5khdep-876c3a@example.test",
+      "name": "admin-mv5khdep-876c3a@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T18:09:56.370Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1314e-96b7-78a1-a220-9029f5cc3538",
+      "email": "inv-mv5khdin-800670@example.test",
+      "name": "Invitee",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T18:09:56.492Z",
+      "mfaEnrolled": false,
+      "roles": [
+        {
+          "id": "01a1312f-28d6-73a3-bc48-433e2853727a",
+          "name": "Platform Auditor"
+        }
+      ]
+    },
+    {
+      "id": "01a1314e-9740-74d2-853a-5bce9e952eb5",
+      "email": "admin-mv5khdlc-bd51f7@example.test",
+      "name": "admin-mv5khdlc-bd51f7@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T18:09:56.657Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d5-7a02-8354-baacc55f2420",
+          "name": "Onboarding Admin"
+        },
+        {
+          "id": "01a1312f-28d6-73a3-bc48-433e2853727a",
+          "name": "Platform Auditor"
+        },
+        {
+          "id": "01a1314e-9778-7930-bf71-2397f46bbe21",
+          "name": "RoleAdmin-mv5khdo8-a71d50"
+        }
+      ]
+    },
+    {
+      "id": "01a1314e-9775-7f12-ba3b-e9b338c9564f",
+      "email": "admin-mv5khdmr-3a3db5@example.test",
+      "name": "admin-mv5khdmr-3a3db5@example.test",
+      "status": "active",
+      "lastLoginAt": null,
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1314e-97fa-7333-9835-c49775e1d132",
+      "email": "admin-mv5khdqg-f01e95@example.test",
+      "name": "admin-mv5khdqg-f01e95@example.test",
+      "status": "active",
+      "lastLoginAt": null,
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d6-73a3-bc48-433e2853727a",
+          "name": "Platform Auditor"
+        }
+      ]
+    },
+    {
+      "id": "01a1314e-985c-7921-9f29-67155cafc727",
+      "email": "admin-mv5khdt8-4e1f43@example.test",
+      "name": "admin-mv5khdt8-4e1f43@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T18:09:56.883Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1314e-9947-7891-ae5f-24137fe3e786",
+      "email": "admin-mv5khdzs-dad209@example.test",
+      "name": "admin-mv5khdzs-dad209@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T18:09:57.111Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1314e-9a07-74f3-a7ad-994a2ac51329",
+      "email": "admin-mv5khe53-6d0697@example.test",
+      "name": "admin-mv5khe53-6d0697@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T18:09:57.313Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d6-73a3-bc48-433e2853727a",
+          "name": "Platform Auditor"
+        }
+      ]
+    },
+    {
+      "id": "01a1314e-9ce5-7f61-a213-34bb58dd0227",
+      "email": "admin-mv5khep0-c5e97c@example.test",
+      "name": "admin-mv5khep0-c5e97c@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T18:09:58.077Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1314e-9fc9-7a91-9408-82ed21448f1b",
+      "email": "admin-mv5khf96-417247@example.test",
+      "name": "admin-mv5khf96-417247@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T18:09:58.820Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1314e-a6fb-7090-9468-f6be60042858",
+      "email": "admin-mv5khgnz-5108f5@example.test",
+      "name": "admin-mv5khgnz-5108f5@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T18:10:00.672Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a1315c-ce17-7f73-876e-3ba47dcd1e40",
+      "email": "admin-mv5l1cbh-637caa@example.test",
+      "name": "admin-mv5l1cbh-637caa@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-12T18:25:28.214Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a132d6-e3ea-7893-8fe4-08d5e2914fef",
+      "email": "admin-mv5zsfb8-09c960@example.test",
+      "name": "admin-mv5zsfb8-09c960@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-13T01:18:26.380Z",
+      "mfaEnrolled": true,
+      "roles": [
+        {
+          "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+          "name": "Super Admin"
+        }
+      ]
+    },
+    {
+      "id": "01a132d6-e49c-7382-aaa8-8cbf9b9c1df9",
+      "email": "admin-mv5zsfhn-7c97ab@example.test",
+      "name": "admin-mv5zsfhn-7c97ab@example.test",
+      "status": "active",
+      "lastLoginAt": "2026-10-13T01:18:26.514Z",
       "mfaEnrolled": true,
       "roles": [
         {

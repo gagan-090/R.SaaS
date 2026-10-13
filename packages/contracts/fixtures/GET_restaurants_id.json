@@ -6,56 +6,56 @@
   "request": {},
   "status": 200,
   "response": {
-    "id": "01a1313d-8a52-7441-ad9c-95e5564047fb",
-    "code": "R000074",
+    "id": "01a132d6-e5a0-75c2-8856-77db77821521",
+    "code": "R000120",
     "name": "Spice Route",
-    "ownerEmail": "owner-mv5jtfbi-7556bc@example.test",
+    "ownerEmail": "owner-mv5zsfok-dfbfb6@example.test",
     "gstin": "27AAAPA1234A1Z5",
     "address": "FC Road, Pune",
     "status": "active",
     "statusReason": null,
     "menuVersion": 0,
-    "createdAt": "2026-10-12T17:51:19.122Z",
-    "updatedAt": "2026-10-12T17:51:19.122Z",
+    "createdAt": "2026-10-13T01:18:26.720Z",
+    "updatedAt": "2026-10-13T01:18:26.720Z",
     "branches": [
       {
-        "id": "01a1313d-8a54-71a0-8ad1-321b14fd11ad",
-        "tenantId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+        "id": "01a132d6-e5a1-7912-818c-45417aae865a",
+        "tenantId": "01a132d6-e5a0-75c2-8856-77db77821521",
         "franchiseId": null,
         "code": "BR01",
         "name": "Spice Route",
         "address": "FC Road, Pune",
         "gstin": "27AAAPA1234A1Z5",
         "settings": {},
-        "seq": "415",
-        "createdAt": "2026-10-12T17:51:19.124Z"
+        "seq": "663",
+        "createdAt": "2026-10-13T01:18:26.722Z"
       }
     ],
     "licenses": [
       {
-        "id": "01a1313d-8a5e-7666-9dc2-bf4e769ef582",
+        "id": "01a132d6-e5df-7a5f-8e32-7322b3b782b8",
         "planCode": "premium",
         "planName": "Premium",
-        "startsAt": "2026-10-12T17:51:19.133Z",
-        "endsAt": "2026-11-12T17:51:19.133Z",
+        "startsAt": "2026-10-13T01:18:26.783Z",
+        "endsAt": "2026-11-13T01:18:26.783Z",
         "graceDays": 7,
         "status": "active",
         "reason": "initial license at onboarding",
-        "issuedBy": "01a1313d-873d-7be0-882e-324e69d8774c",
-        "createdAt": "2026-10-12T17:51:19.140Z"
+        "issuedBy": "01a132d6-e3ea-7893-8fe4-08d5e2914fef",
+        "createdAt": "2026-10-13T01:18:26.796Z"
       }
     ],
     "currentLicense": {
-      "id": "01a1313d-8a5e-7666-9dc2-bf4e769ef582",
+      "id": "01a132d6-e5df-7a5f-8e32-7322b3b782b8",
       "planCode": "premium",
       "planName": "Premium",
-      "startsAt": "2026-10-12T17:51:19.133Z",
-      "endsAt": "2026-11-12T17:51:19.133Z",
+      "startsAt": "2026-10-13T01:18:26.783Z",
+      "endsAt": "2026-11-13T01:18:26.783Z",
       "graceDays": 7,
       "status": "active",
       "reason": "initial license at onboarding",
-      "issuedBy": "01a1313d-873d-7be0-882e-324e69d8774c",
-      "createdAt": "2026-10-12T17:51:19.140Z"
+      "issuedBy": "01a132d6-e3ea-7893-8fe4-08d5e2914fef",
+      "createdAt": "2026-10-13T01:18:26.796Z"
     },
     "entitlement": {
       "state": "active",

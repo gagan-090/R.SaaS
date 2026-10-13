@@ -10,12 +10,12 @@
   },
   "status": 200,
   "response": {
-    "id": "01a1313d-8d73-71a1-a075-418bf25e612e",
-    "tenantId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
-    "branchId": "01a1313d-8a54-71a0-8ad1-321b14fd11ad",
+    "id": "01a132d6-e78e-7b23-a8d9-26f7667d39f5",
+    "tenantId": "01a132d6-e5a0-75c2-8856-77db77821521",
+    "branchId": "01a132d6-e5a1-7912-818c-45417aae865a",
     "name": "Ground floor (AC)",
     "sortOrder": 0,
-    "seq": "420",
+    "seq": "668",
     "deleted": false
   }
 }

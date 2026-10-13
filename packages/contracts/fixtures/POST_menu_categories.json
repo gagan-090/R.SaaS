@@ -11,12 +11,12 @@
   },
   "status": 201,
   "response": {
-    "id": "01a1313d-8e5a-75f0-94ce-d7b0b2c80465",
-    "tenantId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
+    "id": "01a132d6-e7ff-7ce3-b9b2-225d2ebed7d3",
+    "tenantId": "01a132d6-e5a0-75c2-8856-77db77821521",
     "branchId": null,
     "name": "Mains",
     "sortOrder": 1,
-    "seq": "426",
+    "seq": "674",
     "deleted": false
   }
 }

@@ -71,6 +71,18 @@ class HubServer {
     });
 
     // ---- state & reads
+    r.get('/staff', (Request q) async {
+      await _actor(q);
+      return _json(await hub.staff());
+    });
+    r.get('/menu', (Request q) async {
+      await _actor(q);
+      return _json(await hub.menu());
+    });
+    r.get('/branch', (Request q) async {
+      await _actor(q);
+      return _json(await hub.branchInfo());
+    });
     r.get('/state', (Request q) async {
       await _actor(q);
       return _json(await hub.state());

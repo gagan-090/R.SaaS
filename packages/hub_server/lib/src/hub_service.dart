@@ -278,13 +278,38 @@ class HubService {
     final o = await _order(id);
     final lines = await _lines(id);
     final bill = await db.selectOne('SELECT * FROM bills WHERE order_id = ?', [id]);
+    final table = o['table_id'] == null ? null : await db.selectOne('SELECT name FROM tables WHERE id = ?', [o['table_id']]);
     return {
       ...o,
+      'table_name': table?['name'],
       'lines': lines,
       'totals': computeBill(_inputs(lines)).toJson(),
       'bill': bill,
     };
   }
+
+  /// Menu for order screens: categories + available items with their current tax rate.
+  Future<Map<String, Object?>> menu() async => {
+        'menuVersion': await db.getMeta('menu_version'),
+        'categories': await db.query('SELECT id, name, sort_order FROM categories WHERE deleted = 0 ORDER BY sort_order, name'),
+        'items': [
+          for (final i in await db.query(
+              'SELECT i.id, i.category_id, i.name, i.price_paise, i.available, i.is_veg, i.plate_colors, t.rate_bp FROM items i JOIN tax_rules t ON t.id = i.tax_rule_id WHERE i.deleted = 0 ORDER BY i.name'))
+            {...i, 'plate_colors': i['plate_colors'] == null ? null : jsonDecode(i['plate_colors']! as String)},
+        ],
+      };
+
+  /// Staff tiles for the PIN login screen — names and roles only, never PIN hashes.
+  Future<List<Map<String, Object?>>> staff() async => [
+        for (final u in await db.query("SELECT id, name, roles_json FROM users WHERE status = 'active' ORDER BY name"))
+          {'id': u['id'], 'name': u['name'], 'roles': (jsonDecode(u['roles_json']! as String) as List).map((r) => (r as Map)['role']).toList()},
+      ];
+
+  /// Branch header for receipts and the hub screen.
+  Future<Map<String, Object?>> branchInfo() async => {
+        'tenant': jsonDecode(await db.getMeta('tenant') ?? '{}'),
+        'branch': jsonDecode(await db.getMeta('branch') ?? '{}'),
+      };
 
   Future<Map<String, Object?>> state() async {
     final live = await db.query("SELECT * FROM orders WHERE status IN ('open','billed') ORDER BY opened_at");

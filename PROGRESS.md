@@ -86,3 +86,15 @@ HPDialog + ReasonDialog, NumericKeypad, PlateIcon, VegMark, QtyStepper, Category
 Test: `cd packages/ui_kit && flutter analyze && flutter test` → No issues; **+6: All tests passed!**
 Test: `cd apps/admin_web && flutter analyze && flutter test` → No issues; **+4: All tests passed!** (driven by the recorded contract fixtures)
 Build: `flutter build web --release --dart-define=API_BASE_URL=…` → **✓ Built build/web**.
+
+### M7 POS app (cashier path) — DONE with gaps (2026-10-13 ~10:00 IST)
+Built: `apps/pos_app` (`rsaas_pos`, Windows + Android, service theme). S1 device setup (pair by QR payload `rsaas-hub://pair?…` or IP + code,
+TLS fingerprint pinning, credentials in secure storage) or "this device is the hub" (embedded `rsaas_hub` on IO), S2 hub status with pairing QR,
+S3 staff tiles + PIN, S4 status bar, C1 table map, C2 order + KOT, C3 transfer, C4 reversal (reason; owner PIN for sent lines), C5 bill preview +
+discount, C7 tip, C6 split payment with change and one idempotency key per attempt, C8 bill history. Hub gained `/staff`, `/menu`, `/branch`
+and `table_name` on orders; cloud `/devices/register-hub` infers a single branch.
+Test: `cd apps/pos_app && flutter analyze && flutter test` → No issues; **+6: All tests passed!**
+Test: `cd packages/hub_server && dart test` → **+28: All tests passed!**; `pnpm --filter @rsaas/api test` → **73 passed** (contracts regenerated: 57 routes, 64 fixtures).
+Build: `flutter build web --release` → **✓ Built build/web** (compile check). `flutter build apk --debug` → **FAILED**: Android SDK licences not
+accepted, Gradle transform errors, then the disk filled (ENOSPC). Windows build needs a Windows PC.
+Not built: camera QR scanning, C9 adjustment dialog, C10 shift summary, waiter table scoping, KDS (chef sees a placeholder).

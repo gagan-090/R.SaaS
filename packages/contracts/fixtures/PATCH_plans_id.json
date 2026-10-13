@@ -10,8 +10,8 @@
   },
   "status": 200,
   "response": {
-    "id": "01a1313d-89a3-75d0-b056-96fef7a0a8d2",
-    "code": "trial_mv5jtf9z",
+    "id": "01a132d6-e551-75f0-a984-0f9b3741e957",
+    "code": "trial_mv5zsfnu",
     "name": "Trial",
     "featureFlags": [
       "tables",
@@ -23,7 +23,7 @@
     },
     "pricePaise": 49900,
     "billingCycle": "monthly",
-    "createdAt": "2026-10-12T17:51:18.947Z",
-    "updatedAt": "2026-10-12T17:51:18.979Z"
+    "createdAt": "2026-10-13T01:18:26.642Z",
+    "updatedAt": "2026-10-13T01:18:26.657Z"
   }
 }

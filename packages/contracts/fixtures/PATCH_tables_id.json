@@ -10,15 +10,15 @@
   },
   "status": 200,
   "response": {
-    "id": "01a1313d-8da2-7400-bd57-ca845c180dec",
-    "tenantId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
-    "branchId": "01a1313d-8a54-71a0-8ad1-321b14fd11ad",
-    "floorId": "01a1313d-8d73-71a1-a075-418bf25e612e",
+    "id": "01a132d6-e7a4-73d2-9039-f4f437ee99be",
+    "tenantId": "01a132d6-e5a0-75c2-8856-77db77821521",
+    "branchId": "01a132d6-e5a1-7912-818c-45417aae865a",
+    "floorId": "01a132d6-e78e-7b23-a8d9-26f7667d39f5",
     "name": "12",
     "seats": 6,
     "layoutX": 0,
     "layoutY": 0,
-    "seq": "423",
+    "seq": "671",
     "deleted": false
   }
 }

@@ -1,0 +1,32 @@
+name: rsaas_pos
+description: POS app — cashier, waiter, KDS, owner and Hub mode (Windows + Android).
+publish_to: none
+version: 0.1.0+1
+resolution: workspace
+
+environment:
+  sdk: ^3.8.0
+  flutter: '>=3.27.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  rsaas_core: any
+  rsaas_ui_kit: any
+  rsaas_hub: any
+  flutter_riverpod: ^2.6.1
+  http: ^1.2.0
+  crypto: ^3.0.0
+  web_socket_channel: ^3.0.0
+  shared_preferences: ^2.3.0
+  flutter_secure_storage: ^9.2.0
+  path_provider: ^2.1.0
+  qr_flutter: ^4.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true

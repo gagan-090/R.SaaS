@@ -31,3 +31,6 @@ Format: date · decision · why · alternative rejected.
 - 2026-10-12 · Admin portal keeps tokens in memory only (refresh on 401; browser reload = sign in again) · no tokens in localStorage, where any XSS could read them · localStorage persistence. **Confirm the UX with Gagan.**
 - 2026-10-12 · Flutter widget tests run against the recorded contract fixtures (`packages/contracts/fixtures`) through a MockClient · a contract change that breaks a screen fails CI · hand-written mock JSON in each app.
 - 2026-10-12 · Riverpod 2.6 + go_router 14 (Playbook stack), `admin_web` on Dart ≥ 3.8 for null-aware map entries · known-stable APIs · Riverpod 3 migration risk overnight.
+- 2026-10-13 · POS keeps its device setup (hub URL, pinned fingerprint, device token) in `flutter_secure_storage` (DPAPI on Windows, Keystore on Android) · the device token is a credential · shared_preferences in plain text.
+- 2026-10-13 · `/devices/register-hub` infers the branch when the tenant has exactly one, and returns `branchCode` + `licensePublicKey` · one-branch restaurants pair without picking a branch · always require `branchId`.
+- 2026-10-13 · POS `flutter build web` is a compile check only (the hub needs dart:io; the web build runs as a paired client without hub mode) · catches compile errors in CI without Windows/Android toolchains · no web build.

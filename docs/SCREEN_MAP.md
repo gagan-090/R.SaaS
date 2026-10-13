@@ -25,18 +25,18 @@ Every portal screen uses `AsyncView` for loading, empty and error states. Every 
 
 | # | Screen | Role | Plan | Hub API | Status |
 | --- | --- | --- | --- | --- | --- |
-| S1 | Device setup: "This device is the hub" / pair with hub (QR or IP + code) | all | All | `GET /pairing/info`, `POST /pairing/claim` | see M7 |
-| S2 | Hub status: pairing QR, paired devices, sync counts, license state | hub | All | `GET /sync/status` | see M7 |
-| S3 | Staff login: user tiles + PIN pad | all | All | `POST /session/login` | see M7 |
-| S4 | Status bar: hub online/offline, sync pending/failed, license banner | all | All | `GET /health`, WS `/events` | see M7 |
-| C1 | Table map: free / occupied / bill printed, running totals | cashier | All | `GET /state`, WS | see M7 |
-| C2 | Order screen: category rail, item grid, order panel, KOT | cashier | All | `POST /orders`, `POST /orders/:id/lines`, `PATCH …/lines/:id`, `POST /orders/:id/kot` | see M7 |
-| C3 | Table transfer | cashier | All | `POST /orders/:id/transfer` | see M7 |
-| C4 | Reversal dialog: reason required, PIN pad if sent | cashier | All | `POST /orders/:id/lines/:id/reverse` | see M7 |
-| C5 | Bill preview: lines, subtotal, discount, CGST, SGST, tip, round-off, total | cashier | All | `POST /orders/:id/bill` | see M7 |
-| C6 | Payment: cash keypad + change, UPI, card, split across modes | cashier | All | `POST /bills/:id/payments` (`Idempotency-Key`) | see M7 |
-| C7 | Tip: waiter picker (defaults to the order's waiter) | cashier | All | `POST /bills/:id/tip` | see M7 |
-| C8 | Bill history: today's bills, reprint | cashier | All | `GET /bills?date=` | see M7 |
+| S1 | Device setup: "This device is the hub" / pair with hub (QR or IP + code) | all | All | `GET /pairing/info`, `POST /pairing/claim` | Built — QR payload paste or IP + code; camera scan not built (test: pairing stores the device token) |
+| S2 | Hub status: pairing QR, paired devices, sync counts, license state | hub | All | `GET /sync/status` | Built (embedded hub on IO platforms) |
+| S3 | Staff login: user tiles + PIN pad | all | All | `POST /session/login` | Built (test: wrong then right PIN) |
+| S4 | Status bar: hub online/offline, sync pending/failed, license banner | all | All | `GET /health`, WS `/events` | Built (test: hub + sync chips) |
+| C1 | Table map: free / occupied / bill printed, running totals | cashier | All | `GET /state`, WS | Built |
+| C2 | Order screen: category rail, item grid, order panel, KOT | cashier | All | `POST /orders`, `POST /orders/:id/lines`, `PATCH …/lines/:id`, `POST /orders/:id/kot` | Built (test: order + KOT) |
+| C3 | Table transfer | cashier | All | `POST /orders/:id/transfer` | Built |
+| C4 | Reversal dialog: reason required, PIN pad if sent | cashier | All | `POST /orders/:id/lines/:id/reverse` | Built (test: reason required, owner PIN for sent line) |
+| C5 | Bill preview: lines, subtotal, discount, CGST, SGST, tip, round-off, total | cashier | All | `POST /orders/:id/bill` | Built |
+| C6 | Payment: cash keypad + change, UPI, card, split across modes | cashier | All | `POST /bills/:id/payments` (`Idempotency-Key`) | Built (tests: split UPI + cash with change; retry reuses the same idempotency key) |
+| C7 | Tip: waiter picker (defaults to the order's waiter) | cashier | All | `POST /bills/:id/tip` | Built (test: tip to a waiter) |
+| C8 | Bill history: today's bills, reprint | cashier | All | `GET /bills?date=` | Built (reprint waits for M8) |
 | C9 | Adjustment dialog (PIN) | cashier | All | `POST /bills/:id/adjustments` | Planned |
 | C10 | Shift summary | cashier | All | — | Planned |
 | W1–W4 | Waiter: my tables, take order, order status, my tips | waiter | Pro+ | same order routes | Planned (Day 12) |

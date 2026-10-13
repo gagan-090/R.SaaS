@@ -14,7 +14,9 @@ describe('sync', () => {
     t = await createTestApp();
     const sa = await createAdmin(t, ['Super Admin']);
     R = await onboardRestaurant(t, (await loginAdmin(t, sa)).accessToken);
-    device = (await t.http().post(api('/devices/register-hub')).set(bearer(R.ownerToken)).send({ branchId: R.branchId, name: 'Cashier PC', platform: 'windows' }).expect(201)).body.deviceToken;
+    const reg = (await t.http().post(api('/devices/register-hub')).set(bearer(R.ownerToken)).send({ name: 'Cashier PC', platform: 'windows' }).expect(201)).body;
+    expect(reg).toMatchObject({ branchId: R.branchId, branchCode: 'BR01', licensePublicKey: loadEnv().LICENSE_PUBLIC_KEY });
+    device = reg.deviceToken;
   });
   afterAll(() => t.close());
 

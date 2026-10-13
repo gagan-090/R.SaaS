@@ -5,7 +5,7 @@
   "auth": "bearer",
   "request": {
     "body": {
-      "email": "admin-mv5jtfoe-b1fca2@example.test",
+      "email": "admin-mv5zsfwv-114a1e@example.test",
       "name": "Neha Support",
       "roleIds": [
         "01a1312f-28d6-73a3-bc48-433e2853727a"
@@ -14,8 +14,8 @@
   },
   "status": 201,
   "response": {
-    "id": "01a1313d-8bae-7623-9a5a-0bf2c1af654b",
-    "email": "admin-mv5jtfoe-b1fca2@example.test",
+    "id": "01a132d6-e695-7991-aed0-4faa6768424d",
+    "email": "admin-mv5zsfwv-114a1e@example.test",
     "name": "Neha Support",
     "status": "invited",
     "lastLoginAt": null,

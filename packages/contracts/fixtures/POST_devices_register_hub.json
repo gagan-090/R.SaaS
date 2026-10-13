@@ -5,15 +5,17 @@
   "auth": "bearer",
   "request": {
     "body": {
-      "branchId": "01a1313d-8a54-71a0-8ad1-321b14fd11ad",
+      "branchId": "01a132d6-e5a1-7912-818c-45417aae865a",
       "name": "Cashier PC",
       "platform": "windows"
     }
   },
   "status": 201,
   "response": {
-    "deviceId": "01a1313d-8f07-7872-9580-052ccba43e80",
+    "deviceId": "01a132d6-e862-7f00-996a-6bb822df5a0f",
     "deviceToken": "<deviceToken>",
-    "branchId": "01a1313d-8a54-71a0-8ad1-321b14fd11ad"
+    "branchId": "01a132d6-e5a1-7912-818c-45417aae865a",
+    "branchCode": "BR01",
+    "licensePublicKey": "MCowBQYDK2VwAyEA264ZlOWpfxfR+1BosxoIiJgDAIUTlTon+1Ofr4/AJSY="
   }
 }

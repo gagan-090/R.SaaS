@@ -100,6 +100,39 @@
       "createdAt": "2026-10-12T17:48:51.669Z"
     },
     {
+      "id": "01a1313e-378e-7bd1-860c-c4ecb303cffb",
+      "name": "RoleAdmin-mv5judn2-c13f75",
+      "description": null,
+      "permissions": [
+        "platform.admin.roles",
+        "platform.admin.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-12T17:52:03.471Z"
+    },
+    {
+      "id": "01a13143-1cdb-7601-b602-41bcf85219a4",
+      "name": "RoleAdmin-mv5k197f-7d7877",
+      "description": null,
+      "permissions": [
+        "platform.admin.roles",
+        "platform.admin.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-12T17:57:24.316Z"
+    },
+    {
+      "id": "01a1314e-9778-7930-bf71-2397f46bbe21",
+      "name": "RoleAdmin-mv5khdo8-a71d50",
+      "description": null,
+      "permissions": [
+        "platform.admin.roles",
+        "platform.admin.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-12T18:09:56.600Z"
+    },
+    {
       "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
       "name": "Super Admin",
       "description": "All platform permissions",
@@ -130,6 +163,16 @@
       ],
       "isSystem": false,
       "createdAt": "2026-10-12T17:50:57.286Z"
+    },
+    {
+      "id": "01a1313d-8c19-7562-b7da-5de7168bcb39",
+      "name": "Support t-mv5jtfr8-e69066",
+      "description": "Reads restaurants",
+      "permissions": [
+        "platform.restaurant.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-12T17:51:19.578Z"
     },
     {
       "id": "01a13135-4361-7690-8983-9ddc48a904e3",
@@ -190,6 +233,36 @@
       ],
       "isSystem": false,
       "createdAt": "2026-10-12T17:48:51.955Z"
+    },
+    {
+      "id": "01a1313e-3869-7b33-865b-f57540561f61",
+      "name": "r-mv5judsy-078616",
+      "description": null,
+      "permissions": [
+        "platform.restaurant.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-12T17:52:03.689Z"
+    },
+    {
+      "id": "01a13143-1da4-7991-8856-56cab60bb721",
+      "name": "r-mv5k19cv-49035f",
+      "description": null,
+      "permissions": [
+        "platform.restaurant.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-12T17:57:24.517Z"
+    },
+    {
+      "id": "01a1314e-9816-7263-ab9e-00d10a3c1cc5",
+      "name": "r-mv5khdsg-50e8c2",
+      "description": null,
+      "permissions": [
+        "platform.restaurant.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-12T18:09:56.758Z"
     }
   ]
 }

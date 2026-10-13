@@ -61,6 +61,15 @@ void main() {
       expect((await h.post('/pairing/claim', body: {'code': code, 'deviceName': 'x', 'platform': 'android'})).code, 'feature_not_in_plan');
     });
 
+    test('staff list and menu for the POS screens never expose PIN hashes', () async {
+      final staff = (await h.get('/staff')).body! as List;
+      expect(staff.map((s) => (s as Map)['name']), containsAll(['Ravi', 'Anita', 'Owner']));
+      expect(jsonEncode(staff), isNot(contains('argon2')));
+      final menu = (await h.get('/menu')).json;
+      expect((menu['items']! as List).firstWhere((i) => (i as Map)['id'] == Harness.lassi), containsPair('rate_bp', 1200));
+      expect(((await h.get('/branch')).json['branch']! as Map)['code'], 'BR01');
+    });
+
     test('Argon2id PIN hashes from the cloud (node argon2) verify on the hub', () {
       const nodeHash = r'$argon2id$v=19$m=19456,p=1,t=2$Nyg+d4QuwlMXcFGftzjXKg$glolkwTphcD7kkBhYXA+CaBulAuakkaoTSspW3ZvHQ4';
       expect(verifyArgon2(nodeHash, '1234'), isTrue);

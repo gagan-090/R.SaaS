@@ -11,21 +11,21 @@
   },
   "status": 201,
   "response": {
-    "tenantId": "01a1313d-8a52-7441-ad9c-95e5564047fb",
-    "code": "R000074",
-    "branchId": "01a1313d-8a54-71a0-8ad1-321b14fd11ad",
-    "ownerUserId": "01a1313d-8a59-7ca0-bcc5-d3372420c4fb",
+    "tenantId": "01a132d6-e5a0-75c2-8856-77db77821521",
+    "code": "R000120",
+    "branchId": "01a132d6-e5a1-7912-818c-45417aae865a",
+    "ownerUserId": "01a132d6-e5dc-7a60-9033-de4ec40e319b",
     "license": {
-      "id": "01a1313d-8a5e-7666-9dc2-bf4e769ef582",
+      "id": "01a132d6-e5df-7a5f-8e32-7322b3b782b8",
       "planCode": "premium",
       "planName": "Premium",
-      "startsAt": "2026-10-12T17:51:19.133Z",
-      "endsAt": "2026-11-12T17:51:19.133Z",
+      "startsAt": "2026-10-13T01:18:26.783Z",
+      "endsAt": "2026-11-13T01:18:26.783Z",
       "graceDays": 7,
       "status": "active",
       "reason": "initial license at onboarding",
-      "issuedBy": "01a1313d-873d-7be0-882e-324e69d8774c",
-      "createdAt": "2026-10-12T17:51:19.140Z"
+      "issuedBy": "01a132d6-e3ea-7893-8fe4-08d5e2914fef",
+      "createdAt": "2026-10-13T01:18:26.796Z"
     }
   }
 }
