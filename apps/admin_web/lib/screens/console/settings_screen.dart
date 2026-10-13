@@ -5,6 +5,7 @@ import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 import '../../api/api_client.dart';
 import '../../state/providers.dart';
 import '../../widgets/common.dart';
+import '../../widgets/labels.dart';
 
 /// Restaurant settings: what prints on every bill (name, address, GSTIN), the plan, and GST rates.
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -117,12 +118,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         Row(children: [
           Text('${lic['planName'] ?? '—'}', style: HPType.titleCard(p.text).copyWith(fontSize: 26)),
           const SizedBox(width: HPSpace.md),
-          StatusChip(label: '${lic['state']}', tone: toneForStatus('${lic['state']}')),
+          StatusChip(label: statusLabel(lic['state']), tone: toneForStatus('${lic['state']}')),
         ]),
         const SizedBox(height: 4),
         Text(lic['endsAt'] == null ? 'No active license' : 'Renews ${shortDate(lic['endsAt'])}', style: HPType.body(p.muted)),
         const SizedBox(height: HPSpace.md),
-        Wrap(spacing: HPSpace.xs, runSpacing: HPSpace.xs, children: [for (final f in (lic['features'] as List)) Chip(label: Text('$f'), visualDensity: VisualDensity.compact)]),
+        Text('INCLUDES', style: HPType.overline(p.muted)),
+        const SizedBox(height: HPSpace.sm),
+        Wrap(spacing: HPSpace.xs, runSpacing: HPSpace.xs, children: [
+          for (final f in (lic['features'] as List).cast<String>())
+            Chip(avatar: Icon(Icons.check_rounded, size: 16, color: p.success), label: Text(featureLabel(f)), visualDensity: VisualDensity.compact),
+        ]),
       ]),
     );
     final taxes = SectionCard(

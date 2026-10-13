@@ -338,4 +338,14 @@ void main() {
       expect(find.textContaining('change ₹156'), findsOneWidget);
     });
   }
+
+  testWidgets('settings: plan, status and features read as words, not codes', (t) async {
+    await start(t);
+    await go(t, 'Settings', size: desktop);
+    expect(find.text('Active'), findsWidgets);
+    expect(find.text('active'), findsNothing);
+    expect(find.text('Kitchen display'), findsOneWidget);
+    expect(find.text('kds'), findsNothing);
+    expect(find.text('roles.extended'), findsNothing);
+  });
 }

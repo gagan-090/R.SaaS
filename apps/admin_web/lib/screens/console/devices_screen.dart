@@ -6,6 +6,7 @@ import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 import '../../api/api_client.dart';
 import '../../state/providers.dart';
 import '../../widgets/common.dart';
+import '../../widgets/labels.dart';
 
 String ago(Object? iso) {
   final d = DateTime.tryParse('${iso ?? ''}');
@@ -109,7 +110,7 @@ class _DeviceRow extends StatelessWidget {
         if (!revoked) StatusChip(label: online ? 'Online' : 'Offline', tone: online ? HPTone.success : HPTone.neutral),
       ]),
       subtitle: Text(
-        revoked ? 'Revoked ${shortDate(device['revokedAt'])}' : '${device['platform']} · ${(device['branch'] as Map?)?['name'] ?? ''} · paired ${shortDate(device['pairedAt'])} · seen ${ago(device['lastSeenAt'])}',
+        revoked ? 'Revoked ${shortDate(device['revokedAt'])}' : '${titleCase('${device['platform']}')} · ${(device['branch'] as Map?)?['name'] ?? ''} · paired ${shortDate(device['pairedAt'])} · seen ${ago(device['lastSeenAt'])}',
         style: HPType.body(p.muted),
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
