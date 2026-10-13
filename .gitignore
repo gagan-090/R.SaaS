@@ -50,3 +50,8 @@ pakages/
 
 # built APKs (shared outside git)
 release/
+
+# Local Claude configuration and instructions
+.claude/
+CLAUDE.md
+CLAUDE.local.md
