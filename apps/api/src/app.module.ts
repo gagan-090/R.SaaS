@@ -17,11 +17,12 @@ import { PlansController } from './restaurants/plans.controller';
 import { RestaurantsController } from './restaurants/restaurants.controller';
 import { SyncController } from './sync/sync.controller';
 import { SyncService } from './sync/sync.service';
+import { ConsoleController } from './tenant/console.controller';
 import { TenantController } from './tenant/tenant.controller';
 
 @Module({
   imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: loadEnv().API_RATE_LIMIT_PER_MIN }])],
-  controllers: [HealthController, AuthController, PlatformController, RestaurantsController, PlansController, TenantController, SyncController],
+  controllers: [HealthController, AuthController, PlatformController, RestaurantsController, PlansController, TenantController, ConsoleController, SyncController],
   providers: [
     DbService, TokensService, AuthService, AuditService, LicenseService, SyncService, mailerProvider,
     // Order matters: rate limit → authenticate → authorise → plan/license gate.

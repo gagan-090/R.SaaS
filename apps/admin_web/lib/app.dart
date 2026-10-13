@@ -5,8 +5,26 @@ import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 
 import 'screens/admins_screen.dart';
 import 'screens/auth_screens.dart';
+import 'screens/console/dashboard_screen.dart';
+import 'screens/console/devices_screen.dart';
+import 'screens/console/menu_screen.dart';
+import 'screens/console/settings_screen.dart';
+import 'screens/console/staff_screen.dart';
+import 'screens/console/tables_screen.dart';
 import 'screens/restaurants_screens.dart';
 import 'state/providers.dart';
+import 'widgets/common.dart';
+
+/// One web app, two consoles: platform admins get the Super Admin console, restaurant owners / IT admins the
+/// Restaurant console (menu, tables, staff, hubs). The account type from /me decides; the API enforces it.
+/// Console pages cross-fade (150 ms) instead of cutting.
+Page<void> _fade(GoRouterState s, Widget child) => CustomTransitionPage<void>(
+      key: s.pageKey,
+      child: child,
+      transitionDuration: const Duration(milliseconds: 180),
+      reverseTransitionDuration: const Duration(milliseconds: 120),
+      transitionsBuilder: (c, a, _, child) => FadeTransition(opacity: CurvedAnimation(parent: a, curve: Curves.easeOut), child: child),
+    );
 
 final routerProvider = Provider<GoRouter>((ref) {
   final auth = ref.read(authProvider.notifier);
@@ -19,21 +37,33 @@ final routerProvider = Provider<GoRouter>((ref) {
       return switch (s) {
         SignedOut() => loc == '/login' ? null : '/login',
         MfaChallenge() || MfaEnrollment() => loc == '/mfa' ? null : '/mfa',
-        SignedIn() => (loc == '/login' || loc == '/mfa') ? '/' : null,
+        SignedIn(:final isRestaurant) when isRestaurant => loc.startsWith('/console') ? null : '/console',
+        SignedIn() => (loc == '/login' || loc == '/mfa' || loc.startsWith('/console')) ? '/' : null,
       };
     },
     routes: [
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       GoRoute(path: '/mfa', builder: (_, _) => const MfaScreen()),
       ShellRoute(
-        builder: (c, s, child) => _Shell(location: s.matchedLocation, child: child),
+        builder: (c, s, child) => ConsoleShell(location: s.matchedLocation, nav: platformNav, brand: 'Platform', child: child),
         routes: [
-          GoRoute(path: '/', builder: (_, _) => const DashboardScreen()),
-          GoRoute(path: '/restaurants', builder: (_, s) => RestaurantsScreen(initialStatus: s.uri.queryParameters['status'])),
-          GoRoute(path: '/restaurants/:id', builder: (_, s) => RestaurantDetailScreen(id: s.pathParameters['id']!)),
-          GoRoute(path: '/plans', builder: (_, _) => const PlansScreen()),
-          GoRoute(path: '/admins', builder: (_, _) => const AdminsScreen()),
-          GoRoute(path: '/audit', builder: (_, _) => const AuditScreen()),
+          GoRoute(path: '/', pageBuilder: (_, s) => _fade(s, const DashboardScreen())),
+          GoRoute(path: '/restaurants', pageBuilder: (_, s) => _fade(s, RestaurantsScreen(initialStatus: s.uri.queryParameters['status']))),
+          GoRoute(path: '/restaurants/:id', pageBuilder: (_, s) => _fade(s, RestaurantDetailScreen(id: s.pathParameters['id']!))),
+          GoRoute(path: '/plans', pageBuilder: (_, s) => _fade(s, const PlansScreen())),
+          GoRoute(path: '/admins', pageBuilder: (_, s) => _fade(s, const AdminsScreen())),
+          GoRoute(path: '/audit', pageBuilder: (_, s) => _fade(s, const AuditScreen())),
+        ],
+      ),
+      ShellRoute(
+        builder: (c, s, child) => ConsoleShell(location: s.matchedLocation, nav: restaurantNav, brand: 'Restaurant', child: child),
+        routes: [
+          GoRoute(path: '/console', pageBuilder: (_, s) => _fade(s, const RestaurantDashboardScreen())),
+          GoRoute(path: '/console/menu', pageBuilder: (_, s) => _fade(s, const MenuScreen())),
+          GoRoute(path: '/console/tables', pageBuilder: (_, s) => _fade(s, const TablesScreen())),
+          GoRoute(path: '/console/staff', pageBuilder: (_, s) => _fade(s, const StaffScreen())),
+          GoRoute(path: '/console/devices', pageBuilder: (_, s) => _fade(s, const DevicesScreen())),
+          GoRoute(path: '/console/settings', pageBuilder: (_, s) => _fade(s, const SettingsScreen())),
         ],
       ),
     ],
@@ -44,76 +74,149 @@ class AdminApp extends ConsumerWidget {
   const AdminApp({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) => MaterialApp.router(
-        title: 'Restaurant SaaS · Super Admin',
+        title: 'House Plating',
         debugShowCheckedModeBanner: false,
         theme: HPTheme.backOffice(),
+        darkTheme: HPTheme.backOffice(brightness: Brightness.dark),
+        themeMode: ThemeMode.system, // follows the device / browser setting
         routerConfig: ref.watch(routerProvider),
       );
 }
 
-class _Shell extends ConsumerWidget {
-  const _Shell({required this.location, required this.child});
+typedef NavItem = (String path, String label, IconData icon, String? permission);
+
+const platformNav = <NavItem>[
+  ('/', 'Dashboard', Icons.space_dashboard_outlined, null),
+  ('/restaurants', 'Restaurants', Icons.storefront_outlined, 'platform.restaurant.read'),
+  ('/plans', 'Plans', Icons.workspace_premium_outlined, 'platform.restaurant.read'),
+  ('/admins', 'Admins', Icons.admin_panel_settings_outlined, 'platform.admin.read'),
+  ('/audit', 'Audit log', Icons.receipt_long_outlined, 'platform.audit.read'),
+];
+
+const restaurantNav = <NavItem>[
+  ('/console', 'Dashboard', Icons.space_dashboard_outlined, null),
+  ('/console/menu', 'Menu', Icons.restaurant_menu_rounded, 'menu.read'),
+  ('/console/tables', 'Floors & tables', Icons.table_restaurant_outlined, 'floor.read'),
+  ('/console/staff', 'Staff', Icons.badge_outlined, 'staff.read'),
+  ('/console/devices', 'Hubs & devices', Icons.router_outlined, 'device.manage'),
+  ('/console/settings', 'Settings', Icons.tune_rounded, 'restaurant.profile.read'),
+];
+
+/// Sidebar on wide screens, app bar + drawer on phones. Items the signed-in role cannot use are hidden
+/// (the API refuses them anyway).
+class ConsoleShell extends ConsumerWidget {
+  const ConsoleShell({super.key, required this.location, required this.nav, required this.brand, required this.child});
   final String location;
+  final List<NavItem> nav;
+  final String brand;
   final Widget child;
-  static const _nav = [
-    ('/', 'Dashboard', Icons.space_dashboard_outlined, null),
-    ('/restaurants', 'Restaurants', Icons.storefront_outlined, 'platform.restaurant.read'),
-    ('/plans', 'Plans', Icons.workspace_premium_outlined, 'platform.restaurant.read'),
-    ('/admins', 'Admins', Icons.admin_panel_settings_outlined, 'platform.admin.read'),
-    ('/audit', 'Audit log', Icons.receipt_long_outlined, 'platform.audit.read'),
-  ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authProvider);
     final me = auth is SignedIn ? auth : null;
-    final items = _nav.where((n) => n.$4 == null || (me?.can(n.$4!) ?? false)).toList();
-    final idx = items.lastIndexWhere((n) => n.$1 == '/' ? location == '/' : location.startsWith(n.$1));
-    return Scaffold(
-      body: Row(children: [
-        Container(
-          width: 232,
-          color: HPColors.wineDeep,
+    final items = nav.where((n) => n.$4 == null || (me?.can(n.$4!) ?? false)).toList();
+    final root = items.isEmpty ? '/' : items.first.$1;
+    final idx = items.lastIndexWhere((n) => n.$1 == root ? location == root : location.startsWith(n.$1));
+    final narrow = isNarrowWeb(context);
+    final p = context.hp;
+
+    Widget sidebar({required bool inDrawer}) => SizedBox(
+        width: inDrawer ? null : 248,
+        child: Material(
+          color: p.sidebar,
           child: SafeArea(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(HPSpace.x2, HPSpace.x2, HPSpace.x2, HPSpace.x3),
-                child: Text('House\nPlating', style: HPType.titleScreen(HPColors.paper).copyWith(fontSize: 26, height: 1.05)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('House\nPlating', style: HPType.titleScreen(_onSidebar(p)).copyWith(fontSize: 26, height: 1.05)),
+                  const SizedBox(height: HPSpace.sm),
+                  Text('$brand console'.toUpperCase(), style: HPType.overline(_onSidebar(p).withValues(alpha: .65)).copyWith(fontSize: 10)),
+                ]),
               ),
-              for (var i = 0; i < items.length; i++)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: HPSpace.md, vertical: 2),
-                  child: Material(
-                    color: i == idx ? HPColors.wine : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
-                    child: ListTile(
-                      dense: true,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      leading: Icon(items[i].$3, color: HPColors.paper),
-                      title: Text(items[i].$2, style: HPType.label(HPColors.paper)),
-                      onTap: () => context.go(items[i].$1),
+              Expanded(
+                child: ListView(children: [
+                  for (var i = 0; i < items.length; i++)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: HPSpace.md, vertical: 2),
+                      child: _NavTile(
+                        key: Key('nav-${items[i].$2}'),
+                        item: items[i],
+                        selected: i == idx,
+                        onTap: () {
+                          if (inDrawer) Navigator.of(context).pop();
+                          context.go(items[i].$1);
+                        },
+                      ),
                     ),
-                  ),
-                ),
-              const Spacer(),
+                ]),
+              ),
               if (me != null)
                 Padding(
                   padding: const EdgeInsets.all(HPSpace.lg),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('${me.me['name'] ?? ''}', style: HPType.label(HPColors.paper)),
-                    Text('${me.me['email'] ?? ''}', style: HPType.body(HPColors.paper.withValues(alpha: .7)).copyWith(fontSize: 12)),
-                    TextButton.icon(
+                  child: Row(children: [
+                    CircleAvatar(
+                      radius: 18,
+                      backgroundColor: HPColors.saffron,
+                      child: Text('${me.me['name'] ?? '?'}'.characters.first.toUpperCase(), style: HPType.label(HPColors.onSaffron)),
+                    ),
+                    const SizedBox(width: HPSpace.sm),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('${me.me['name'] ?? ''}', style: HPType.label(_onSidebar(p)), overflow: TextOverflow.ellipsis),
+                        Text('${me.me['email'] ?? ''}', style: HPType.body(_onSidebar(p).withValues(alpha: .7)).copyWith(fontSize: 12), overflow: TextOverflow.ellipsis),
+                      ]),
+                    ),
+                    IconButton(
+                      key: const Key('sign-out'),
+                      tooltip: 'Sign out',
                       onPressed: () => ref.read(authProvider.notifier).logout(),
-                      icon: const Icon(Icons.logout, size: 16, color: HPColors.saffron),
-                      label: Text('Sign out', style: HPType.label(HPColors.saffron)),
+                      icon: const Icon(Icons.logout_rounded, color: HPColors.saffron, size: 20),
                     ),
                   ]),
                 ),
             ]),
           ),
         ),
-        Expanded(child: child),
-      ]),
+      );
+
+    if (narrow) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(idx >= 0 ? items[idx].$2 : 'House Plating'),
+          leading: Builder(builder: (c) => IconButton(key: const Key('open-nav'), tooltip: 'Menu', icon: const Icon(Icons.menu_rounded), onPressed: () => Scaffold.of(c).openDrawer())),
+        ),
+        drawer: Drawer(backgroundColor: p.sidebar, child: sidebar(inDrawer: true)),
+        body: SafeArea(top: false, child: child),
+      );
+    }
+    return Scaffold(body: Row(children: [sidebar(inDrawer: false), Expanded(child: child)]));
+  }
+
+  static Color _onSidebar(HPPalette p) => p.isDark || p.sidebar.computeLuminance() < .3 ? HPColors.paper : HPColors.ink;
+}
+
+class _NavTile extends StatelessWidget {
+  const _NavTile({super.key, required this.item, required this.selected, required this.onTap});
+  final NavItem item;
+  final bool selected;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final p = context.hp;
+    final fg = selected ? HPColors.onSaffron : ConsoleShell._onSidebar(p);
+    return Material(
+      color: selected ? HPColors.saffron : Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: ListTile(
+        dense: true,
+        selected: selected,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        leading: Icon(item.$3, color: fg, size: 20),
+        title: Text(item.$2, style: HPType.label(fg)),
+        onTap: onTap,
+      ),
     );
   }
 }

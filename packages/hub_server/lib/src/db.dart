@@ -78,6 +78,12 @@ const _schemaV2 = <String>[
   'CREATE INDEX print_jobs_object ON print_jobs(doc_type, object_id)',
 ];
 
+/// v3: menu photos — items carry the cloud image id; bytes are cached so photos show offline.
+const _schemaV3 = <String>[
+  'ALTER TABLE items ADD COLUMN image_id TEXT',
+  'CREATE TABLE media_cache (id TEXT PRIMARY KEY, content_type TEXT NOT NULL, bytes BLOB NOT NULL, fetched_at TEXT NOT NULL)',
+];
+
 /// drift database without code generation: the schema is plain SQL above and queries go through
 /// [query]/[execute]. drift provides the executor, transactions (nested = savepoints) and migrations.
 class HubDatabase extends GeneratedDatabase {
@@ -93,18 +99,23 @@ class HubDatabase extends GeneratedDatabase {
   Iterable<DatabaseSchemaEntity> get allSchemaEntities => const [];
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) async {
-          for (final s in [..._schemaV1, ..._schemaV2]) {
+          for (final s in [..._schemaV1, ..._schemaV2, ..._schemaV3]) {
             await customStatement(s);
           }
         },
         onUpgrade: (m, from, to) async {
           if (from < 2) {
             for (final s in _schemaV2) {
+              await customStatement(s);
+            }
+          }
+          if (from < 3) {
+            for (final s in _schemaV3) {
               await customStatement(s);
             }
           }
@@ -119,6 +130,7 @@ class HubDatabase extends GeneratedDatabase {
         final bool b => Variable<bool>(b),
         final int i => Variable<int>(i),
         final String s => Variable<String>(s),
+        final Uint8List b => Variable<Uint8List>(b),
         _ => throw ArgumentError('unsupported SQL argument type ${x.runtimeType}'),
       };
 

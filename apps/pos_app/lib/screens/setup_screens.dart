@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:qr_flutter/qr_flutter.dart';
@@ -9,21 +11,30 @@ import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 import '../hub/hub_api.dart';
 import '../hub/hub_mode.dart';
 import '../state/app_state.dart';
-import 'role_screens.dart';
-
-/// Short message at the bottom. A new message replaces the current one, so staff never read a stale toast.
-void toast(BuildContext c, String msg, {bool error = false}) => ScaffoldMessenger.of(c)
-  ..hideCurrentSnackBar()
-  ..showSnackBar(SnackBar(content: Text(msg), backgroundColor: error ? HPColors.chili : HPColors.emberRaised, duration: Duration(seconds: error ? 4 : 2)));
-
-String errText(Object e) => e is HubApiException ? e.message : '$e';
+import '../ui/common.dart';
+import '../ui/shell.dart';
 
 /// Pairs with a hub: overridable so tests do not open sockets.
 final pairFnProvider = Provider<Future<String> Function(PairingPayload, String name, String platform)>(
   (ref) => (p, name, platform) => claimPairing(p, deviceName: name, platform: platform),
 );
 
-/// S1 Device setup: pair with the branch hub, or make this device the hub.
+class _Brand extends StatelessWidget {
+  const _Brand();
+  @override
+  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: const BoxDecoration(color: HPColors.saffron, shape: BoxShape.circle),
+          child: const Icon(Icons.restaurant_rounded, color: HPColors.onSaffron, size: 22),
+        ),
+        const SizedBox(width: HPSpace.sm),
+        Text('HOUSE PLATING', style: HPType.overline(context.hp.accentInk)),
+      ]);
+}
+
+/// S1 Device setup: make this device the branch hub (signs in to the cloud once) or join an existing hub.
 class DeviceSetupScreen extends ConsumerStatefulWidget {
   const DeviceSetupScreen({super.key});
   @override
@@ -35,8 +46,9 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
       _code = TextEditingController(), _fp = TextEditingController(), _name = TextEditingController(text: 'Cashier terminal');
   final _cloud = TextEditingController(text: const String.fromEnvironment('API_BASE_URL', defaultValue: 'http://localhost:3000/api/v1')),
       _email = TextEditingController(), _password = TextEditingController(), _mfa = TextEditingController();
-  bool _busy = false, _needMfa = false;
-  String? _challenge;
+  bool _busy = false, _needMfa = false, _manual = false, _showPassword = false;
+  late bool _asHub = HubHost.supported;
+  String? _challenge, _error;
 
   String get _platform => Theme.of(context).platform == TargetPlatform.windows ? 'windows' : 'android';
 
@@ -45,13 +57,16 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
         (int.tryParse(_port.text) == null || _ip.text.trim().isEmpty || _code.text.trim().isEmpty
             ? null
             : PairingPayload(host: _ip.text.trim(), port: int.parse(_port.text), code: _code.text.trim(), fingerprint: _fp.text.trim().isEmpty ? null : _fp.text.trim().toUpperCase()));
-    if (p == null) return toast(context, 'Scan the hub QR or enter IP, port and code', error: true);
-    setState(() => _busy = true);
+    if (p == null) return setState(() => _error = 'Paste the pairing text shown on the hub, or enter its IP address and 6-digit code');
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     try {
       final token = await ref.read(pairFnProvider)(p, _name.text.trim(), _platform);
       await ref.read(setupProvider.notifier).save(DeviceSetup(hubBaseUrl: p.baseUrl, deviceToken: token, fingerprint: p.fingerprint));
     } catch (e) {
-      if (mounted) toast(context, errText(e), error: true);
+      if (mounted) setState(() => _error = errText(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -59,11 +74,20 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
 
   /// Hub mode: owner signs in to the cloud once; the cloud registers this device as the branch hub.
   Future<void> _becomeHub() async {
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     final base = _cloud.text.trim().replaceAll(RegExp(r'/$'), '');
     Future<Map<String, dynamic>> post(String path, Object body, {String? bearer}) async {
-      final r = await http.post(Uri.parse('$base$path'),
-          headers: {'content-type': 'application/json', if (bearer != null) 'authorization': 'Bearer $bearer'}, body: jsonEncode(body));
+      final http.Response r;
+      try {
+        r = await http
+            .post(Uri.parse('$base$path'), headers: {'content-type': 'application/json', if (bearer != null) 'authorization': 'Bearer $bearer'}, body: jsonEncode(body))
+            .timeout(const Duration(seconds: 15));
+      } catch (_) {
+        throw HubApiException(0, 'unreachable', 'Cannot reach $base — check the address and that this device is on the same Wi-Fi');
+      }
       final j = r.body.isEmpty ? <String, dynamic>{} : jsonDecode(r.body) as Map<String, dynamic>;
       if (r.statusCode >= 400) throw HubApiException(r.statusCode, '${j['code']}', '${j['message']}');
       return j;
@@ -76,7 +100,10 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
       } else {
         final l = await post('/auth/login', {'email': _email.text.trim(), 'password': _password.text});
         if (l['status'] == 'mfa_required') {
-          setState(() { _needMfa = true; _challenge = l['challengeToken'] as String; });
+          setState(() {
+            _needMfa = true;
+            _challenge = l['challengeToken'] as String;
+          });
           return;
         }
         access = l['accessToken'] as String;
@@ -89,81 +116,153 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
       await ref.read(setupProvider.notifier).save(DeviceSetup(
           hubBaseUrl: 'https://127.0.0.1:${host.port}/hub/v1', deviceToken: host.localDeviceToken!, fingerprint: host.fingerprint, hubConfig: cfg));
     } catch (e) {
-      if (mounted) toast(context, errText(e), error: true);
+      if (mounted) setState(() => _error = errText(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        body: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(HPSpace.x2),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 980),
+  Widget build(BuildContext context) {
+    final p = context.hp;
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(HPSpace.x2),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: AutofillGroup(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  Text('SET UP THIS DEVICE', style: HPType.overline(HPColors.saffron)),
-                  const SizedBox(height: HPSpace.sm),
-                  Text('Pair with the kitchen hub', style: HPType.titleScreen(HPColors.ghee)),
+                  const Align(alignment: Alignment.centerLeft, child: _Brand()),
                   const SizedBox(height: HPSpace.x2),
-                  TextField(controller: _name, decoration: const InputDecoration(labelText: 'Device name')),
+                  Text('Set up this device', style: HPType.titleScreen(p.text)),
+                  const SizedBox(height: HPSpace.xs),
+                  Text('Do this once. Afterwards staff only need their PIN.', style: HPType.body(p.muted).copyWith(fontSize: 15)),
+                  const SizedBox(height: HPSpace.x2),
+                  if (HubHost.supported)
+                    SegmentedButton<bool>(
+                      showSelectedIcon: false,
+                      segments: const [
+                        ButtonSegment(value: true, label: Text('Main device'), icon: Icon(Icons.router_rounded)),
+                        ButtonSegment(value: false, label: Text('Join a hub'), icon: Icon(Icons.link_rounded)),
+                      ],
+                      selected: {_asHub},
+                      onSelectionChanged: (v) => setState(() {
+                        _asHub = v.first;
+                        _error = null;
+                      }),
+                    ),
                   const SizedBox(height: HPSpace.lg),
-                  Wrap(spacing: HPSpace.lg, runSpacing: HPSpace.lg, children: [
-                    SizedBox(width: _cardWidth(context), child: _card('Pair with a hub', Icons.qr_code_scanner_rounded, [
-                      TextField(key: const Key('pair-payload'), controller: _payload, decoration: const InputDecoration(labelText: 'Scan QR (or paste its text)', helperText: 'Camera scanning: see MORNING.md')),
-                      const SizedBox(height: HPSpace.md),
-                      Text('or enter it by hand', style: HPType.body(HPColors.husk)),
-                      const SizedBox(height: HPSpace.sm),
-                      Row(children: [
-                        Expanded(flex: 3, child: TextField(controller: _ip, decoration: const InputDecoration(labelText: 'Hub IP'))),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    child: KeyedSubtree(key: ValueKey(_asHub), child: _asHub ? _hubForm(p) : _pairForm(p)),
+                  ),
+                  if (_error != null)
+                    Container(
+                      margin: const EdgeInsets.only(top: HPSpace.md),
+                      padding: const EdgeInsets.all(HPSpace.md),
+                      decoration: BoxDecoration(color: p.danger.withValues(alpha: .12), borderRadius: BorderRadius.circular(12)),
+                      child: Row(children: [
+                        Icon(Icons.error_outline_rounded, color: p.danger),
                         const SizedBox(width: HPSpace.sm),
-                        Expanded(flex: 2, child: TextField(controller: _port, decoration: const InputDecoration(labelText: 'Port'))),
+                        Expanded(child: Text(_error!, key: const Key('setup-error'), style: HPType.body(p.text))),
                       ]),
-                      const SizedBox(height: HPSpace.sm),
-                      TextField(controller: _code, decoration: const InputDecoration(labelText: '6-digit code')),
-                      const SizedBox(height: HPSpace.sm),
-                      TextField(controller: _fp, decoration: const InputDecoration(labelText: 'Certificate fingerprint (from the hub screen)')),
-                      const SizedBox(height: HPSpace.lg),
-                      PrimaryButton(label: 'Pair', busy: _busy, onPressed: _pair),
-                    ])),
-                    if (HubHost.supported)
-                      SizedBox(width: _cardWidth(context), child: _card('This device is the hub', Icons.router_rounded, [
-                        Text('Use the main cashier PC. It keeps working when the internet is down; keep it on a UPS.', style: HPType.body(HPColors.husk)),
-                        const SizedBox(height: HPSpace.md),
-                        TextField(controller: _cloud, decoration: const InputDecoration(labelText: 'Cloud API URL')),
-                        const SizedBox(height: HPSpace.sm),
-                        TextField(controller: _email, decoration: const InputDecoration(labelText: 'Owner / IT admin email')),
-                        const SizedBox(height: HPSpace.sm),
-                        TextField(controller: _password, obscureText: true, decoration: const InputDecoration(labelText: 'Password')),
-                        if (_needMfa) ...[const SizedBox(height: HPSpace.sm), TextField(controller: _mfa, decoration: const InputDecoration(labelText: 'Authenticator code'))],
-                        const SizedBox(height: HPSpace.lg),
-                        SecondaryButton(label: 'Make this the hub', icon: Icons.power_settings_new_rounded, onPressed: _busy ? null : _becomeHub),
-                      ])),
-                  ]),
+                    ),
                 ]),
               ),
             ),
           ),
         ),
-      );
+      ),
+    );
+  }
 
-  double _cardWidth(BuildContext c) => (MediaQuery.sizeOf(c).width - 2 * HPSpace.x2).clamp(260.0, 460.0);
-
-  Widget _card(String title, IconData icon, List<Widget> children) => Card(
+  Widget _hubForm(HPPalette p) => Card(
         child: Padding(
           padding: const EdgeInsets.all(HPSpace.x2),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Row(children: [Icon(icon, color: HPColors.saffron), const SizedBox(width: HPSpace.sm), Expanded(child: Text(title, style: HPType.titleCard(HPColors.ghee), overflow: TextOverflow.ellipsis))]),
+            Text('This device runs the restaurant', style: HPType.titleCard(p.text)),
+            const SizedBox(height: 4),
+            Text('Use the main cashier device. Billing keeps working when the internet is down; keep it charged.', style: HPType.body(p.muted)),
             const SizedBox(height: HPSpace.lg),
-            ...children,
+            TextField(controller: _cloud, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'Server address', prefixIcon: Icon(Icons.cloud_outlined))),
+            const SizedBox(height: HPSpace.md),
+            TextField(
+              key: const Key('hub-email'),
+              controller: _email,
+              keyboardType: TextInputType.emailAddress,
+              autofillHints: const [AutofillHints.email],
+              decoration: const InputDecoration(labelText: 'Owner or IT admin email', prefixIcon: Icon(Icons.alternate_email_rounded)),
+            ),
+            const SizedBox(height: HPSpace.md),
+            TextField(
+              key: const Key('hub-password'),
+              controller: _password,
+              obscureText: !_showPassword,
+              autofillHints: const [AutofillHints.password],
+              decoration: InputDecoration(
+                labelText: 'Password',
+                prefixIcon: const Icon(Icons.lock_outline_rounded),
+                suffixIcon: IconButton(
+                  tooltip: _showPassword ? 'Hide password' : 'Show password',
+                  icon: Icon(_showPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                  onPressed: () => setState(() => _showPassword = !_showPassword),
+                ),
+              ),
+              onSubmitted: (_) => _becomeHub(),
+            ),
+            if (_needMfa) ...[
+              const SizedBox(height: HPSpace.md),
+              TextField(controller: _mfa, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Authenticator code', prefixIcon: Icon(Icons.verified_user_outlined))),
+            ],
+            const SizedBox(height: HPSpace.md),
+            TextField(controller: _name, decoration: const InputDecoration(labelText: 'Name of this device', prefixIcon: Icon(Icons.devices_rounded))),
+            const SizedBox(height: HPSpace.x2),
+            PrimaryButton(key: const Key('make-hub'), label: 'Make this the hub', icon: Icons.power_settings_new_rounded, busy: _busy, onPressed: _becomeHub),
+          ]),
+        ),
+      );
+
+  Widget _pairForm(HPPalette p) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(HPSpace.x2),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Text('Join the restaurant\'s hub', style: HPType.titleCard(p.text)),
+            const SizedBox(height: 4),
+            Text('On the hub open More → Hub & devices. Copy the pairing text here, or type its address and code.', style: HPType.body(p.muted)),
+            const SizedBox(height: HPSpace.lg),
+            TextField(key: const Key('pair-payload'), controller: _payload, decoration: const InputDecoration(labelText: 'Pairing text from the hub', prefixIcon: Icon(Icons.link_rounded))),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(onPressed: () => setState(() => _manual = !_manual), icon: Icon(_manual ? Icons.expand_less_rounded : Icons.expand_more_rounded), label: const Text('Enter the address by hand')),
+            ),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 180),
+              child: !_manual
+                  ? const SizedBox(width: double.infinity)
+                  : Column(children: [
+                      Row(children: [
+                        Expanded(flex: 3, child: TextField(controller: _ip, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'Hub IP'))),
+                        const SizedBox(width: HPSpace.sm),
+                        Expanded(flex: 2, child: TextField(controller: _port, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Port'))),
+                      ]),
+                      const SizedBox(height: HPSpace.sm),
+                      TextField(controller: _code, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '6-digit code')),
+                      const SizedBox(height: HPSpace.sm),
+                      TextField(controller: _fp, decoration: const InputDecoration(labelText: 'Security fingerprint (from the hub screen)')),
+                    ]),
+            ),
+            const SizedBox(height: HPSpace.md),
+            TextField(controller: _name, decoration: const InputDecoration(labelText: 'Name of this device', prefixIcon: Icon(Icons.devices_rounded))),
+            const SizedBox(height: HPSpace.x2),
+            PrimaryButton(label: 'Pair', icon: Icons.link_rounded, busy: _busy, onPressed: _pair),
           ]),
         ),
       );
 }
 
-/// S2 Hub status (hub device): pairing QR + sync counts.
+/// S2 Hub & devices (on the hub): pairing code + QR for new terminals, sync health, reset.
 class HubStatusScreen extends ConsumerStatefulWidget {
   const HubStatusScreen({super.key});
   @override
@@ -176,251 +275,306 @@ class _HubStatusScreenState extends ConsumerState<HubStatusScreen> {
     final host = ref.read(hubHostProvider);
     final api = ref.watch(hubApiProvider);
     ref.watch(hubTickProvider);
-    final p = host.pairing;
+    final pairing = host.pairing;
+    final p = context.hp;
     return Scaffold(
-      appBar: AppBar(title: const Text('Hub status')),
-      body: ListView(padding: const EdgeInsets.all(HPSpace.x2), children: [
-        if (p != null)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(HPSpace.x2),
-              child: Column(children: [
-                Text('Scan to pair a device', style: HPType.titleCard(HPColors.ghee)),
+      body: Column(children: [
+        const PosTopBar(title: 'Hub & devices'),
+        Expanded(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: ListView(padding: const EdgeInsets.all(HPSpace.lg), children: [
+                if (pairing != null)
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(HPSpace.x2),
+                      child: Column(children: [
+                        Text('Pair another device', style: HPType.titleCard(p.text)),
+                        const SizedBox(height: 4),
+                        Text('On the new device choose "Join a hub" and use this code. It works once, for 10 minutes.', textAlign: TextAlign.center, style: HPType.body(p.muted)),
+                        const SizedBox(height: HPSpace.lg),
+                        Container(
+                          padding: const EdgeInsets.all(HPSpace.md),
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(HPRadius.card)),
+                          child: QrImageView(data: pairing.encode(), size: 200),
+                        ),
+                        const SizedBox(height: HPSpace.lg),
+                        Text(pairing.code.split('').join(' '), style: HPType.displayTotal(p.text).copyWith(fontSize: 36, letterSpacing: 4)),
+                        Text('${pairing.host}:${pairing.port}', style: HPType.mono(p.muted)),
+                        const SizedBox(height: HPSpace.md),
+                        Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, alignment: WrapAlignment.center, children: [
+                          OutlinedButton.icon(
+                            icon: const Icon(Icons.copy_rounded, size: 18),
+                            label: const Text('Copy pairing text'),
+                            onPressed: () async {
+                              await Clipboard.setData(ClipboardData(text: pairing.encode()));
+                              if (context.mounted) toast(context, 'Pairing text copied');
+                            },
+                          ),
+                          OutlinedButton.icon(
+                            icon: const Icon(Icons.refresh_rounded, size: 18),
+                            label: const Text('New code'),
+                            onPressed: () async {
+                              await host.newPairingCode();
+                              setState(() {});
+                            },
+                          ),
+                        ]),
+                      ]),
+                    ),
+                  )
+                else
+                  const EmptyState(title: 'Paired to a hub', message: 'This device works with the hub on your restaurant Wi-Fi.', icon: Icons.link_rounded),
                 const SizedBox(height: HPSpace.lg),
-                QrImageView(data: p.encode(), size: 220, backgroundColor: Colors.white),
-                const SizedBox(height: HPSpace.md),
-                SelectableText('IP ${p.host}:${p.port} · code ${p.code}\n${p.fingerprint}', textAlign: TextAlign.center, style: HPType.mono(HPColors.husk)),
-                const SizedBox(height: HPSpace.md),
-                SecondaryButton(label: 'New code', icon: Icons.refresh, onPressed: () async {
-                  await host.newPairingCode();
-                  setState(() {});
-                }),
+                if (api != null)
+                  FutureBuilder<Json>(
+                    future: api.syncStatus(),
+                    builder: (c, s) => s.hasData
+                        ? Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(HPSpace.lg),
+                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                Text('CLOUD SYNC', style: HPType.overline(p.muted)),
+                                const SizedBox(height: HPSpace.sm),
+                                Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, children: [
+                                  StatusChip(label: '${s.data!['pending']} waiting', tone: (s.data!['pending'] as int) > 0 ? HPTone.saffron : HPTone.success),
+                                  StatusChip(label: '${s.data!['failed']} failed', tone: (s.data!['failed'] as int) > 0 ? HPTone.danger : HPTone.neutral),
+                                  StatusChip(label: '${s.data!['pushed']} synced', tone: HPTone.success),
+                                ]),
+                              ]),
+                            ),
+                          )
+                        : const SkeletonBox(height: 80),
+                  ),
+                if (ref.watch(sessionProvider)?.can('device.manage') ?? false) ...[
+                  const SizedBox(height: HPSpace.x2),
+                  DangerButton(
+                    label: 'Reset this device',
+                    icon: Icons.restart_alt_rounded,
+                    onPressed: () async {
+                      final ok = await showDialog<bool>(
+                        context: context,
+                        builder: (c) => HPDialog(
+                          title: 'Reset this device?',
+                          actions: [
+                            SecondaryButton(label: 'Cancel', onPressed: () => Navigator.pop(c)),
+                            DangerButton(label: 'Reset', onPressed: () => Navigator.pop(c, true)),
+                          ],
+                          child: const Text('It forgets its hub pairing and must be set up again. Bills already on the hub are kept.'),
+                        ),
+                      );
+                      if (ok != true || !context.mounted) return;
+                      switchUser(context, ref);
+                      await ref.read(setupProvider.notifier).reset();
+                    },
+                  ),
+                ],
               ]),
             ),
-          )
-        else
-          const EmptyState(title: 'Not running as hub', message: 'This device is paired to another hub.'),
-        const SizedBox(height: HPSpace.lg),
-        if (api != null)
-          FutureBuilder<Json>(
-            future: api.syncStatus(),
-            builder: (c, s) => s.hasData
-                ? Wrap(spacing: HPSpace.sm, children: [
-                    StatusChip(label: '${s.data!['pending']} waiting to sync', tone: (s.data!['pending'] as int) > 0 ? HPTone.saffron : HPTone.success),
-                    StatusChip(label: '${s.data!['failed']} failed', tone: (s.data!['failed'] as int) > 0 ? HPTone.danger : HPTone.neutral),
-                    StatusChip(label: '${s.data!['pushed']} synced', tone: HPTone.success),
-                  ])
-                : const LoadingState(),
           ),
-        if (ref.watch(sessionProvider)?.can('device.manage') ?? false) ...[
-          const SizedBox(height: HPSpace.x2),
-          DangerButton(
-            label: 'Reset this device',
-            onPressed: () async {
-              final ok = await showDialog<bool>(
-                context: context,
-                builder: (c) => HPDialog(
-                  title: 'Reset this device?',
-                  actions: [
-                    SecondaryButton(label: 'Cancel', onPressed: () => Navigator.pop(c)),
-                    DangerButton(label: 'Reset', onPressed: () => Navigator.pop(c, true)),
-                  ],
-                  child: const Text('It forgets its hub pairing and must be set up again. Bills already on the hub are kept.'),
-                ),
-              );
-              if (ok != true || !context.mounted) return;
-              ref.read(sessionProvider.notifier).state = null;
-              Navigator.of(context).popUntil((r) => r.isFirst);
-              await ref.read(setupProvider.notifier).reset();
-            },
-          ),
-        ],
+        ),
       ]),
     );
   }
 }
 
-/// S3 Staff login: user tiles + PIN pad.
+/// S3 Staff login: who is working (tiles with role colours) → PIN pad. A wrong PIN shakes the dots.
 class StaffLoginScreen extends ConsumerStatefulWidget {
   const StaffLoginScreen({super.key});
   @override
   ConsumerState<StaffLoginScreen> createState() => _StaffLoginScreenState();
 }
 
-class _StaffLoginScreenState extends ConsumerState<StaffLoginScreen> {
+class _StaffLoginScreenState extends ConsumerState<StaffLoginScreen> with SingleTickerProviderStateMixin {
   Json? _user;
   String _pin = '';
   String? _error;
   bool _busy = false;
+  late final AnimationController _shake;
+  Future<List<Json>>? _staff;
+
+  @override
+  void initState() {
+    super.initState();
+    _shake = AnimationController(vsync: this, duration: const Duration(milliseconds: 380));
+  }
+
+  @override
+  void dispose() {
+    _shake.dispose();
+    super.dispose();
+  }
 
   Future<void> _submit() async {
     final api = ref.read(hubApiProvider)!;
-    setState(() { _busy = true; _error = null; });
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     try {
       final r = await api.login(_user!['id'] as String, _pin);
+      final user = r['user'] as Map;
+      HapticFeedback.lightImpact();
       ref.read(sessionProvider.notifier).state = StaffSession(
-        userId: (r['user'] as Map)['id'] as String,
-        name: (r['user'] as Map)['name'] as String,
+        userId: user['id'] as String,
+        name: '${user['name']}'.split(' (').first,
         permissions: (r['permissions'] as List).cast<String>().toSet(),
+        roles: ((user['roles'] as List?) ?? (_user!['roles'] as List? ?? const [])).map((e) => '$e').toList(),
       );
     } catch (e) {
-      setState(() { _error = errText(e); _pin = ''; });
+      HapticFeedback.heavyImpact();
+      _shake.forward(from: 0);
+      if (mounted) {
+        setState(() {
+          _error = errText(e);
+          _pin = '';
+        });
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
+  void _key(String d) {
+    if (_pin.length >= 8) return;
+    setState(() {
+      _pin += d;
+      _error = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final api = ref.watch(hubApiProvider)!;
+    _staff ??= api.staff();
+    final p = context.hp;
+    final narrow = isNarrow(context);
     return Scaffold(
-      body: SafeArea(
-        child: Column(children: [
-          const StatusBar(showUser: false),
-          Expanded(
-            child: FutureBuilder<List<Json>>(
-              future: api.staff(),
-              builder: (c, s) {
-                if (s.hasError) return ErrorState(message: errText(s.error!), onRetry: () => setState(() {}));
-                if (!s.hasData) return const LoadingState();
-                return Center(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(HPSpace.x2),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 720),
-                      child: Column(children: [
-                        Text(_user == null ? 'Who is working?' : 'Hello, ${'${_user!['name']}'.split(' (').first}', style: HPType.titleScreen(HPColors.ghee), textAlign: TextAlign.center),
-                        SizedBox(height: isNarrow(context) ? HPSpace.lg : HPSpace.x2),
-                        if (_user == null)
-                          Wrap(spacing: isNarrow(context) ? HPSpace.sm : HPSpace.md, runSpacing: isNarrow(context) ? HPSpace.sm : HPSpace.md, alignment: WrapAlignment.center, children: [
-                            for (final u in s.data!)
-                              SizedBox(
-                                width: isNarrow(context) ? 100 : 160,
-                                child: Card(
-                                  child: InkWell(
-                                    key: Key('staff-${u['name']}'),
-                                    borderRadius: BorderRadius.circular(HPRadius.card),
-                                    onTap: () => setState(() => _user = u),
-                                    child: Padding(
-                                      padding: EdgeInsets.all(isNarrow(context) ? HPSpace.sm : HPSpace.lg),
-                                      child: Column(children: [
-                                        CircleAvatar(radius: isNarrow(context) ? 20 : 26, backgroundColor: HPColors.emberRaised, child: Text('${u['name']}'[0], style: HPType.titleCard(HPColors.saffron))),
-                                        const SizedBox(height: HPSpace.sm),
-                                        Text('${u['name']}'.split(' (').first, style: HPType.label(HPColors.ghee), overflow: TextOverflow.ellipsis),
-                                        Text((u['roles'] as List).map((r) => '$r'.replaceAll('_', ' ')).join(', '), style: HPType.body(HPColors.husk).copyWith(fontSize: 12), overflow: TextOverflow.ellipsis),
-                                      ]),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                          ])
-                        else
-                          SizedBox(
-                            width: 320,
-                            child: Column(children: [
-                              Text('•' * _pin.length + '○' * (4 - _pin.length).clamp(0, 4), key: const Key('pin-dots'), style: HPType.displayTotal(HPColors.saffron).copyWith(letterSpacing: 12)),
-                              if (_error != null) Text(_error!, style: HPType.body(HPColors.chili)),
-                              const SizedBox(height: HPSpace.lg),
-                              NumericKeypad(
-                                onKey: (d) => setState(() => _pin = _pin.length < 8 ? _pin + d : _pin),
-                                onBackspace: () => setState(() => _pin = _pin.isEmpty ? '' : _pin.substring(0, _pin.length - 1)),
-                                onClear: () => setState(() => _pin = ''),
-                              ),
-                              const SizedBox(height: HPSpace.lg),
-                              PrimaryButton(label: 'Sign in', busy: _busy, onPressed: _pin.length >= 4 ? _submit : null),
-                              TextButton(onPressed: () => setState(() { _user = null; _pin = ''; _error = null; }), child: const Text('Not you?')),
-                            ]),
-                          ),
-                      ]),
+      body: Column(children: [
+        PosTopBar(title: _user == null ? 'Sign in' : 'Enter your PIN', showUser: false),
+        Expanded(
+          child: FutureBuilder<List<Json>>(
+            future: _staff,
+            builder: (c, s) {
+              if (s.hasError) return ErrorState(message: errText(s.error!), onRetry: () => setState(() => _staff = api.staff()));
+              if (!s.hasData) return const LoadingState(label: 'Loading staff…');
+              return Center(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.all(narrow ? HPSpace.lg : HPSpace.x2),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 760),
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200),
+                      child: _user == null ? _pickUser(s.data!, p, narrow) : _pinPad(p),
                     ),
                   ),
-                );
-              },
-            ),
+                ),
+              );
+            },
           ),
-        ]),
-      ),
+        ),
+      ]),
     );
   }
-}
 
-/// S4 Status bar on every screen: hub online/offline, sync counts, role menu, signed-in user. Compact on phones.
-class StatusBar extends ConsumerWidget {
-  const StatusBar({super.key, this.showUser = true, this.title});
-  final bool showUser;
-  final String? title;
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final ev = ref.watch(hubEventsProvider);
-    final session = ref.watch(sessionProvider);
-    final setup = ref.watch(setupProvider).valueOrNull;
-    final online = !ev.hasError;
-    final narrow = isNarrow(context);
-    final canPop = Navigator.of(context).canPop();
-    return SafeArea(
-      bottom: false,
+  Widget _pickUser(List<Json> staff, HPPalette p, bool narrow) => Column(key: const ValueKey('pick'), children: [
+        Text('Who is working?', style: HPType.titleScreen(p.text), textAlign: TextAlign.center),
+        const SizedBox(height: HPSpace.xs),
+        Text('Tap your name, then enter your PIN', style: HPType.body(p.muted)),
+        SizedBox(height: narrow ? HPSpace.lg : HPSpace.x2),
+        if (staff.isEmpty) const EmptyState(title: 'No staff yet', message: 'The owner adds staff and PINs in the web console. They arrive here within a minute.', icon: Icons.badge_outlined),
+        Wrap(spacing: HPSpace.md, runSpacing: HPSpace.md, alignment: WrapAlignment.center, children: [
+          for (final u in staff)
+            SizedBox(
+              width: narrow ? 100 : 140,
+              child: Material(
+                color: p.surface,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(HPRadius.card), side: BorderSide(color: p.line)),
+                child: InkWell(
+                  key: Key('staff-${'${u['name']}'.split(' (').first}'),
+                  borderRadius: BorderRadius.circular(HPRadius.card),
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() {
+                      _user = u;
+                      _pin = '';
+                      _error = null;
+                    });
+                  },
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: narrow ? HPSpace.md : HPSpace.lg, horizontal: HPSpace.sm),
+                    child: Column(children: [
+                      _Avatar(name: '${u['name']}', role: (u['roles'] as List).isEmpty ? null : '${(u['roles'] as List).first}', radius: narrow ? 22 : 28),
+                      const SizedBox(height: HPSpace.sm),
+                      Text('${u['name']}'.split(' (').first, style: HPType.label(p.text), overflow: TextOverflow.ellipsis),
+                      Text(roleLabel(u['roles'] as List), style: HPType.body(p.muted).copyWith(fontSize: 12), overflow: TextOverflow.ellipsis),
+                    ]),
+                  ),
+                ),
+              ),
+            ),
+        ]),
+      ]);
+
+  Widget _pinPad(HPPalette p) {
+    final name = '${_user!['name']}'.split(' (').first;
+    return SizedBox(
+      key: const ValueKey('pin'),
+      width: 340,
       child: Column(children: [
-        Container(
-          height: 56,
-          padding: EdgeInsets.symmetric(horizontal: narrow ? HPSpace.xs : HPSpace.lg),
-          decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: HPColors.clayLine))),
-          child: Row(children: [
-            if (canPop) IconButton(tooltip: 'Back', icon: const Icon(Icons.arrow_back_rounded), onPressed: () => Navigator.of(context).maybePop()),
-            Flexible(child: Text(title ?? 'House Plating', style: HPType.titleCard(HPColors.ghee), overflow: TextOverflow.ellipsis)),
-            SizedBox(width: narrow ? HPSpace.xs : HPSpace.lg),
-            if (narrow)
-              Tooltip(message: online ? 'Hub online' : 'Hub offline', child: Icon(online ? Icons.wifi_rounded : Icons.wifi_off_rounded, color: online ? HPColors.cardamom : HPColors.chili, size: 20))
-            else
-              StatusChip(label: online ? 'Hub online' : 'Hub offline', tone: online ? HPTone.success : HPTone.danger, icon: online ? Icons.wifi_rounded : Icons.wifi_off_rounded),
-            const SizedBox(width: HPSpace.xs),
-            _SyncChip(compact: narrow),
-            const Spacer(),
-            if ((setup?.isHub ?? false) && !narrow)
-              IconButton(tooltip: 'Hub status', icon: const Icon(Icons.router_rounded), onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HubStatusScreen()))),
-            if (showUser && session != null) ...[
-              const RoleMenuButton(),
-              if (!narrow) Text(session.name, style: HPType.label(HPColors.ghee)),
-              IconButton(key: const Key('switch-user'), tooltip: 'Switch user (${session.name})', icon: const Icon(Icons.logout_rounded), onPressed: () {
-                // close every open screen first, then sign out, so no screen rebuilds without a user
-                Navigator.of(context).popUntil((r) => r.isFirst);
-                ref.read(hubApiProvider)?.sessionToken = null;
-                ref.read(sessionProvider.notifier).state = null;
-              }),
+        _Avatar(name: name, role: (_user!['roles'] as List).isEmpty ? null : '${(_user!['roles'] as List).first}', radius: 34),
+        const SizedBox(height: HPSpace.md),
+        Text('Hello, $name', style: HPType.titleScreen(p.text).copyWith(fontSize: 26), textAlign: TextAlign.center),
+        const SizedBox(height: HPSpace.lg),
+        AnimatedBuilder(
+          animation: _shake,
+          builder: (c, child) => Transform.translate(offset: Offset(math.sin(_shake.value * math.pi * 6) * 10 * (1 - _shake.value), 0), child: child),
+          child: Row(
+            key: const Key('pin-dots'),
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var i = 0; i < math.max(4, _pin.length); i++)
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 120),
+                  margin: const EdgeInsets.symmetric(horizontal: 6),
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: i < _pin.length ? (_error != null ? p.danger : HPColors.saffron) : Colors.transparent,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: _error != null ? p.danger : p.outline, width: 2),
+                  ),
+                ),
             ],
-          ]),
+          ),
         ),
-        if (!online) const OfflineBanner(message: 'Kitchen hub offline — orders paused until it is back'),
+        SizedBox(height: 32, child: Center(child: _error == null ? null : Text(_error!, style: HPType.body(p.danger)))),
+        NumericKeypad(onKey: _key, onBackspace: () => setState(() => _pin = _pin.isEmpty ? '' : _pin.substring(0, _pin.length - 1)), onClear: () => setState(() => _pin = '')),
+        const SizedBox(height: HPSpace.lg),
+        PrimaryButton(label: 'Sign in', busy: _busy, onPressed: _pin.length >= 4 ? _submit : null),
+        TextButton(onPressed: () => setState(() => _user = null), child: const Text('Not you?')),
       ]),
     );
   }
 }
 
-class _SyncChip extends ConsumerWidget {
-  const _SyncChip({this.compact = false});
-  final bool compact;
+class _Avatar extends StatelessWidget {
+  const _Avatar({required this.name, required this.role, this.radius = 28});
+  final String name;
+  final String? role;
+  final double radius;
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    ref.watch(hubTickProvider);
-    final api = ref.watch(hubApiProvider);
-    if (api == null) return const SizedBox.shrink();
-    return FutureBuilder<Json>(
-      future: api.syncStatus(),
-      builder: (c, s) {
-        if (!s.hasData) return const SizedBox.shrink();
-        final pending = s.data!['pending'] as int, failed = s.data!['failed'] as int;
-        if (compact) {
-          final color = failed > 0 ? HPColors.chili : pending > 0 ? HPColors.saffron : HPColors.husk;
-          return Tooltip(
-            message: failed > 0 ? '$failed failed to sync' : pending > 0 ? '$pending waiting to sync' : 'All synced',
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(failed > 0 ? Icons.sync_problem_rounded : Icons.cloud_sync_rounded, size: 20, color: color),
-              if (failed + pending > 0) Text(' ${failed > 0 ? failed : pending}', style: HPType.body(color)),
-            ]),
-          );
-        }
-        if (failed > 0) return StatusChip(label: '$failed failed to sync', tone: HPTone.danger);
-        return StatusChip(label: pending > 0 ? '$pending waiting to sync' : 'All synced', tone: pending > 0 ? HPTone.saffron : HPTone.neutral, icon: Icons.cloud_sync_rounded);
-      },
+  Widget build(BuildContext context) {
+    final c = roleColor(context, role);
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: c, width: 2)),
+      child: CircleAvatar(
+        radius: radius,
+        backgroundColor: c.withValues(alpha: .18),
+        child: Text(name.characters.first.toUpperCase(), style: HPType.titleCard(context.hp.text).copyWith(fontSize: radius * .8)),
+      ),
     );
   }
 }

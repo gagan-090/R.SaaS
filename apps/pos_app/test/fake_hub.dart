@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:rsaas_core/rsaas_core.dart';
 import 'package:rsaas_pos/hub/hub_api.dart';
@@ -24,7 +25,7 @@ class FakeHubApi extends HubApi {
     {'id': 't2', 'floor_id': 'f1', 'name': '2', 'seats': 2},
   ];
   final items = [
-    {'id': 'i1', 'category_id': 'c1', 'name': 'Butter Chicken', 'price_paise': 34000, 'rate_bp': 500, 'available': 1, 'is_veg': 0, 'plate_colors': {'base': '#D9622B', 'sauce': '#F2C27B', 'garnish': '#4F8A3B'}},
+    {'id': 'i1', 'category_id': 'c1', 'name': 'Butter Chicken', 'price_paise': 34000, 'rate_bp': 500, 'available': 1, 'is_veg': 0, 'image_id': 'img-bc', 'plate_colors': {'base': '#D9622B', 'sauce': '#F2C27B', 'garnish': '#4F8A3B'}},
     {'id': 'i2', 'category_id': 'c1', 'name': 'Garlic Naan', 'price_paise': 6000, 'rate_bp': 500, 'available': 1, 'is_veg': 1, 'plate_colors': null},
   ];
   final orders = <String, Json>{};
@@ -65,7 +66,7 @@ class FakeHubApi extends HubApi {
       _ => ['floor.read', 'menu.read', 'order.read', 'kds.read', 'reports.read'], // auditor
     };
     _perms = perms.toSet();
-    return {'sessionToken': sessionToken, 'user': {'id': userId, 'name': u['name']}, 'permissions': perms};
+    return {'sessionToken': sessionToken, 'user': {'id': userId, 'name': u['name'], 'roles': u['roles']}, 'permissions': perms};
   }
 
   @override
@@ -75,10 +76,20 @@ class FakeHubApi extends HubApi {
       'floors': [{'id': 'f1', 'name': 'Ground'}],
       'tables': [
         for (final t in tables)
-          {...t, 'status': live.any((o) => o['table_id'] == t['id']) ? 'occupied' : 'free', 'orderId': live.where((o) => o['table_id'] == t['id']).firstOrNull?['id']},
+          () {
+            final o = live.where((o) => o['table_id'] == t['id']).firstOrNull;
+            return {
+              ...t,
+              'status': o == null ? 'free' : (o['status'] == 'billed' ? 'bill_printed' : 'occupied'),
+              'orderId': o?['id'],
+              'totalPaise': o == null ? null : (_orderView(o['id'] as String)['totals'] as Json)['totalPaise'],
+              'openedAt': o?['opened_at'],
+              'waiterName': staffList.where((u) => u['id'] == o?['waiter_id']).firstOrNull?['name'],
+            };
+          }(),
       ],
-      'openOrders': live,
-      'kds': [],
+      'openOrders': [for (final o in live) {...o, 'total_paise': (_orderView(o['id'] as String)['totals'] as Json)['totalPaise'], 'item_count': (o['lines'] as List).length}],
+      'kds': tickets.where((k) => k['status'] != 'served').toList(),
     };
   }
 
@@ -86,12 +97,22 @@ class FakeHubApi extends HubApi {
   Future<Json> menu() async => {'categories': [{'id': 'c1', 'name': 'Mains'}], 'items': items};
 
   @override
+  Future<Json> branch() async => {'tenant': {'name': 'Demo Dhaba'}, 'branch': {'name': 'Demo Dhaba — MG Road', 'code': 'BR01'}};
+
+  final mediaRequests = <String>[];
+  @override
+  Future<Uint8List?> media(String id) async {
+    mediaRequests.add(id);
+    return null; // no photo bytes in tests: the plate illustration shows
+  }
+
+  @override
   Future<Json> openOrder({required String type, String? tableId, String? waiterId}) async {
     if (tableId != null && orders.values.any((o) => o['table_id'] == tableId && (o['status'] == 'open' || o['status'] == 'billed'))) {
       throw HubApiException(409, 'table_occupied', 'Table already has an open order');
     }
     final id = _id('o');
-    orders[id] = {'id': id, 'type': type, 'table_id': tableId, 'waiter_id': waiterId, 'status': 'open', 'version': 1, 'lines': <Json>[]};
+    orders[id] = {'id': id, 'type': type, 'table_id': tableId, 'waiter_id': waiterId, 'status': 'open', 'version': 1, 'lines': <Json>[], 'opened_at': DateTime.now().toUtc().toIso8601String()};
     events$.add({'type': 'table.status_changed'});
     return _orderView(id);
   }
@@ -116,6 +137,7 @@ class FakeHubApi extends HubApi {
   @override
   Future<Json> updateLine(String orderId, String lineId, {int? qty, String? notes}) async {
     _line(orderId, lineId)['qty'] = qty ?? _line(orderId, lineId)['qty'];
+    if (notes != null) _line(orderId, lineId)['notes'] = notes;
     return _orderView(orderId);
   }
 
@@ -242,6 +264,7 @@ class FakeHubApi extends HubApi {
     if (s.settled) {
       b['status'] = 'paid';
       orders[b['order_id']]!['status'] = 'paid';
+      events$.add({'type': 'bill.paid', 'data': {'billId': billId, 'orderId': b['order_id']}});
     }
     return _paid[idempotencyKey] = r;
   }

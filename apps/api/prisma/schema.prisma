@@ -21,21 +21,21 @@ enum AdminStatus {
 }
 
 model PlatformAdmin {
-  id                String              @id @default(uuid(7)) @db.Uuid
-  email             String              @unique
-  name              String
-  passwordHash      String?             @map("password_hash")
-  status            AdminStatus         @default(invited)
-  failedLoginCount  Int                 @default(0) @map("failed_login_count")
-  lockedUntil       DateTime?           @map("locked_until") @db.Timestamptz(3)
-  lastLoginAt       DateTime?           @map("last_login_at") @db.Timestamptz(3)
-  inviteTokenHash   String?             @unique @map("invite_token_hash")
-  inviteExpiresAt   DateTime?           @map("invite_expires_at") @db.Timestamptz(3)
-  invitedById       String?             @map("invited_by_id") @db.Uuid
-  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
-  roles             PlatformAdminRole[]
-  mfa               MFAEnrollment?      @relation("AdminMfa")
+  id               String              @id @default(uuid(7)) @db.Uuid
+  email            String              @unique
+  name             String
+  passwordHash     String?             @map("password_hash")
+  status           AdminStatus         @default(invited)
+  failedLoginCount Int                 @default(0) @map("failed_login_count")
+  lockedUntil      DateTime?           @map("locked_until") @db.Timestamptz(3)
+  lastLoginAt      DateTime?           @map("last_login_at") @db.Timestamptz(3)
+  inviteTokenHash  String?             @unique @map("invite_token_hash")
+  inviteExpiresAt  DateTime?           @map("invite_expires_at") @db.Timestamptz(3)
+  invitedById      String?             @map("invited_by_id") @db.Uuid
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  roles            PlatformAdminRole[]
+  mfa              MFAEnrollment?      @relation("AdminMfa")
 
   @@map("platform_admins")
 }
@@ -44,7 +44,7 @@ model PlatformRole {
   id          String              @id @default(uuid(7)) @db.Uuid
   name        String              @unique
   description String?
-  permissions String[]            // Permission.key values (tier = platform)
+  permissions String[] // Permission.key values (tier = platform)
   isSystem    Boolean             @default(false) @map("is_system")
   createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
   admins      PlatformAdminRole[]
@@ -159,19 +159,19 @@ enum TenantStatus {
 
 // Registration before the owner's email is verified. Not tenant-scoped (no tenant exists yet).
 model RestaurantRegistration {
-  id              String    @id @default(uuid(7)) @db.Uuid
-  ownerEmail      String    @map("owner_email")
-  ownerName       String    @map("owner_name")
-  restaurantName  String    @map("restaurant_name")
-  gstin           String?
-  address         String?
-  planCode        String    @map("plan_code")
-  tokenHash       String    @unique @map("token_hash")
-  expiresAt       DateTime  @map("expires_at") @db.Timestamptz(3)
-  verifiedAt      DateTime? @map("verified_at") @db.Timestamptz(3)
-  tenantId        String?   @map("tenant_id") @db.Uuid
-  createdById     String    @map("created_by_id") @db.Uuid
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  id             String    @id @default(uuid(7)) @db.Uuid
+  ownerEmail     String    @map("owner_email")
+  ownerName      String    @map("owner_name")
+  restaurantName String    @map("restaurant_name")
+  gstin          String?
+  address        String?
+  planCode       String    @map("plan_code")
+  tokenHash      String    @unique @map("token_hash")
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(3)
+  verifiedAt     DateTime? @map("verified_at") @db.Timestamptz(3)
+  tenantId       String?   @map("tenant_id") @db.Uuid
+  createdById    String    @map("created_by_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@index([ownerEmail])
   @@map("restaurant_registrations")
@@ -193,6 +193,7 @@ model RestaurantTenant {
   branches     Branch[]
   licenses     License[]
   users        User[]
+  media        Media[]
 
   @@map("restaurant_tenants")
 }
@@ -445,17 +446,17 @@ enum OrderStatus {
 }
 
 model Order {
-  id        String      @id @db.Uuid
-  tenantId  String      @map("tenant_id") @db.Uuid
-  branchId  String      @map("branch_id") @db.Uuid
-  type      OrderType
-  tableId   String?     @map("table_id") @db.Uuid
-  waiterId  String?     @map("waiter_id") @db.Uuid
-  status    OrderStatus
-  openedBy  String      @map("opened_by") @db.Uuid
-  openedAt  DateTime    @map("opened_at") @db.Timestamptz(3)
-  version   Int
-  lines     OrderLine[]
+  id       String      @id @db.Uuid
+  tenantId String      @map("tenant_id") @db.Uuid
+  branchId String      @map("branch_id") @db.Uuid
+  type     OrderType
+  tableId  String?     @map("table_id") @db.Uuid
+  waiterId String?     @map("waiter_id") @db.Uuid
+  status   OrderStatus
+  openedBy String      @map("opened_by") @db.Uuid
+  openedAt DateTime    @map("opened_at") @db.Timestamptz(3)
+  version  Int
+  lines    OrderLine[]
 
   @@index([tenantId, branchId])
   @@map("orders")
@@ -633,16 +634,30 @@ model SyncEvent {
 }
 
 model SyncConflict {
-  id         String    @id @default(uuid(7)) @db.Uuid
-  tenantId   String    @map("tenant_id") @db.Uuid
-  branchId   String    @map("branch_id") @db.Uuid
-  eventId    String    @unique @map("event_id") @db.Uuid
+  id         String   @id @default(uuid(7)) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  branchId   String   @map("branch_id") @db.Uuid
+  eventId    String   @unique @map("event_id") @db.Uuid
   reason     String
   payload    Json
-  detectedAt DateTime  @default(now()) @map("detected_at") @db.Timestamptz(3)
-  resolvedBy String?   @map("resolved_by") @db.Uuid
+  detectedAt DateTime @default(now()) @map("detected_at") @db.Timestamptz(3)
+  resolvedBy String?  @map("resolved_by") @db.Uuid
   resolution String?
 
   @@index([tenantId, branchId])
   @@map("sync_conflicts")
+}
+
+/// Menu photo bytes (resized by the console before upload). Served publicly by unguessable id at GET /media/:id.
+model Media {
+  id          String           @id @default(uuid(7)) @db.Uuid
+  tenantId    String           @map("tenant_id") @db.Uuid
+  contentType String           @map("content_type")
+  bytes       Bytes
+  sizeBytes   Int              @map("size_bytes")
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  tenant      RestaurantTenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@map("media")
 }

@@ -178,8 +178,16 @@ class FakeCloud {
   Map<String, Object?>? pullBody;
   String? lastSince;
 
+  final media = <String, List<int>>{};
+  int mediaFetches = 0;
+
   http.Client client() => MockClient((req) async {
         if (offline) throw const SocketException('network unreachable');
+        if (req.url.path.contains('/media/')) {
+          mediaFetches++;
+          final bytes = media[req.url.pathSegments.last];
+          return bytes == null ? http.Response('', 404) : http.Response.bytes(bytes, 200, headers: {'content-type': 'image/png'});
+        }
         if (req.url.path.endsWith('/sync/pull')) {
           lastSince = req.url.queryParameters['since'];
           return http.Response.bytes(utf8.encode(jsonEncode(pullBody ?? {})), 200, headers: {'content-type': 'application/json; charset=utf-8'});

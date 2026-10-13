@@ -63,3 +63,129 @@ extension HPToneColors on HPTone {
       };
   Color get tint => Color.lerp(color, Colors.white, .35)!;
 }
+
+/// Semantic colours for the current theme (STYLE.md §2–3). Screens read these through `context.hp` so the same
+/// widget works in Midnight Masala (dark) and Daylight (light) and follows the device setting.
+@immutable
+class HPPalette extends ThemeExtension<HPPalette> {
+  const HPPalette({
+    required this.ground,
+    required this.surface,
+    required this.raised,
+    required this.line,
+    required this.outline,
+    required this.text,
+    required this.muted,
+    required this.faint,
+    required this.accent,
+    required this.onAccent,
+    required this.accentInk,
+    required this.success,
+    required this.danger,
+    required this.pending,
+    required this.note,
+    required this.brand,
+    required this.onBrand,
+    required this.sidebar,
+    required this.isDark,
+  });
+
+  /// Page background.
+  final Color ground;
+
+  /// Cards, panels, inputs.
+  final Color surface;
+
+  /// Chips, keys, hover, selected rows.
+  final Color raised;
+  final Color line;
+  final Color outline;
+  final Color text;
+  final Color muted;
+  final Color faint;
+
+  /// Saffron: fills (with [onAccent] text) — the one primary action per region.
+  final Color accent;
+  final Color onAccent;
+
+  /// Accent used as text/icons on [ground]; darker on light so contrast stays ≥ 4.5:1.
+  final Color accentInk;
+  final Color success;
+  final Color danger;
+  final Color pending;
+
+  /// Kitchen notes ("less spicy").
+  final Color note;
+
+  /// Back-office brand (wine) and the text on it.
+  final Color brand;
+  final Color onBrand;
+  final Color sidebar;
+  final bool isDark;
+
+  /// Midnight Masala — service, dark.
+  static const serviceDark = HPPalette(
+    ground: HPColors.espresso, surface: HPColors.ember, raised: HPColors.emberRaised, line: HPColors.clayLine, outline: HPColors.outline,
+    text: HPColors.ghee, muted: HPColors.husk, faint: HPColors.smoke, accent: HPColors.saffron, onAccent: HPColors.onSaffron,
+    accentInk: HPColors.saffron, success: HPColors.cardamom, danger: HPColors.chili, pending: HPColors.jamun, note: HPColors.saffronTint,
+    brand: HPColors.saffron, onBrand: HPColors.onSaffron, sidebar: HPColors.kitchen, isDark: true,
+  );
+
+  /// Daylight — service, light (same layout, paper ground; saffron stays the fill, text accents darken for contrast).
+  static const serviceLight = HPPalette(
+    ground: HPColors.paper, surface: HPColors.paperCard, raised: Color(0xFFF3EADB), line: HPColors.paperLine, outline: Color(0xFFCDBDA4),
+    text: HPColors.ink, muted: HPColors.inkMuted, faint: Color(0xFF9A8B7C), accent: HPColors.saffron, onAccent: HPColors.onSaffron,
+    accentInk: Color(0xFF9A5A00), success: Color(0xFF3E7D46), danger: Color(0xFFC2402B), pending: Color(0xFF7B52A8), note: Color(0xFF9A5A00),
+    brand: HPColors.saffron, onBrand: HPColors.onSaffron, sidebar: Color(0xFFF3EADB), isDark: false,
+  );
+
+  /// Back office, light (wine brand).
+  static const backOfficeLight = HPPalette(
+    ground: HPColors.paper, surface: HPColors.paperCard, raised: Color(0xFFF3EADB), line: HPColors.paperLine, outline: Color(0xFFCDBDA4),
+    text: HPColors.ink, muted: HPColors.inkMuted, faint: Color(0xFF9A8B7C), accent: HPColors.wine, onAccent: HPColors.paper,
+    accentInk: HPColors.wine, success: Color(0xFF3E7D46), danger: Color(0xFFC2402B), pending: Color(0xFF7B52A8), note: Color(0xFF9A5A00),
+    brand: HPColors.wine, onBrand: HPColors.paper, sidebar: HPColors.wineDeep, isDark: false,
+  );
+
+  /// Back office, dark (follows the device at night).
+  static const backOfficeDark = HPPalette(
+    ground: Color(0xFF120B0C), surface: Color(0xFF1C1314), raised: Color(0xFF281B1D), line: Color(0xFF3A2A2C), outline: Color(0xFF4D3A3D),
+    text: HPColors.ghee, muted: HPColors.husk, faint: HPColors.smoke, accent: HPColors.saffron, onAccent: HPColors.onSaffron,
+    accentInk: HPColors.saffron, success: HPColors.cardamom, danger: HPColors.chili, pending: HPColors.jamun, note: HPColors.saffronTint,
+    brand: Color(0xFFD9707F), onBrand: Color(0xFF1E0A0E), sidebar: Color(0xFF0C0708), isDark: true,
+  );
+
+  /// Status colour for a tone in this palette (darker on light grounds).
+  Color tone(HPTone t) => switch (t) {
+        HPTone.neutral => muted,
+        HPTone.saffron => isDark ? accent : accentInk,
+        HPTone.success => success,
+        HPTone.danger => danger,
+        HPTone.pending => pending,
+      };
+
+  @override
+  HPPalette copyWith({Color? ground, Color? surface, Color? accent}) => HPPalette(
+        ground: ground ?? this.ground, surface: surface ?? this.surface, raised: raised, line: line, outline: outline, text: text, muted: muted,
+        faint: faint, accent: accent ?? this.accent, onAccent: onAccent, accentInk: accentInk, success: success, danger: danger, pending: pending,
+        note: note, brand: brand, onBrand: onBrand, sidebar: sidebar, isDark: isDark,
+      );
+
+  @override
+  HPPalette lerp(HPPalette? other, double t) {
+    if (other == null) return this;
+    Color l(Color a, Color b) => Color.lerp(a, b, t)!;
+    return HPPalette(
+      ground: l(ground, other.ground), surface: l(surface, other.surface), raised: l(raised, other.raised), line: l(line, other.line),
+      outline: l(outline, other.outline), text: l(text, other.text), muted: l(muted, other.muted), faint: l(faint, other.faint),
+      accent: l(accent, other.accent), onAccent: l(onAccent, other.onAccent), accentInk: l(accentInk, other.accentInk),
+      success: l(success, other.success), danger: l(danger, other.danger), pending: l(pending, other.pending), note: l(note, other.note),
+      brand: l(brand, other.brand), onBrand: l(onBrand, other.onBrand), sidebar: l(sidebar, other.sidebar), isDark: t < .5 ? isDark : other.isDark,
+    );
+  }
+}
+
+extension HPContext on BuildContext {
+  /// The House Plating palette of the current theme (dark service palette if a screen is built without HPTheme).
+  HPPalette get hp => Theme.of(this).extension<HPPalette>() ?? HPPalette.serviceDark;
+}

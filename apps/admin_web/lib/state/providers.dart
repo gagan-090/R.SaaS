@@ -29,6 +29,10 @@ class SignedIn extends AuthState {
   final Map<String, dynamic> me;
   Set<String> get permissions => ((me['permissions'] as List?) ?? const []).cast<String>().toSet();
   bool can(String p) => permissions.contains(p);
+
+  /// Restaurant user (owner / IT admin …) rather than a platform administrator.
+  bool get isRestaurant => me['type'] == 'user';
+  List<String> get roles => ((me['roles'] as List?) ?? const []).cast<String>();
 }
 
 class AuthNotifier extends Notifier<AuthState> with ChangeNotifier {

@@ -209,7 +209,11 @@ class HubService {
     await db.execute('INSERT INTO sessions(token_hash, user_id, device_id, created_at, expires_at) VALUES (?,?,?,?,?)',
         [sha256Hex(token), userId, deviceId, nowIso(clock()), nowIso(clock().add(const Duration(hours: 12)))]);
     final roles = (jsonDecode(u['roles_json']! as String) as List).cast<Map<String, Object?>>();
-    return {'sessionToken': token, 'user': {'id': userId, 'name': u['name']}, 'permissions': permissionsFor(roles).toList()..sort()};
+    return {
+      'sessionToken': token,
+      'user': {'id': userId, 'name': u['name'], 'roles': [for (final r in roles) r['role']]},
+      'permissions': permissionsFor(roles).toList()..sort(),
+    };
   }
 
   Future<Actor> authenticate(String? deviceToken, String? sessionToken) async {
@@ -261,8 +265,8 @@ class HubService {
       }
       for (final r in rows('items')) {
         await db.execute(
-          'INSERT OR REPLACE INTO items(id, category_id, name, price_paise, tax_rule_id, available, is_veg, plate_colors, deleted) VALUES (?,?,?,?,?,?,?,?,?)',
-          [r['id'], r['categoryId'], r['name'], r['pricePaise'], r['taxRuleId'], b(r['available']), b(r['isVeg']), r['plateColors'] == null ? null : jsonEncode(r['plateColors']), b(r['deleted'])],
+          'INSERT OR REPLACE INTO items(id, category_id, name, price_paise, tax_rule_id, available, is_veg, plate_colors, deleted, image_id) VALUES (?,?,?,?,?,?,?,?,?,?)',
+          [r['id'], r['categoryId'], r['name'], r['pricePaise'], r['taxRuleId'], b(r['available']), b(r['isVeg']), r['plateColors'] == null ? null : jsonEncode(r['plateColors']), b(r['deleted']), r['imageId']],
         );
       }
       for (final r in rows('users')) {
@@ -320,7 +324,7 @@ class HubService {
         'categories': await db.query('SELECT id, name, sort_order FROM categories WHERE deleted = 0 ORDER BY sort_order, name'),
         'items': [
           for (final i in await db.query(
-              'SELECT i.id, i.category_id, i.name, i.price_paise, i.available, i.is_veg, i.plate_colors, t.rate_bp FROM items i JOIN tax_rules t ON t.id = i.tax_rule_id WHERE i.deleted = 0 ORDER BY i.name'))
+              'SELECT i.id, i.category_id, i.name, i.price_paise, i.available, i.is_veg, i.plate_colors, i.image_id, t.rate_bp FROM items i JOIN tax_rules t ON t.id = i.tax_rule_id WHERE i.deleted = 0 ORDER BY i.name'))
             {...i, 'plate_colors': i['plate_colors'] == null ? null : jsonDecode(i['plate_colors']! as String)},
         ],
       };
@@ -337,15 +341,58 @@ class HubService {
         'branch': jsonDecode(await db.getMeta('branch') ?? '{}'),
       };
 
+  // ------------------------------------------------------------------ menu photos (cached for offline use)
+
+  /// Fetches a photo from the cloud by id; set by the sync worker. Null = offline / not available.
+  Future<({String contentType, Uint8List bytes})?> Function(String id)? mediaFetcher;
+
+  /// A menu photo: from the local cache, else fetched once from the cloud and cached.
+  Future<({String contentType, Uint8List bytes})?> media(String id) async {
+    final row = await db.selectOne('SELECT content_type, bytes FROM media_cache WHERE id = ?', [id]);
+    if (row != null) return (contentType: row['content_type']! as String, bytes: row['bytes']! as Uint8List);
+    final known = await db.selectOne('SELECT 1 AS x FROM items WHERE image_id = ?', [id]);
+    if (known == null || mediaFetcher == null) return null; // only photos of this restaurant's menu are proxied
+    final m = await mediaFetcher!(id);
+    if (m == null) return null;
+    await db.execute('INSERT OR REPLACE INTO media_cache(id, content_type, bytes, fetched_at) VALUES (?,?,?,?)', [id, m.contentType, m.bytes, nowIso(clock())]);
+    return m;
+  }
+
+  /// Photo ids on the live menu that are not cached yet (the sync worker prefetches them).
+  Future<List<String>> missingMedia() async => [
+        for (final r in await db.query('SELECT DISTINCT i.image_id AS id FROM items i LEFT JOIN media_cache m ON m.id = i.image_id WHERE i.deleted = 0 AND i.image_id IS NOT NULL AND m.id IS NULL'))
+          r['id']! as String,
+      ];
+
   Future<Map<String, Object?>> state() async {
-    final live = await db.query("SELECT * FROM orders WHERE status IN ('open','billed') ORDER BY opened_at");
+    final rawLive = await db.query("SELECT * FROM orders WHERE status IN ('open','billed') ORDER BY opened_at");
     final tables = await db.query('SELECT * FROM tables WHERE deleted = 0 ORDER BY floor_id, name');
+    final names = {for (final u in await db.query('SELECT id, name FROM users')) u['id']: u['name']};
+    // running total + item count per live order, so the table map shows money and progress at a glance
+    final live = <Map<String, Object?>>[];
+    for (final o in rawLive) {
+      final lines = await _lines(o['id']! as String);
+      final bill = o['status'] == 'billed' ? await db.selectOne('SELECT total_paise FROM bills WHERE order_id = ?', [o['id']]) : null;
+      live.add({
+        ...o,
+        'total_paise': bill?['total_paise'] ?? computeBill(_inputs(lines)).totalPaise,
+        'item_count': lines.where((l) => l['status'] != 'reversed').fold<int>(0, (n, l) => n + (l['qty']! as int)),
+        'waiter_name': names[o['waiter_id']],
+      });
+    }
     final byTable = {for (final o in live) if (o['table_id'] != null) o['table_id']: o};
     return {
       'floors': await db.query('SELECT * FROM floors WHERE deleted = 0 ORDER BY sort_order'),
       'tables': [
         for (final t in tables)
-          {...t, 'status': byTable[t['id']] == null ? 'free' : (byTable[t['id']]!['status'] == 'billed' ? 'bill_printed' : 'occupied'), 'orderId': byTable[t['id']]?['id']},
+          {
+            ...t,
+            'status': byTable[t['id']] == null ? 'free' : (byTable[t['id']]!['status'] == 'billed' ? 'bill_printed' : 'occupied'),
+            'orderId': byTable[t['id']]?['id'],
+            'totalPaise': byTable[t['id']]?['total_paise'],
+            'openedAt': byTable[t['id']]?['opened_at'],
+            'waiterName': byTable[t['id']]?['waiter_name'],
+          },
       ],
       'openOrders': live,
       'kds': await db.query("SELECT * FROM kitchen_tickets WHERE status <> 'served' ORDER BY created_at"),

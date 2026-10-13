@@ -104,10 +104,11 @@ final hubApiProvider = Provider<HubApi?>((ref) {
 
 /// Signed-in staff member on this terminal.
 class StaffSession {
-  const StaffSession({required this.userId, required this.name, required this.permissions});
+  const StaffSession({required this.userId, required this.name, required this.permissions, this.roles = const []});
   final String userId;
   final String name;
   final Set<String> permissions;
+  final List<String> roles;
   bool can(String p) => permissions.contains(p);
   bool get isKitchenOnly => !can('order.write') && can('kds.read');
 }

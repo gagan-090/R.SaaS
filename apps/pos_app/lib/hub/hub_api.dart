@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -27,6 +28,9 @@ abstract class HubApi {
   Future<List<Json>> staff();
   Future<Json> login(String userId, String pin);
   Future<Json> state();
+
+  /// Restaurant + branch header ({tenant: {name, gstin, address}, branch: {name, code}}).
+  Future<Json> branch();
   Future<Json> menu();
   Future<Json> openOrder({required String type, String? tableId, String? waiterId});
   Future<Json> order(String id);
@@ -41,6 +45,9 @@ abstract class HubApi {
   Future<List<Json>> bills(DateTime day);
   Future<Json> syncStatus();
   Stream<Json> events();
+
+  /// Menu photo bytes from the hub (cached there for offline use); null if there is none.
+  Future<Uint8List?> media(String id);
 
   // kitchen display (K1)
   Future<List<Json>> kdsTickets();
@@ -131,6 +138,8 @@ class HttpHubApi extends HubApi {
   @override
   Future<Json> state() async => await _send('GET', '/state') as Json;
   @override
+  Future<Json> branch() async => await _send('GET', '/branch') as Json;
+  @override
   Future<Json> menu() async => await _send('GET', '/menu') as Json;
   @override
   Future<Json> openOrder({required String type, String? tableId, String? waiterId}) async =>
@@ -164,6 +173,17 @@ class HttpHubApi extends HubApi {
       (await _send('GET', '/bills?date=${day.toIso8601String().substring(0, 10)}') as List).cast<Json>();
   @override
   Future<Json> syncStatus() async => await _send('GET', '/sync/status') as Json;
+
+  @override
+  Future<Uint8List?> media(String id) async {
+    final req = http.Request('GET', Uri.parse('$baseUrl/media/$id'))..headers.addAll(_h);
+    try {
+      final res = await http.Response.fromStream(await _http.send(req).timeout(const Duration(seconds: 15)));
+      return res.statusCode == 200 ? res.bodyBytes : null;
+    } catch (_) {
+      return null; // a missing photo never breaks the menu: the plate illustration shows instead
+    }
+  }
 
   @override
   Future<List<Json>> kdsTickets() async => (await _send('GET', '/kds/tickets') as List).cast<Json>();

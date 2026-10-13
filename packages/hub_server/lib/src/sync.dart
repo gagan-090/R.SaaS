@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -21,6 +22,14 @@ class CloudClient {
     final r = await _http.get(Uri.parse('$baseUrl/sync/pull?since=$since'), headers: _h).timeout(const Duration(seconds: 30));
     if (r.statusCode != 200) throw http.ClientException('pull failed: ${r.statusCode} ${r.body}');
     return jsonDecode(r.body) as Map<String, Object?>;
+  }
+
+  /// A public menu photo, or null if it is gone (404) — throws while offline so callers can retry later.
+  Future<({String contentType, Uint8List bytes})?> media(String id) async {
+    final r = await _http.get(Uri.parse('$baseUrl/media/$id')).timeout(const Duration(seconds: 20));
+    if (r.statusCode == 404) return null;
+    if (r.statusCode != 200) throw http.ClientException('media failed: ${r.statusCode}');
+    return (contentType: r.headers['content-type'] ?? 'image/jpeg', bytes: r.bodyBytes);
   }
 
   Future<List<Map<String, Object?>>> push(List<Map<String, Object?>> events) async {
@@ -109,6 +118,21 @@ class SyncWorker {
     await hub.applyConfig(body);
     await db.setMeta('last_pull_at', nowIso());
     _lastPull = DateTime.now();
+    hub.mediaFetcher ??= cloud.media;
+    await prefetchMedia();
+  }
+
+  /// Caches new menu photos right after a pull so the menu still has photos when the internet drops.
+  Future<int> prefetchMedia({int max = 40}) async {
+    var n = 0;
+    for (final id in (await hub.missingMedia()).take(max)) {
+      try {
+        if (await hub.media(id) != null) n++;
+      } catch (_) {
+        break; // offline: try again after the next pull
+      }
+    }
+    return n;
   }
 
   Future<void> tick() async {

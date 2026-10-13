@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:http/http.dart' as http;
 import 'package:rsaas_hub/rsaas_hub.dart';
 import 'package:test/test.dart';
 import 'package:web_socket_channel/io.dart';
@@ -405,6 +406,29 @@ void main() {
       expect(cloud.lastSince, '42');
       expect(await h.hub.db.getMeta('last_pull_at'), isNotNull);
     });
+  });
+
+  test('menu photos: prefetched after a pull, served by the hub, still there when the cloud is offline', () async {
+    const photo = 'a1b2c3d4-0000-7000-8000-00000000f070';
+    final pull = await h.configPull();
+    final items = (pull['items']! as List).cast<Map<String, Object?>>();
+    items.first['imageId'] = photo;
+    final cloud = FakeCloud()
+      ..pullBody = pull
+      ..media[photo] = [0x89, 0x50, 0x4e, 0x47, 1, 2, 3];
+    final worker = SyncWorker(h.hub.db, h.hub, CloudClient('http://cloud', 'dev-token', client: cloud.client()));
+    await worker.pullOnce();
+    expect(cloud.mediaFetches, 1, reason: 'prefetched right after the pull');
+    final menu = (await h.get('/menu')).json;
+    expect((menu['items']! as List).cast<Map<String, Object?>>().firstWhere((i) => i['id'] == items.first['id'])['image_id'], photo);
+    cloud.offline = true;
+    final r = await http.get(Uri.parse('${h.base}/media/$photo'), headers: h.headers());
+    expect(r.statusCode, 200);
+    expect(r.headers['content-type'], 'image/png');
+    expect(r.bodyBytes, [0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+    expect(cloud.mediaFetches, 1, reason: 'served from the cache');
+    expect((await http.get(Uri.parse('${h.base}/media/not-on-our-menu'), headers: h.headers())).statusCode, 404);
+    expect((await http.get(Uri.parse('${h.base}/media/$photo'))).statusCode, 401, reason: 'paired devices only');
   });
 
   test('WebSocket: snapshot on connect, then live events', () async {

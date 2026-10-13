@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
@@ -6,6 +8,8 @@ Widget host(Widget child, {bool dark = true}) => MaterialApp(
       theme: dark ? HPTheme.service() : HPTheme.backOffice(),
       home: Scaffold(body: Center(child: child)),
     );
+
+Widget hostTheme(Widget child, ThemeData theme) => MaterialApp(theme: theme, home: Scaffold(body: Center(child: child)));
 
 void main() {
   setUpAll(() => HPType.useGoogleFonts = false);
@@ -83,5 +87,67 @@ void main() {
     expect(formatPaise(12345678), '₹1,23,456.78');
     expect(formatPaise(100000000), '₹10,00,000.00');
     expect(formatPaise(-5), '−₹0.05');
+  });
+
+  test('every theme carries its palette; light grounds keep text contrast ≥ 4.5:1', () {
+    double contrast(Color a, Color b) {
+      final la = a.computeLuminance(), lb = b.computeLuminance();
+      return (math.max(la, lb) + .05) / (math.min(la, lb) + .05);
+    }
+
+    for (final (theme, dark) in [
+      (HPTheme.service(), true),
+      (HPTheme.service(brightness: Brightness.light), false),
+      (HPTheme.backOffice(), false),
+      (HPTheme.backOffice(brightness: Brightness.dark), true),
+    ]) {
+      final p = theme.extension<HPPalette>()!;
+      expect(p.isDark, dark);
+      expect(theme.brightness, dark ? Brightness.dark : Brightness.light);
+      expect(contrast(p.text, p.ground), greaterThan(4.5));
+      expect(contrast(p.muted, p.ground), greaterThan(4.5), reason: 'secondary text stays readable');
+      expect(contrast(p.accentInk, p.ground), greaterThan(4.5), reason: 'accent used as text');
+      expect(contrast(HPColors.onSaffron, HPColors.saffron), greaterThan(4.5), reason: 'text on the saffron button');
+    }
+  });
+
+  testWidgets('dish card, KPI card, skeleton, search and count badge render in all four themes', (t) async {
+    for (final (i, theme) in [HPTheme.service(), HPTheme.service(brightness: Brightness.light), HPTheme.backOffice(), HPTheme.backOffice(brightness: Brightness.dark)].indexed) {
+      var taps = 0;
+      String? q;
+      await t.pumpWidget(hostTheme(
+        SizedBox(
+          width: 360,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            SizedBox(
+              width: 170,
+              height: 180,
+              child: DishCard(name: 'Butter Chicken', price: '₹340', isVeg: false, base: const Color(0xFFD9622B), sauce: const Color(0xFFF2C27B), garnish: const Color(0xFF4F8A3B), qty: 2, onTap: () => taps++),
+            ),
+            const KpiCard(label: 'Sales today', value: '₹9,000', caption: '18 bills', icon: Icons.currency_rupee_rounded),
+            const SkeletonBox(height: 20),
+            HPSearchField(onChanged: (v) => q = v),
+            const CountBadge(3),
+            const TableTile(name: '4', seats: 4, state: TableState.ordering, runningTotal: '₹420', minutesSeated: 12, caption: 'Anita', expand: false),
+          ]),
+        ),
+        theme,
+      ));
+      await t.pump(const Duration(milliseconds: 200));
+      await t.tap(find.text('Butter Chicken'));
+      expect(taps, 1);
+      expect(find.text('2'), findsOneWidget, reason: 'quantity badge on the dish card');
+      await t.enterText(find.byType(TextField), 'naan $i');
+      expect(q, 'naan $i');
+      expect(find.text('12 min · Anita'), findsOneWidget);
+    }
+  });
+
+  testWidgets('sold-out dish cannot be added', (t) async {
+    var taps = 0;
+    await t.pumpWidget(host(SizedBox(width: 180, height: 190, child: DishCard(name: 'Biryani', price: '₹320', isVeg: false, base: Colors.orange, sauce: Colors.brown, garnish: Colors.green, available: false, onTap: () => taps++))));
+    await t.tap(find.text('Biryani'));
+    expect(taps, 0);
+    expect(find.text('Sold out'), findsOneWidget);
   });
 }

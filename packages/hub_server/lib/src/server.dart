@@ -89,6 +89,12 @@ class HubServer {
       await _actor(q);
       return _json(await hub.menu());
     });
+    r.get('/media/<id>', (Request q, String id) async {
+      await _actor(q);
+      final m = await hub.media(id);
+      if (m == null) throw notFound('Image');
+      return Response.ok(m.bytes, headers: {'content-type': m.contentType, 'cache-control': 'private, max-age=86400'});
+    });
     r.get('/branch', (Request q) async {
       await _actor(q);
       return _json(await hub.branchInfo());

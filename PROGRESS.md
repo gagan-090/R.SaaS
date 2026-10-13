@@ -171,3 +171,22 @@ Test: `cd packages/hub_server && dart test` → **+39 passed** (+3 KDS/tips) and
 owner login → register-hub → pull → owner/cashier/waiter/chef/IT admin/auditor flows → **37 events pushed, 0 rejected, 0 conflicts**).
 Test: `cd apps/pos_app && flutter test` → **+19 passed** (13 new in `roles_test.dart`: every role at 1280×800, 360×740 and 411×891,
 no overflow; waiter→chef→waiter READY; IT admin printers; owner DUPLICATE reprint + adjustment; cashier adjustment needs owner PIN).
+
+### UI/UX overhaul, light + dark, Restaurant console, menu photos — (2026-10-13)
+- ui_kit: semantic palette (dark/light × service/back-office), theme builder with fade page transitions, floating toasts,
+  nav bar/rail, sheets; components press-scale + haptics; new DishCard (photo or plate, qty badge, sold-out), DishImage,
+  KpiCard, SectionHeader, HPSearchField, SkeletonBox/Grid, CountBadge; TableTile fills grid cells with total · minutes · waiter.
+- API: `console.controller.ts` — overview, sales dashboard from synced events, staff CRUD with PINs, devices list + revoke,
+  category rename/delete, dish delete, photo upload/remove, public `GET /media/:id`, floor delete; migration `20261013120000_media`.
+- Hub: items carry `image_id`, photos prefetched after each pull and served from `media_cache` (schema v3); table state has
+  running total, item count, waiter; PIN login returns roles.
+- Web: Restaurant console (dashboard with setup checklist, menu with photos, floors & tables, staff, hubs & devices,
+  settings) + Super Admin console in one app; responsive (sidebar ↔ drawer), light/dark by device.
+- POS: new shell (bottom bar / rail by role), top bar with hub + sync pill and user menu, table map with summary + takeaway
+  queue, order screen with search, photos, qty badges, kitchen notes, cart bar + order sheet on phones, receipt-style bill
+  screen with two-column payment, animated paid state, KDS columns with age bars, More tab, redesigned setup and PIN login.
+Test: API **84 passed** (+11 console) · hub **40 passed** (+photo cache) · ui_kit **9 passed** (palette contrast, components in 4 themes)
+· admin_web **20 passed** (console at 1440 light, 390 dark, 390 light) · pos_app **18 passed** (roles, cashier, waiter→chef→READY,
+printers/reprint/adjust at 1280×800 dark, 360×740 light, 411×891 dark; retry, reversal + PIN, notes). Bugs found by these tests
+and fixed: sort on a const list (empty floors), toast covering Bill & pay on tablets, stale Bills tab, overflows on 360 px
+(receipt header/total, printer titles, dish editor), keypads clipped in dialogs on 800-px screens, lazy animation in dispose.

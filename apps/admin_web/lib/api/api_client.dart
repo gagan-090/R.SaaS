@@ -130,4 +130,46 @@ class ApiClient {
         'page': '$page',
         'pageSize': '50',
       }) as Json;
+
+  // ---- restaurant console (owner / IT admin)
+  Future<Json> overview() async => await _send('GET', '/tenant/overview') as Json;
+  Future<Json> dashboard({int days = 7}) async => await _send('GET', '/tenant/dashboard', query: {'days': '$days'}) as Json;
+  Future<Json> profile() async => await _send('GET', '/tenant/profile') as Json;
+  Future<Json> updateProfile(Json body) async => await _send('PATCH', '/tenant/profile', body: body) as Json;
+
+  Future<List<dynamic>> taxRules() async => await _send('GET', '/tax-rules') as List<dynamic>;
+  Future<Json> createTaxRule(String name, int rateBp) async => await _send('POST', '/tax-rules', body: {'name': name, 'rateBp': rateBp}) as Json;
+  Future<List<dynamic>> categories() async => await _send('GET', '/menu/categories') as List<dynamic>;
+  Future<Json> createCategory(String name, {int sortOrder = 0}) async => await _send('POST', '/menu/categories', body: {'name': name, 'sortOrder': sortOrder}) as Json;
+  Future<Json> updateCategory(String id, Json body) async => await _send('PATCH', '/menu/categories/$id', body: body) as Json;
+  Future<void> deleteCategory(String id) async => _send('DELETE', '/menu/categories/$id');
+  Future<List<dynamic>> items() async => await _send('GET', '/menu/items') as List<dynamic>;
+  Future<Json> createItem(Json body) async => await _send('POST', '/menu/items', body: body) as Json;
+  Future<Json> updateItem(String id, Json body) async => await _send('PATCH', '/menu/items/$id', body: body) as Json;
+  Future<void> deleteItem(String id) async => _send('DELETE', '/menu/items/$id');
+  Future<Json> setItemImage(String id, String contentType, String dataBase64) async =>
+      await _send('PUT', '/menu/items/$id/image', body: {'contentType': contentType, 'dataBase64': dataBase64}) as Json;
+  Future<void> removeItemImage(String id) async => _send('DELETE', '/menu/items/$id/image');
+
+  /// Public URL of a menu photo (no auth needed; ids are unguessable).
+  String mediaUrl(String id) => '$_base/media/$id';
+
+  Future<List<dynamic>> floors() async => await _send('GET', '/floors') as List<dynamic>;
+  Future<Json> createFloor(String branchId, String name, {int sortOrder = 0}) async =>
+      await _send('POST', '/floors', body: {'branchId': branchId, 'name': name, 'sortOrder': sortOrder}) as Json;
+  Future<Json> updateFloor(String id, Json body) async => await _send('PATCH', '/floors/$id', body: body) as Json;
+  Future<void> deleteFloor(String id) async => _send('DELETE', '/floors/$id');
+  Future<Json> createTable(String floorId, String name, int seats) async => await _send('POST', '/tables', body: {'floorId': floorId, 'name': name, 'seats': seats}) as Json;
+  Future<Json> updateTable(String id, Json body) async => await _send('PATCH', '/tables/$id', body: body) as Json;
+  Future<void> deleteTable(String id) async => _send('DELETE', '/tables/$id');
+
+  Future<List<dynamic>> staff() async => await _send('GET', '/staff') as List<dynamic>;
+  Future<Json> createStaff(Json body) async => await _send('POST', '/staff', body: body) as Json;
+  Future<Json> updateStaff(String id, Json body) async => await _send('PATCH', '/staff/$id', body: body) as Json;
+
+  Future<List<dynamic>> devices() async => await _send('GET', '/devices') as List<dynamic>;
+  Future<Json> revokeDevice(String id, String reason) async => await _send('POST', '/devices/$id/revoke', body: {'reason': reason}) as Json;
+
+  /// Base URL the POS app should use for "This device is the hub".
+  String get baseUrl => _base;
 }

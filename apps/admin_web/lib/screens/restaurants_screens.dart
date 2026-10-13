@@ -65,7 +65,7 @@ class _Kpi extends StatelessWidget {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 StatusChip(label: label, tone: tone),
                 const SizedBox(height: HPSpace.md),
-                Text('${value ?? 0}', style: HPType.displayTotal(HPColors.ink)),
+                Text('${value ?? 0}', style: HPType.displayTotal(context.hp.text)),
               ]),
             ),
           ),
@@ -80,7 +80,7 @@ class _AuditRow extends StatelessWidget {
   Widget build(BuildContext context) => ListTile(
         dense: true,
         contentPadding: EdgeInsets.zero,
-        title: Text('${e['action']}', style: HPType.label(HPColors.ink)),
+        title: Text('${e['action']}', style: HPType.label(context.hp.text)),
         subtitle: Text('${e['actorType'] ?? 'system'} ${e['actorId'] ?? ''} · ${e['reason'] ?? ''}', maxLines: 1, overflow: TextOverflow.ellipsis),
         trailing: Text(shortDate(e['at'])),
       );
@@ -164,8 +164,8 @@ class _RestaurantsScreenState extends ConsumerState<RestaurantsScreen> {
                           rows: [
                             for (final r in items)
                               DataRow(onSelectChanged: (_) => c.go('/restaurants/${r['id']}'), cells: [
-                                DataCell(Text('${r['name']}', style: HPType.label(HPColors.ink))),
-                                DataCell(Text('${r['code']}', style: HPType.mono(HPColors.inkMuted))),
+                                DataCell(Text('${r['name']}', style: HPType.label(context.hp.text))),
+                                DataCell(Text('${r['code']}', style: HPType.mono(context.hp.muted))),
                                 DataCell(Text('${r['ownerEmail']}')),
                                 DataCell(Text('${r['plan'] ?? '—'}')),
                                 DataCell(StatusChip(label: '${r['status']}', tone: toneForStatus(r['status'] as String?))),
@@ -454,8 +454,8 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
   Widget _kv(String k, Object? v) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(width: 120, child: Text(k, style: HPType.body(HPColors.inkMuted))),
-          Expanded(child: Text(v == null || '$v'.isEmpty ? '—' : '$v', style: HPType.body(HPColors.ink))),
+          SizedBox(width: 120, child: Text(k, style: HPType.body(context.hp.muted))),
+          Expanded(child: Text(v == null || '$v'.isEmpty ? '—' : '$v', style: HPType.body(context.hp.text))),
         ]),
       );
 }
@@ -480,10 +480,10 @@ class _AuditListState extends ConsumerState<AuditList> {
           for (final e in (d['items'] as List).cast<Map<String, dynamic>>())
             ExpansionTile(
               tilePadding: EdgeInsets.zero,
-              title: Text('${e['action']}', style: HPType.label(HPColors.ink)),
+              title: Text('${e['action']}', style: HPType.label(context.hp.text)),
               subtitle: Text('${shortDate(e['at'])} · ${e['actorType'] ?? 'system'} ${e['actorId'] ?? ''}${e['reason'] != null ? ' · “${e['reason']}”' : ''}'),
               children: [
-                Align(alignment: Alignment.centerLeft, child: SelectableText('object: ${e['objectType']} ${e['objectId']}\nbefore: ${e['before']}\nafter:  ${e['after']}', style: HPType.mono(HPColors.inkMuted))),
+                Align(alignment: Alignment.centerLeft, child: SelectableText('object: ${e['objectType']} ${e['objectId']}\nbefore: ${e['before']}\nafter:  ${e['after']}', style: HPType.mono(context.hp.muted))),
               ],
             ),
         ]),
@@ -535,7 +535,7 @@ class PlansScreen extends ConsumerWidget {
                 child: SectionCard(title: '${p['name']} · ${formatPaise(p['pricePaise'] as int)}/${p['billingCycle']}', child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Wrap(spacing: 6, runSpacing: 6, children: [for (final f in (p['featureFlags'] as List)) Chip(label: Text('$f'), visualDensity: VisualDensity.compact)]),
                   const SizedBox(height: HPSpace.md),
-                  for (final e in (p['limits'] as Map).entries) Text('${e.key}: ${e.value ?? 'client'}', style: HPType.body(HPColors.inkMuted)),
+                  for (final e in (p['limits'] as Map).entries) Text('${e.key}: ${e.value ?? 'client'}', style: HPType.body(context.hp.muted)),
                 ])),
               ),
           ]),

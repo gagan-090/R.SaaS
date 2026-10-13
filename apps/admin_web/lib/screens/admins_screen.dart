@@ -32,7 +32,7 @@ class _AdminsScreenState extends ConsumerState<AdminsScreen> {
               CheckboxListTile(
                 value: selected.contains(r['id']),
                 title: Text('${r['name']}'),
-                subtitle: Text('${r['description'] ?? ''}\n${(r['permissions'] as List).join(', ')}', style: HPType.body(HPColors.inkMuted).copyWith(fontSize: 12)),
+                subtitle: Text('${r['description'] ?? ''}\n${(r['permissions'] as List).join(', ')}', style: HPType.body(context.hp.muted).copyWith(fontSize: 12)),
                 isThreeLine: true,
                 onChanged: (v) => set(() => v! ? selected.add(r['id'] as String) : selected.remove(r['id'])),
               ),
@@ -105,7 +105,7 @@ class _AdminsScreenState extends ConsumerState<AdminsScreen> {
               for (final a in admins.cast<Map<String, dynamic>>())
                 ListTile(
                   key: Key('admin-${a['email']}'),
-                  title: Text('${a['name']}  ·  ${a['email']}', style: HPType.label(HPColors.ink)),
+                  title: Text('${a['name']}  ·  ${a['email']}', style: HPType.label(context.hp.text)),
                   subtitle: Text((a['roles'] as List).map((r) => r['name']).join(', ')),
                   trailing: Wrap(spacing: HPSpace.sm, crossAxisAlignment: WrapCrossAlignment.center, children: [
                     StatusChip(label: '${a['status']}', tone: toneForStatus(a['status'] as String?)),

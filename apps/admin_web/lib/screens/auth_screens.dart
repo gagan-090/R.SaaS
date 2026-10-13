@@ -22,11 +22,20 @@ class _AuthFrame extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.all(HPSpace.x4),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    Text('SUPER ADMIN', style: HPType.overline(HPColors.wine)),
-                    const SizedBox(height: HPSpace.sm),
-                    Text(title, style: HPType.titleScreen(HPColors.ink)),
+                    Row(children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: const BoxDecoration(color: HPColors.saffron, shape: BoxShape.circle),
+                        child: const Icon(Icons.restaurant_rounded, size: 20, color: HPColors.onSaffron),
+                      ),
+                      const SizedBox(width: HPSpace.sm),
+                      Text('HOUSE PLATING', style: HPType.overline(context.hp.accentInk)),
+                    ]),
+                    const SizedBox(height: HPSpace.lg),
+                    Text(title, style: HPType.titleScreen(context.hp.text)),
                     const SizedBox(height: HPSpace.xs),
-                    Text(subtitle, style: HPType.body(HPColors.inkMuted)),
+                    Text(subtitle, style: HPType.body(context.hp.muted)),
                     const SizedBox(height: HPSpace.x2),
                     child,
                   ]),
@@ -71,7 +80,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) => _AuthFrame(
         title: 'Sign in',
-        subtitle: 'Restaurant SaaS platform console',
+        subtitle: 'Restaurant owners, IT admins and platform admins',
         child: Form(
           key: _form,
           child: AutofillGroup(
@@ -95,7 +104,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               if (_error != null) ...[
                 const SizedBox(height: HPSpace.md),
-                Text(_error!, key: const Key('login-error'), style: HPType.body(HPColors.chili)),
+                Text(_error!, key: const Key('login-error'), style: HPType.body(context.hp.danger)),
               ],
               const SizedBox(height: HPSpace.x2),
               PrimaryButton(label: 'Sign in', busy: _busy, onPressed: _submit),
@@ -147,10 +156,10 @@ class _MfaScreenState extends ConsumerState<MfaScreen> {
           autofocus: true,
           keyboardType: _recovery ? TextInputType.text : TextInputType.number,
           maxLength: _recovery ? 12 : 6,
-          style: HPType.titleCard(HPColors.ink).copyWith(letterSpacing: 6),
+          style: HPType.titleCard(context.hp.text).copyWith(letterSpacing: 6),
           decoration: InputDecoration(labelText: _recovery ? 'Recovery code' : 'Code'),
         ),
-        if (_error != null) Text(_error!, style: HPType.body(HPColors.chili)),
+        if (_error != null) Text(_error!, style: HPType.body(context.hp.danger)),
         const SizedBox(height: HPSpace.lg),
         PrimaryButton(
           label: 'Verify',
@@ -174,8 +183,8 @@ class _MfaScreenState extends ConsumerState<MfaScreen> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Container(
             padding: const EdgeInsets.all(HPSpace.lg),
-            decoration: BoxDecoration(color: HPColors.paper, borderRadius: BorderRadius.circular(14), border: Border.all(color: HPColors.paperLine)),
-            child: Wrap(spacing: HPSpace.x2, runSpacing: HPSpace.sm, children: [for (final c in _codes!) SelectableText(c, style: HPType.mono(HPColors.ink))]),
+            decoration: BoxDecoration(color: context.hp.raised, borderRadius: BorderRadius.circular(14), border: Border.all(color: context.hp.line)),
+            child: Wrap(spacing: HPSpace.x2, runSpacing: HPSpace.sm, children: [for (final c in _codes!) SelectableText(c, style: HPType.mono(context.hp.text))]),
           ),
           const SizedBox(height: HPSpace.x2),
           PrimaryButton(label: 'I have saved them', onPressed: () => _run(() => ref.read(authProvider.notifier).finishEnrollment())),
@@ -191,10 +200,10 @@ class _MfaScreenState extends ConsumerState<MfaScreen> {
         else ...[
           Center(child: QrImageView(data: _enroll!['otpauthUrl'] as String, size: 200, backgroundColor: Colors.white)),
           const SizedBox(height: HPSpace.sm),
-          SelectableText('Key: ${_enroll!['secret']}', textAlign: TextAlign.center, style: HPType.mono(HPColors.inkMuted)),
+          SelectableText('Key: ${_enroll!['secret']}', textAlign: TextAlign.center, style: HPType.mono(context.hp.muted)),
           const SizedBox(height: HPSpace.lg),
           TextField(controller: _code, keyboardType: TextInputType.number, maxLength: 6, decoration: const InputDecoration(labelText: 'Code from the app')),
-          if (_error != null) Text(_error!, style: HPType.body(HPColors.chili)),
+          if (_error != null) Text(_error!, style: HPType.body(context.hp.danger)),
           const SizedBox(height: HPSpace.md),
           PrimaryButton(label: 'Confirm', busy: _busy, onPressed: () => _run(() async {
                 final codes = await api.enrollConfirm(s.enrollmentToken, _code.text.trim());
