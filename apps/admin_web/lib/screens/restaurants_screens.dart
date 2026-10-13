@@ -9,7 +9,8 @@ import '../state/providers.dart';
 import '../widgets/common.dart';
 import '../widgets/labels.dart';
 
-/// P3 Dashboard: counts + recent audit events.
+/// P3 Super Admin dashboard: the platform at a glance (status counts, revenue), what needs attention today
+/// (owners who have not activated, licenses about to end), plans in use and the latest activity.
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
   @override
@@ -24,60 +25,161 @@ class DashboardScreen extends ConsumerWidget {
         api.restaurants(expiresBefore: in30),
         api.audit(),
         api.registrations(),
+        api.plans(),
       ]);
       return {
-        'active': r[0]['total'], 'suspended': r[1]['total'], 'blocked': r[2]['total'], 'expiring': r[3]['total'], 'audit': r[4]['items'],
-        'awaiting': (r[5]['counts'] as Map)['awaiting'],
+        'active': (r[0] as Map)['total'], 'suspended': (r[1] as Map)['total'], 'blocked': (r[2] as Map)['total'],
+        'expiring': (r[3] as Map)['total'], 'expiringItems': (r[3] as Map)['items'], 'audit': (r[4] as Map)['items'], 'awaiting': ((r[5] as Map)['counts'] as Map)['awaiting'], 'awaitingItems': (r[5] as Map)['items'], 'plans': r[6],
       };
     }
 
     return AsyncView<Map<String, dynamic>>(
       load: load,
-      builder: (c, d, _) => ListView(padding: const EdgeInsets.all(HPSpace.x4), children: [
-        Text('Dashboard', style: Theme.of(c).textTheme.headlineMedium),
-        const SizedBox(height: HPSpace.x2),
-        Wrap(spacing: HPSpace.lg, runSpacing: HPSpace.lg, children: [
-          _Kpi('Awaiting verification', d['awaiting'], HPTone.pending, () => c.go('/restaurants?status=pending')),
-          _Kpi('Active', d['active'], HPTone.success, () => c.go('/restaurants?status=active')),
-          _Kpi('Suspended', d['suspended'], HPTone.saffron, () => c.go('/restaurants?status=suspended')),
-          _Kpi('Blocked', d['blocked'], HPTone.danger, () => c.go('/restaurants?status=blocked')),
-          _Kpi('Expiring in 30 days', d['expiring'], HPTone.pending, () => c.go('/restaurants')),
-        ]),
-        const SizedBox(height: HPSpace.x2),
-        SectionCard(
-          title: 'Recent audit events',
-          actions: [TextButton(onPressed: () => c.go('/audit'), child: const Text('Open audit log'))],
-          child: Column(children: [for (final e in (d['audit'] as List).take(8)) _AuditRow(e as Map<String, dynamic>)]),
-        ),
-      ]),
+      builder: (c, d, reload) {
+        final p = context.hp;
+        final narrow = isNarrowWeb(context);
+        final plans = (d['plans'] as List).cast<Map<String, dynamic>>();
+        // monthly recurring revenue from the plans restaurants are on right now (yearly plans count 1/12 per month)
+        final mrr = plans.fold<int>(0, (s, x) => s + ((x['pricePaise'] as int) * ((x['activeLicenses'] as int?) ?? 0) ~/ (x['billingCycle'] == 'yearly' ? 12 : 1)));
+        final awaiting = (d['awaitingItems'] as List).cast<Map<String, dynamic>>();
+        final expiring = (d['expiringItems'] as List).cast<Map<String, dynamic>>();
+        final kpis = <Widget>[
+          _Kpi('Awaiting verification', d['awaiting'], HPTone.pending, Icons.mark_email_unread_outlined, () => c.go('/restaurants?status=pending')),
+          _Kpi('Active', d['active'], HPTone.success, Icons.storefront_outlined, () => c.go('/restaurants?status=active')),
+          _Kpi('Suspended', d['suspended'], HPTone.saffron, Icons.pause_circle_outline, () => c.go('/restaurants?status=suspended')),
+          _Kpi('Blocked', d['blocked'], HPTone.danger, Icons.block, () => c.go('/restaurants?status=blocked')),
+          _Kpi('Licenses ending in 30 days', d['expiring'], HPTone.pending, Icons.event_busy_outlined, () => c.go('/restaurants')),
+          _Kpi('Monthly revenue (plans)', formatPaise(mrr).replaceAll('.00', ''), HPTone.success, Icons.currency_rupee_rounded, () => c.go('/plans')),
+        ];
+        Widget section(String title, Widget child, {List<Widget> actions = const []}) => SectionCard(title: title, actions: actions, child: child);
+        final attention = section(
+          'Needs your attention',
+          Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            if (awaiting.isEmpty && expiring.isEmpty) Text('All clear — nothing waiting.', style: HPType.body(p.muted)),
+            for (final r in awaiting.take(4))
+              _AttentionRow(
+                icon: Icons.mark_email_unread_outlined,
+                tone: HPTone.pending,
+                title: '${r['restaurantName']}',
+                subtitle: 'Owner has not activated yet · ${r['ownerEmail']}',
+                onTap: () => c.go('/restaurants?status=pending'),
+              ),
+            for (final r in expiring.take(4))
+              _AttentionRow(
+                icon: Icons.event_busy_outlined,
+                tone: HPTone.saffron,
+                title: '${r['name']}',
+                subtitle: 'License ends ${shortDate(r['licenseEndsAt'])} · ${titleCase('${r['plan'] ?? ''}')}',
+                onTap: () => c.go('/restaurants/${r['id']}'),
+              ),
+          ]),
+        );
+        final planMix = section(
+          'Restaurants by plan',
+          Column(children: [
+            for (final pl in plans)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(children: [
+                  Expanded(child: Text('${pl['name']}', style: HPType.label(p.text), overflow: TextOverflow.ellipsis)),
+                  Text('${pl['activeLicenses'] ?? 0}', style: HPType.titleCard(p.text).copyWith(fontSize: 18)),
+                  const SizedBox(width: HPSpace.md),
+                  SizedBox(width: 96, child: Text('${formatPaise(pl['pricePaise'] as int).replaceAll('.00', '')}/${pl['billingCycle'] == 'yearly' ? 'yr' : 'mo'}', textAlign: TextAlign.right, style: HPType.body(p.muted))),
+                ]),
+              ),
+          ]),
+          actions: [TextButton(onPressed: () => c.go('/plans'), child: const Text('Plans'))],
+        );
+        final activity = section(
+          'Recent activity',
+          Column(children: [for (final e in (d['audit'] as List).take(8)) _AuditRow(e as Map<String, dynamic>)]),
+          actions: [TextButton(onPressed: () => c.go('/audit'), child: const Text('Audit log'))],
+        );
+        return RefreshIndicator(
+          onRefresh: () async => reload(),
+          child: PageFrame(
+            title: 'Dashboard',
+            subtitle: 'Your restaurants at a glance',
+            actions: [IconButton(tooltip: 'Refresh', onPressed: reload, icon: const Icon(Icons.refresh_rounded))],
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              LayoutBuilder(builder: (c2, box) {
+                final cols = box.maxWidth < 560 ? 2 : 3;
+                const gap = HPSpace.md;
+                final w = (box.maxWidth - gap * (cols - 1)) / cols;
+                return Wrap(spacing: gap, runSpacing: gap, children: [for (final k in kpis) SizedBox(width: w, child: k)]);
+              }),
+              const SizedBox(height: HPSpace.lg),
+              if (narrow) ...[attention, const SizedBox(height: HPSpace.lg), planMix, const SizedBox(height: HPSpace.lg), activity]
+              else
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Expanded(flex: 3, child: Column(children: [attention, const SizedBox(height: HPSpace.lg), activity])),
+                  const SizedBox(width: HPSpace.lg),
+                  Expanded(flex: 2, child: planMix),
+                ]),
+            ]),
+          ),
+        );
+      },
     );
   }
 }
 
 class _Kpi extends StatelessWidget {
-  const _Kpi(this.label, this.value, this.tone, this.onTap);
+  const _Kpi(this.label, this.value, this.tone, this.icon, this.onTap);
   final String label;
   final Object? value;
   final HPTone tone;
+  final IconData icon;
   final VoidCallback onTap;
   @override
-  Widget build(BuildContext context) => SizedBox(
-        width: 220,
-        child: Card(
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(HPRadius.card),
-            child: Padding(
-              padding: const EdgeInsets.all(HPSpace.x2),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                StatusChip(label: label, tone: tone),
-                const SizedBox(height: HPSpace.md),
-                Text('${value ?? 0}', style: HPType.displayTotal(context.hp.text)),
-              ]),
-            ),
-          ),
+  Widget build(BuildContext context) {
+    final p = context.hp;
+    final narrow = isNarrowWeb(context);
+    return Card(
+      key: Key('kpi-$label'),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: EdgeInsets.all(narrow ? HPSpace.md : HPSpace.lg),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(color: p.tone(tone).withValues(alpha: .14), borderRadius: BorderRadius.circular(10)),
+                child: Icon(icon, size: 18, color: p.tone(tone)),
+              ),
+              const Spacer(),
+              Icon(Icons.chevron_right_rounded, size: 18, color: p.faint),
+            ]),
+            const SizedBox(height: HPSpace.sm),
+            FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text('${value ?? 0}', style: HPType.displayTotal(p.text).copyWith(fontSize: narrow ? 28 : 34))),
+            Text(label, style: HPType.body(p.muted).copyWith(fontSize: narrow ? 12.5 : 14), maxLines: 2, overflow: TextOverflow.ellipsis),
+          ]),
         ),
-      );
+      ),
+    );
+  }
+}
+
+class _AttentionRow extends StatelessWidget {
+  const _AttentionRow({required this.icon, required this.tone, required this.title, required this.subtitle, required this.onTap});
+  final IconData icon;
+  final HPTone tone;
+  final String title, subtitle;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final p = context.hp;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: CircleAvatar(radius: 18, backgroundColor: p.tone(tone).withValues(alpha: .14), child: Icon(icon, size: 18, color: p.tone(tone))),
+      title: Text(title, style: HPType.label(p.text), overflow: TextOverflow.ellipsis),
+      subtitle: Text(subtitle, style: HPType.body(p.muted), maxLines: 2, overflow: TextOverflow.ellipsis),
+      trailing: const Icon(Icons.chevron_right_rounded),
+      onTap: onTap,
+    );
+  }
 }
 
 class _AuditRow extends StatelessWidget {
@@ -88,8 +190,8 @@ class _AuditRow extends StatelessWidget {
         dense: true,
         contentPadding: EdgeInsets.zero,
         title: Text(auditActionLabel(e['action']), style: HPType.label(context.hp.text)),
-        subtitle: Text(['by ${auditActor(e)}', if (e['tenantName'] != null) '${e['tenantName']}', if (e['reason'] != null) '“${e['reason']}”'].join(' · '), maxLines: 1, overflow: TextOverflow.ellipsis),
-        trailing: Text(shortDate(e['at'])),
+        subtitle: Text(['by ${auditActor(e)}', if (e['tenantName'] != null) '${e['tenantName']}', if (e['reason'] != null) '“${e['reason']}”'].join(' · '), maxLines: 2, overflow: TextOverflow.ellipsis),
+        trailing: Text(shortDate(e['at']), style: HPType.body(context.hp.muted).copyWith(fontSize: 12)),
       );
 }
 
@@ -163,8 +265,8 @@ class _RestaurantsScreenState extends ConsumerState<RestaurantsScreen> {
 
   List<Widget> _list(BuildContext context) => [
         Wrap(spacing: HPSpace.md, runSpacing: HPSpace.md, crossAxisAlignment: WrapCrossAlignment.center, children: [
-          SizedBox(width: 260, child: TextField(key: const Key('search'), controller: _q, decoration: const InputDecoration(labelText: 'Search name or code', prefixIcon: Icon(Icons.search)), onSubmitted: (_) => _apply())),
-          SizedBox(width: 220, child: TextField(controller: _owner, decoration: const InputDecoration(labelText: 'Owner email'), onSubmitted: (_) => _apply())),
+          SizedBox(width: isNarrowWeb(context) ? double.infinity : 260, child: TextField(key: const Key('search'), controller: _q, decoration: const InputDecoration(labelText: 'Search name or code', prefixIcon: Icon(Icons.search)), onSubmitted: (_) => _apply())),
+          SizedBox(width: isNarrowWeb(context) ? double.infinity : 220, child: TextField(controller: _owner, decoration: const InputDecoration(labelText: 'Owner email'), onSubmitted: (_) => _apply())),
           _Drop(label: 'Status', value: _status == 'pending' ? null : _status, items: const ['active', 'suspended', 'blocked'], onChanged: (v) {
             _status = v;
             _apply();
@@ -184,6 +286,29 @@ class _RestaurantsScreenState extends ConsumerState<RestaurantsScreen> {
             builder: (c, d, reload) {
               final items = (d['items'] as List).cast<Map<String, dynamic>>();
               final total = d['total'] as int;
+              if (isNarrowWeb(context)) {
+                // phones: one card per restaurant instead of a sideways-scrolling table
+                return ListView(children: [
+                  for (final r in items)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: HPSpace.sm),
+                      child: OrderCard(
+                        key: Key('row-${r['code']}'),
+                        title: '${r['name']}',
+                        subtitle: '${r['code']} · ${titleCase('${r['plan'] ?? 'no plan'}')}${r['licenseEndsAt'] == null ? '' : ' · ends ${shortDate(r['licenseEndsAt'])}'}',
+                        total: '',
+                        status: statusLabel(r['status']),
+                        tone: toneForStatus(r['status'] as String?),
+                        onTap: () => c.go('/restaurants/${r['id']}'),
+                      ),
+                    ),
+                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    IconButton(tooltip: 'Previous page', onPressed: _page > 1 ? () => setState(() => (_page--, _load = _makeLoad())) : null, icon: const Icon(Icons.chevron_left)),
+                    Text('$total · page $_page'),
+                    IconButton(tooltip: 'Next page', onPressed: _page * 25 < total ? () => setState(() => (_page++, _load = _makeLoad())) : null, icon: const Icon(Icons.chevron_right)),
+                  ]),
+                ]);
+              }
               return Card(
                 child: Column(children: [
                   Expanded(
@@ -237,7 +362,7 @@ class _Drop extends StatelessWidget {
   final ValueChanged<String?> onChanged;
   @override
   Widget build(BuildContext context) => SizedBox(
-        width: 200,
+        width: isNarrowWeb(context) ? (MediaQuery.sizeOf(context).width - 2 * HPSpace.lg - HPSpace.md) / 2 : 200,
         child: DropdownButtonFormField<String?>(
           key: Key('filter-$label'),
           isExpanded: true,
@@ -676,13 +801,13 @@ class _AuditScreenState extends State<AuditScreen> {
   String? _a, _t;
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.all(HPSpace.x4),
+        padding: EdgeInsets.all(isNarrowWeb(context) ? HPSpace.lg : HPSpace.x4),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Text('Audit log', style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: HPSpace.lg),
           Wrap(spacing: HPSpace.md, runSpacing: HPSpace.md, children: [
-            SizedBox(width: 260, child: TextField(controller: _action, decoration: const InputDecoration(labelText: 'Action contains'))),
-            SizedBox(width: 340, child: TextField(controller: _tenant, decoration: const InputDecoration(labelText: 'Restaurant id'))),
+            SizedBox(width: isNarrowWeb(context) ? double.infinity : 260, child: TextField(controller: _action, decoration: const InputDecoration(labelText: 'Action contains'))),
+            SizedBox(width: isNarrowWeb(context) ? double.infinity : 340, child: TextField(controller: _tenant, decoration: const InputDecoration(labelText: 'Restaurant id'))),
             SecondaryButton(label: 'Filter', height: 48, onPressed: () => setState(() => (_a = _action.text.trim(), _t = _tenant.text.trim()))),
           ]),
           const SizedBox(height: HPSpace.lg),

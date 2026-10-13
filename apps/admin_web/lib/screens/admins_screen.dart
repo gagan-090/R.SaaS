@@ -4,6 +4,7 @@ import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 
 import '../state/providers.dart';
 import '../widgets/common.dart';
+import '../widgets/labels.dart';
 
 /// P9 Platform admins (invite, roles, deactivate) and P10 MFA reset with step-up.
 class AdminsScreen extends ConsumerStatefulWidget {
@@ -94,9 +95,9 @@ class _AdminsScreenState extends ConsumerState<AdminsScreen> {
       load: _load,
       builder: (c, d, _) {
         final (admins, roles) = d;
-        return ListView(padding: const EdgeInsets.all(HPSpace.x4), children: [
-          Row(children: [
-            Expanded(child: Text('Platform admins', style: Theme.of(c).textTheme.headlineMedium)),
+        return ListView(padding: EdgeInsets.all(isNarrowWeb(c) ? HPSpace.lg : HPSpace.x4), children: [
+          Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, runSpacing: HPSpace.md, children: [
+            Text('Platform admins', style: Theme.of(c).textTheme.headlineMedium),
             if (can('platform.admin.invite')) SizedBox(width: 200, child: PrimaryButton(label: 'Invite admin', icon: Icons.person_add_alt, height: 52, onPressed: () => _invite(roles))),
           ]),
           const SizedBox(height: HPSpace.x2),
@@ -105,11 +106,17 @@ class _AdminsScreenState extends ConsumerState<AdminsScreen> {
               for (final a in admins.cast<Map<String, dynamic>>())
                 ListTile(
                   key: Key('admin-${a['email']}'),
-                  title: Text('${a['name']}  ·  ${a['email']}', style: HPType.label(context.hp.text)),
-                  subtitle: Text((a['roles'] as List).map((r) => r['name']).join(', ')),
+                  title: Text('${a['name']}', style: HPType.label(context.hp.text)),
+                  isThreeLine: true,
+                  subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('${a['email']} · ${(a['roles'] as List).map((r) => r['name']).join(', ')}', overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 6),
+                    Wrap(spacing: HPSpace.sm, runSpacing: 4, children: [
+                      StatusChip(label: titleCase('${a['status']}'), tone: toneForStatus(a['status'] as String?)),
+                      StatusChip(label: a['mfaEnrolled'] == true ? 'Two-step on' : 'Two-step not set', tone: a['mfaEnrolled'] == true ? HPTone.success : HPTone.saffron),
+                    ]),
+                  ]),
                   trailing: Wrap(spacing: HPSpace.sm, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                    StatusChip(label: '${a['status']}', tone: toneForStatus(a['status'] as String?)),
-                    StatusChip(label: a['mfaEnrolled'] == true ? 'MFA on' : 'MFA not set', tone: a['mfaEnrolled'] == true ? HPTone.success : HPTone.saffron),
                     if (a['id'] != myId)
                       PopupMenuButton<String>(
                         tooltip: 'Actions',

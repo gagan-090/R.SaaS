@@ -48,7 +48,7 @@ void main() {
     await t.tap(find.widgetWithText(PrimaryButton, 'Verify'));
     await t.pumpAndSettle();
     expect(find.text('Dashboard'), findsWidgets);
-    expect(find.text('Recent audit events'.toUpperCase()), findsOneWidget);
+    expect(find.text('RECENT ACTIVITY'), findsOneWidget);
     final verify = jsonDecode(fx.where('POST', '/auth/mfa/verify').single.body) as Map;
     expect(verify['code'], '123456');
     expect(verify.containsKey('recoveryCode'), isFalse);

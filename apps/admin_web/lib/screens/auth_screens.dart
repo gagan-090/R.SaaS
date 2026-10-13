@@ -113,6 +113,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               if (_error != null) ...[
                 const SizedBox(height: HPSpace.md),
                 Text(_error!, key: const Key('login-error'), style: HPType.body(context.hp.danger)),
+                const SizedBox(height: HPSpace.xs),
+                // generic on purpose (no hint whether the email exists), but tells new owners what to do
+                Text('New restaurant? Activate it first with the link in your email, or ask your platform admin to resend it.',
+                    key: const Key('login-hint'), style: HPType.body(context.hp.muted).copyWith(fontSize: 13)),
               ],
               const SizedBox(height: HPSpace.x2),
               PrimaryButton(label: 'Sign in', busy: _busy, onPressed: _submit),
