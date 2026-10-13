@@ -80,8 +80,9 @@ async function main() {
   }
 
   // Demo restaurant
+  // The demo restaurant is found by its fixed code, so renaming the owner's email locally never creates a second demo.
   const demoEmail = 'owner@demo-dhaba.example';
-  if (!(await prisma.restaurantTenant.findUnique({ where: { ownerEmail: demoEmail } }))) {
+  if (!(await prisma.restaurantTenant.findUnique({ where: { code: 'R000000' } }))) {
     const ownerPassword = process.env.DEMO_OWNER_PASSWORD || 'Demo-' + randomBytes(9).toString('base64url');
     const pin = '1234';
     const tenant = await prisma.restaurantTenant.create({
@@ -130,15 +131,15 @@ async function main() {
     await prisma.license.create({ data: { id, tenantId: tenant.id, planId: plan.id, startsAt, endsAt, signedToken: token, issuedBy: sa.id, reason: 'demo seed' } });
     console.log(`Created demo restaurant "Demo Dhaba" — owner ${demoEmail} / ${ownerPassword}; staff PIN ${pin}`);
   }
-  await ensureDemoStaffAndPlan(demoEmail, email);
+  await ensureDemoStaffAndPlan(email);
 }
 
 /** Demo plan: Premium by default so every role (incl. chef / IT admin / auditor and the KDS) can be tried. */
 const DEMO_PLAN = (process.env.DEMO_PLAN || 'premium') as 'standard' | 'professional' | 'premium';
 
 /** One PIN user per restaurant role (all PIN 1234) and a license on DEMO_PLAN. Idempotent, also for older seeds. */
-async function ensureDemoStaffAndPlan(demoEmail: string, superAdminEmail: string) {
-  const tenant = await prisma.restaurantTenant.findUniqueOrThrow({ where: { ownerEmail: demoEmail } });
+async function ensureDemoStaffAndPlan(superAdminEmail: string) {
+  const tenant = await prisma.restaurantTenant.findUniqueOrThrow({ where: { code: 'R000000' } });
   const staff: [string, 'cashier' | 'waiter' | 'chef' | 'it_admin' | 'auditor'][] = [
     ['Ravi (Cashier)', 'cashier'], ['Anita (Waiter)', 'waiter'], ['Sohan (Waiter)', 'waiter'],
     ['Kunal (Chef)', 'chef'], ['Imran (IT Admin)', 'it_admin'], ['Asha (Auditor)', 'auditor'],
