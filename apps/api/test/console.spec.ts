@@ -153,30 +153,84 @@ describe('restaurant console', () => {
     });
   });
 
-  it('dashboard totals come from synced bills (latest version), payments, lines and tips', async () => {
-    const reg = (await t.http().post(api('/devices/register-hub')).set(bearer(std.ownerToken)).send({ name: 'Hub 3', platform: 'windows' }).expect(201)).body;
+  it('dashboard: KPIs, previous period, hourly, dine-in vs takeaway, categories, waiters, reversals, live, recent bills, bill detail', async () => {
+    const auth = bearer(std.ownerToken);
+    const reg = (await t.http().post(api('/devices/register-hub')).set(auth).send({ name: 'Hub 3', platform: 'windows' }).expect(201)).body;
+    const tax = (await t.http().post(api('/tax-rules')).set(auth).send({ name: 'GST 5%', rateBp: 500 }).expect(201)).body;
+    const mains = (await t.http().post(api('/menu/categories')).set(auth).send({ name: 'Mains' }).expect(201)).body;
+    const chicken = (await t.http().post(api('/menu/items')).set(auth).send({ categoryId: mains.id, name: 'Butter Chicken', pricePaise: 34000, taxRuleId: tax.id }).expect(201)).body;
+    const waiter = (await t.http().post(api('/staff')).set(auth).send({ name: 'Anita', role: 'waiter', pin: '5555' }).expect(201)).body;
+    const floor = (await t.http().post(api('/floors')).set(auth).send({ branchId: std.branchId, name: 'Ground' }).expect(201)).body;
+    const table = (await t.http().post(api('/tables')).set(auth).send({ floorId: floor.id, name: '7' }).expect(201)).body;
+
     const now = new Date().toISOString();
-    const billId = uuidv7();
-    const e = (entity: string, entityId: string, op: string, payload: Record<string, unknown>) => ({ eventId: uuidv7(), entity, entityId, op, payload: { ...payload, branchId: std.branchId }, createdAt: now });
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString();
+    const ids = { o1: uuidv7(), o2: uuidv7(), o3: uuidv7(), b1: uuidv7(), b2: uuidv7(), b0: uuidv7(), l1: uuidv7(), l2: uuidv7(), l3: uuidv7() };
+    const e = (entity: string, entityId: string, op: string, payload: Record<string, unknown>, at = now) => ({ eventId: uuidv7(), entity, entityId, op, payload: { ...payload, branchId: std.branchId }, createdAt: at });
     const events = [
-      e('order', uuidv7(), 'create', {}),
-      e('order_line', uuidv7(), 'create', { name_snapshot: 'Butter Chicken', qty: 2, price_snapshot_paise: 34000, status: 'sent' }),
-      e('order_line', uuidv7(), 'create', { name_snapshot: 'Naan', qty: 3, price_snapshot_paise: 6000, status: 'reversed' }),
-      e('bill', billId, 'create', { status: 'open', total_paise: 71400, created_at: now }),
-      e('bill', billId, 'update', { status: 'paid', total_paise: 74400, cgst_paise: 1700, sgst_paise: 1700, discount_paise: 0, created_at: now, closed_at: now }),
-      e('payment', uuidv7(), 'create', { mode: 'upi', amountPaise: 40000 }),
-      e('payment', uuidv7(), 'create', { mode: 'cash', amountPaise: 34400 }),
-      e('tip_allocation', uuidv7(), 'create', { amountPaise: 3000 }),
+      // dine-in on table 7 for Anita: 2 butter chicken, 3 naan reversed; billed and paid UPI + cash, tip 30
+      e('order', ids.o1, 'create', { id: ids.o1, type: 'dine_in', table_id: table.id, waiter_id: waiter.id, status: 'open', opened_at: now }),
+      e('order_line', ids.l1, 'create', { id: ids.l1, order_id: ids.o1, menu_item_id: chicken.id, name_snapshot: 'Butter Chicken', qty: 2, price_snapshot_paise: 34000, status: 'sent', created_at: now }),
+      e('order_line', ids.l2, 'create', { id: ids.l2, order_id: ids.o1, menu_item_id: uuidv7(), name_snapshot: 'Naan', qty: 3, price_snapshot_paise: 6000, status: 'sent', created_at: now }),
+      e('order_line', ids.l2, 'update', { id: ids.l2, order_id: ids.o1, name_snapshot: 'Naan', qty: 3, price_snapshot_paise: 6000, status: 'reversed', reversal_reason: 'Guest changed mind', reversed_at: now }),
+      e('bill', ids.b1, 'create', { id: ids.b1, order_id: ids.o1, invoice_no: 'BR01/26-27/000101', status: 'open', total_paise: 71400, created_at: now }),
+      e('bill', ids.b1, 'update', { id: ids.b1, order_id: ids.o1, invoice_no: 'BR01/26-27/000101', status: 'paid', subtotal_paise: 68000, discount_paise: 0, total_paise: 74400, cgst_paise: 1700, sgst_paise: 1700, tip_paise: 3000, round_off_paise: 0, created_at: now, closed_at: now }),
+      e('payment', uuidv7(), 'create', { billId: ids.b1, mode: 'upi', amountPaise: 40000, at: now }),
+      e('payment', uuidv7(), 'create', { billId: ids.b1, mode: 'cash', amountPaise: 34400, tenderedPaise: 50000, changePaise: 15600, at: now }),
+      e('tip_allocation', uuidv7(), 'create', { billId: ids.b1, waiterId: waiter.id, amountPaise: 3000 }),
+      e('bill_adjustment', uuidv7(), 'create', { bill_id: ids.b1, amount_paise: -2000, reason: 'Naan was cold', at: now }),
+      // takeaway, paid by card
+      e('order', ids.o2, 'create', { id: ids.o2, type: 'takeaway', status: 'paid', opened_at: now }),
+      e('order_line', ids.l3, 'create', { id: ids.l3, order_id: ids.o2, menu_item_id: chicken.id, name_snapshot: 'Butter Chicken', qty: 1, price_snapshot_paise: 34000, status: 'sent', created_at: now }),
+      e('bill', ids.b2, 'update', { id: ids.b2, order_id: ids.o2, invoice_no: 'BR01/26-27/000102', status: 'paid', total_paise: 35700, cgst_paise: 850, sgst_paise: 850, created_at: now, closed_at: now }),
+      e('payment', uuidv7(), 'create', { billId: ids.b2, mode: 'card', amountPaise: 35700, at: now }),
+      // still open on a table right now
+      e('order', ids.o3, 'create', { id: ids.o3, type: 'dine_in', table_id: table.id, status: 'open', opened_at: now }),
+      // yesterday: one bill for the comparison
+      e('bill', ids.b0, 'update', { id: ids.b0, order_id: uuidv7(), invoice_no: 'BR01/26-27/000100', status: 'paid', total_paise: 50000, created_at: yesterday, closed_at: yesterday }, yesterday),
     ];
     await t.http().post(api('/sync/push')).set('X-Device-Token', reg.deviceToken).send({ events }).expect(200);
-    const d = (await t.http().get(api('/tenant/dashboard?days=7')).set(bearer(std.ownerToken)).expect(200)).body;
-    expect(d.today).toEqual({ salesPaise: 74400, bills: 1, avgBillPaise: 74400 });
-    expect(d.period).toMatchObject({ salesPaise: 74400, bills: 1, orders: 1, taxesPaise: 3400, tipsPaise: 3000 });
-    expect(d.byMode).toEqual({ upi: 40000, cash: 34400 });
-    expect(d.topItems).toEqual([{ name: 'Butter Chicken', qty: 2, amountPaise: 68000 }]); // reversed lines excluded
-    expect(d.days).toHaveLength(7);
-    expect(d.days.at(-1).salesPaise).toBe(74400);
+
+    const d = (await t.http().get(api('/tenant/dashboard?range=today')).set(auth).expect(200)).body;
+    expect(d.kpis).toMatchObject({
+      salesPaise: 110100, bills: 2, avgBillPaise: 55050, dineInPaise: 74400, takeawayPaise: 35700, dineInBills: 1, takeawayBills: 1,
+      taxesPaise: 5100, tipsPaise: 3000, reversals: { count: 1, amountPaise: 18000 }, adjustments: { count: 1, amountPaise: -2000 },
+    });
+    expect(d.previous).toMatchObject({ salesPaise: 50000, bills: 1 });
+    expect(d.change.salesPct).toBe(120.2);
+    expect(d.byMode).toEqual({ upi: 40000, cash: 34400, card: 35700 });
+    expect(d.byCategory).toEqual([{ name: 'Mains', qty: 3, amountPaise: 102000 }]);
+    expect(d.topItems[0]).toEqual({ name: 'Butter Chicken', category: 'Mains', qty: 3, amountPaise: 102000 });
+    expect(d.byWaiter).toEqual(expect.arrayContaining([
+      { name: 'Anita', salesPaise: 74400, bills: 1, tipsPaise: 3000 },
+      { name: 'No waiter', salesPaise: 35700, bills: 1, tipsPaise: 0 },
+    ]));
+    expect(d.reversals.reasons).toEqual([{ reason: 'Guest changed mind', count: 1 }]);
+    expect(d.live).toMatchObject({ openTables: 1, takeaways: 0 });
+    expect(d.hourly).toHaveLength(24);
+    expect(d.hourly.reduce((s: number, h: { salesPaise: number }) => s + h.salesPaise, 0)).toBe(110100);
+    expect(d.recentBills[0]).toMatchObject({ invoiceNo: expect.stringMatching(/^BR01\/26-27\/00010[12]$/), status: 'paid' });
+    expect(d.recentBills.find((b: { id: string }) => b.id === ids.b1)).toMatchObject({ where: 'Table 7', waiter: 'Anita' });
+    // legacy keys still there for older clients
+    expect(d.today).toEqual({ salesPaise: 110100, bills: 2, avgBillPaise: 55050 });
+
+    const week = (await t.http().get(api('/tenant/dashboard?range=7d')).set(auth).expect(200)).body;
+    expect(week.series).toHaveLength(7);
+    expect(week.kpis.salesPaise).toBe(160100);
+
+    const bill = (await t.http().get(api(`/tenant/bills/${ids.b1}`)).set(auth).expect(200)).body;
+    expect(bill).toMatchObject({ invoiceNo: 'BR01/26-27/000101', where: 'Table 7', waiter: 'Anita', status: 'paid', totals: { totalPaise: 74400 } });
+    expect(bill.lines).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'Butter Chicken', qty: 2, amountPaise: 68000, status: 'sent' }),
+      expect.objectContaining({ name: 'Naan', status: 'reversed', reversalReason: 'Guest changed mind' }),
+    ]));
+    expect(bill.payments.map((p: { mode: string }) => p.mode)).toEqual(['upi', 'cash']);
+    expect(bill.tips).toEqual([{ waiter: 'Anita', amountPaise: 3000 }]);
+    expect(bill.adjustments).toEqual([expect.objectContaining({ amountPaise: -2000, reason: 'Naan was cold' })]);
+    await t.http().get(api(`/tenant/bills/${uuidv7()}`)).set(auth).expect(404);
+
     const cashier = await addStaff(t, std.tenantId, 'cashier');
     await t.http().get(api('/tenant/dashboard')).set(bearer(cashier.token)).expect(403);
+    await t.http().get(api(`/tenant/bills/${ids.b1}`)).set(bearer(cashier.token)).expect(403);
   });
 });

@@ -43,7 +43,10 @@ const ImageBody = z.object({
   dataBase64: z.string().min(16).max(1_600_000),
 });
 const RevokeBody = z.object({ reason: z.string().trim().min(3).max(500) });
-const DashboardQuery = z.object({ days: z.coerce.number().int().min(1).max(31).default(7) });
+const DashboardQuery = z.object({
+  range: z.enum(['today', '7d', '30d']).optional(),
+  days: z.coerce.number().int().min(1).max(31).optional(), // legacy: same as range=Nd
+});
 
 const IST_MS = (5 * 60 + 30) * 60_000;
 /** Start of the IST calendar day containing [d], as a UTC Date. */
@@ -96,71 +99,226 @@ export class ConsoleController {
 
   /**
    * Sales from what the hubs synced (Build Spec: the hub is the writer; the cloud reports on synced events).
-   * Totals use the latest version of each bill, so tips and reversals after billing are counted once.
+   * Every figure uses the latest version of each bill / order / line, so tips, reversals and payments after billing
+   * are counted once. The previous period of the same length is returned for comparison.
    */
   @RequirePermissions('reports.read')
   @Get('tenant/dashboard')
   dashboard(@CurrentActor() a: Actor, @Query(new ZodPipe(DashboardQuery)) q: z.infer<typeof DashboardQuery>) {
+    const days = q.range === 'today' ? 1 : q.range === '30d' ? 30 : q.range === '7d' ? 7 : (q.days ?? 7);
     return this.t(a, async (tx) => {
       const today = istDayStart(new Date());
-      const from = new Date(today.getTime() - (q.days - 1) * 86_400_000);
+      const from = new Date(today.getTime() - (days - 1) * 86_400_000);
+      const prevFrom = new Date(from.getTime() - days * 86_400_000);
       const events = await tx.syncEvent.findMany({
-        where: { createdAt: { gte: from }, entity: { in: ['bill', 'payment', 'order', 'order_line', 'tip_allocation'] } },
+        // orders / lines may have been opened the day before a bill closes: look back one extra day for them
+        where: { createdAt: { gte: new Date(prevFrom.getTime() - 86_400_000) }, entity: { in: ['bill', 'payment', 'order', 'order_line', 'tip_allocation', 'bill_adjustment'] } },
         orderBy: { createdAt: 'asc' },
         select: { entity: true, entityId: true, op: true, payload: true, createdAt: true },
       });
       type P = Record<string, unknown>;
-      const bills = new Map<string, P>();
-      const orders = new Set<string>();
-      const lines = new Map<string, P>();
-      const byMode: Record<string, number> = {};
-      let tips = 0;
+      const latest = { bill: new Map<string, P>(), order: new Map<string, P>(), order_line: new Map<string, P>() };
+      const payments: (P & { at: Date })[] = [], tips: (P & { at: Date })[] = [], adjustments: (P & { at: Date })[] = [];
       for (const e of events) {
         const p = e.payload as P;
-        if (e.entity === 'bill') bills.set(e.entityId, p); // later versions overwrite earlier ones
-        else if (e.entity === 'order' && e.op === 'create') orders.add(e.entityId);
-        else if (e.entity === 'order_line') lines.set(e.entityId, p);
-        else if (e.entity === 'payment' && typeof p.amountPaise === 'number') byMode[String(p.mode)] = (byMode[String(p.mode)] ?? 0) + p.amountPaise;
-        else if (e.entity === 'tip_allocation' && typeof p.amountPaise === 'number') tips += p.amountPaise;
+        if (e.entity === 'bill' || e.entity === 'order' || e.entity === 'order_line') latest[e.entity].set(e.entityId, { ...latest[e.entity].get(e.entityId), ...p });
+        else if (e.entity === 'payment') payments.push({ ...p, at: e.createdAt });
+        else if (e.entity === 'tip_allocation') tips.push({ ...p, at: e.createdAt });
+        else adjustments.push({ ...p, at: e.createdAt });
       }
-      const days: Record<string, { day: string; salesPaise: number; bills: number }> = {};
-      for (let i = 0; i < q.days; i++) {
+      const [users, items, cats, tables] = await Promise.all([
+        tx.user.findMany({ select: { id: true, name: true } }),
+        tx.menuItem.findMany({ select: { id: true, categoryId: true } }),
+        tx.menuCategory.findMany({ select: { id: true, name: true } }),
+        tx.table.findMany({ select: { id: true, name: true } }),
+      ]);
+      const userName = new Map(users.map((u) => [u.id, u.name.split(' (')[0]]));
+      const catOfItem = new Map(items.map((i) => [i.id, i.categoryId]));
+      const catName = new Map(cats.map((c) => [c.id, c.name]));
+      const tableName = new Map(tables.map((t) => [t.id, t.name]));
+      const n = (v: unknown) => Number(v ?? 0);
+      const paidAt = (b: P) => new Date(String(b.closed_at ?? b.created_at));
+      const inPeriod = (d: Date) => d >= from;
+      const inPrev = (d: Date) => d >= prevFrom && d < from;
+
+      // ---- bills
+      const paid = [...latest.bill.values()].filter((b) => b.status === 'paid');
+      const cur = paid.filter((b) => inPeriod(paidAt(b)));
+      const prev = paid.filter((b) => inPrev(paidAt(b)));
+      const sum = (bs: P[], k: string) => bs.reduce((s, b) => s + n(b[k]), 0);
+      const sales = sum(cur, 'total_paise'), prevSales = sum(prev, 'total_paise');
+
+      const series: Record<string, { day: string; salesPaise: number; bills: number }> = {};
+      for (let i = 0; i < days; i++) {
         const k = istDayKey(new Date(from.getTime() + i * 86_400_000));
-        days[k] = { day: k, salesPaise: 0, bills: 0 };
+        series[k] = { day: k, salesPaise: 0, bills: 0 };
       }
-      let sales = 0, paidBills = 0, taxes = 0, discounts = 0, todaySales = 0, todayBills = 0;
-      for (const b of bills.values()) {
-        if (b.status !== 'paid') continue;
-        const at = new Date(String(b.closed_at ?? b.created_at));
-        const total = Number(b.total_paise ?? 0);
-        sales += total;
-        paidBills++;
-        taxes += Number(b.cgst_paise ?? 0) + Number(b.sgst_paise ?? 0);
-        discounts += Number(b.discount_paise ?? 0);
+      const hourly = Array.from({ length: 24 }, (_, h) => ({ hour: h, salesPaise: 0, bills: 0 }));
+      for (const b of cur) {
+        const at = paidAt(b);
         const k = istDayKey(at);
-        if (days[k]) {
-          days[k].salesPaise += total;
-          days[k].bills++;
+        if (series[k]) {
+          series[k].salesPaise += n(b.total_paise);
+          series[k].bills++;
         }
-        if (at >= today) {
-          todaySales += total;
-          todayBills++;
-        }
+        const h = new Date(at.getTime() + IST_MS).getUTCHours();
+        hourly[h].salesPaise += n(b.total_paise);
+        hourly[h].bills++;
       }
-      const itemQty = new Map<string, { name: string; qty: number; amountPaise: number }>();
-      for (const l of lines.values()) {
-        if (l.status === 'reversed') continue;
+      const busiest = hourly.reduce((m, x) => (x.salesPaise > m.salesPaise ? x : m), hourly[0]);
+
+      // ---- orders: type split, waiter, table
+      const orderOfBill = (b: P) => latest.order.get(String(b.order_id));
+      const dineIn = cur.filter((b) => orderOfBill(b)?.type !== 'takeaway');
+      const ordersInPeriod = [...latest.order.values()].filter((o) => inPeriod(new Date(String(o.opened_at ?? from.toISOString()))));
+      const byWaiter = new Map<string, { name: string; salesPaise: number; bills: number; tipsPaise: number }>();
+      const waiterRow = (id: unknown) => {
+        const key = id ? String(id) : 'none';
+        if (!byWaiter.has(key)) byWaiter.set(key, { name: id ? (userName.get(String(id)) ?? 'Former staff') : 'No waiter', salesPaise: 0, bills: 0, tipsPaise: 0 });
+        return byWaiter.get(key)!;
+      };
+      for (const b of cur) {
+        const w = waiterRow(orderOfBill(b)?.waiter_id);
+        w.salesPaise += n(b.total_paise);
+        w.bills++;
+      }
+      const tipsCur = tips.filter((t) => inPeriod(t.at));
+      for (const t of tipsCur) waiterRow(t.waiterId).tipsPaise += n(t.amountPaise);
+
+      // ---- lines: dishes, categories, reversals
+      const billedOrders = new Set(cur.map((b) => String(b.order_id)));
+      const dish = new Map<string, { name: string; category: string; qty: number; amountPaise: number }>();
+      const byCat = new Map<string, { name: string; qty: number; amountPaise: number }>();
+      const reversals: { name: string; qty: number; amountPaise: number; reason: string }[] = [];
+      for (const l of latest.order_line.values()) {
+        const amount = n(l.qty) * n(l.price_snapshot_paise);
+        if (l.status === 'reversed') {
+          if (inPeriod(new Date(String(l.reversed_at ?? l.created_at ?? from.toISOString())))) {
+            reversals.push({ name: String(l.name_snapshot ?? 'Item'), qty: n(l.qty), amountPaise: amount, reason: String(l.reversal_reason ?? '') });
+          }
+          continue;
+        }
+        if (!billedOrders.has(String(l.order_id))) continue; // dishes on paid bills of the period
+        const category = catName.get(catOfItem.get(String(l.menu_item_id)) ?? '') ?? 'Other';
         const name = String(l.name_snapshot ?? 'Item');
-        const cur = itemQty.get(name) ?? { name, qty: 0, amountPaise: 0 };
-        cur.qty += Number(l.qty ?? 0);
-        cur.amountPaise += Number(l.qty ?? 0) * Number(l.price_snapshot_paise ?? 0);
-        itemQty.set(name, cur);
+        const d = dish.get(name) ?? { name, category, qty: 0, amountPaise: 0 };
+        d.qty += n(l.qty);
+        d.amountPaise += amount;
+        dish.set(name, d);
+        const c = byCat.get(category) ?? { name: category, qty: 0, amountPaise: 0 };
+        c.qty += n(l.qty);
+        c.amountPaise += amount;
+        byCat.set(category, c);
       }
+      const reasonCounts = new Map<string, number>();
+      for (const r of reversals) reasonCounts.set(r.reason || 'No reason', (reasonCounts.get(r.reason || 'No reason') ?? 0) + 1);
+
+      // ---- payments
+      const byMode: Record<string, number> = {};
+      for (const p of payments.filter((x) => inPeriod(x.at))) byMode[String(p.mode)] = (byMode[String(p.mode)] ?? 0) + n(p.amountPaise);
+
+      const adjCur = adjustments.filter((x) => inPeriod(x.at));
+
+      // ---- right now (from the latest synced state)
+      // an order whose bill is paid is closed even if its own status update has not synced yet
+      const paidOrders = new Set(paid.map((b) => String(b.order_id)));
+      const live = [...latest.order.values()].filter((o) => (o.status === 'open' || o.status === 'billed') && !paidOrders.has(String(o.id)));
+      const unpaidBills = [...latest.bill.values()].filter((b) => b.status === 'open');
+
+      // ---- recent bills
+      const recentBills = [...latest.bill.values()]
+        .sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)))
+        .slice(0, 12)
+        .map((b) => {
+          const o = orderOfBill(b);
+          return {
+            id: b.id, invoiceNo: b.invoice_no, totalPaise: n(b.total_paise), status: b.status, createdAt: b.created_at, closedAt: b.closed_at ?? null,
+            where: o?.type === 'takeaway' ? 'Takeaway' : o?.table_id ? `Table ${tableName.get(String(o.table_id)) ?? '?'}` : '—',
+            waiter: o?.waiter_id ? (userName.get(String(o.waiter_id)) ?? null) : null,
+          };
+        });
+
+      const pct = (c: number, p: number) => (p === 0 ? null : Math.round(((c - p) * 1000) / p) / 10);
+      const kpis = {
+        salesPaise: sales, bills: cur.length, avgBillPaise: cur.length ? Math.round(sales / cur.length) : 0, orders: ordersInPeriod.length,
+        dineInPaise: sum(dineIn, 'total_paise'), takeawayPaise: sales - sum(dineIn, 'total_paise'),
+        dineInBills: dineIn.length, takeawayBills: cur.length - dineIn.length,
+        discountsPaise: sum(cur, 'discount_paise'), taxesPaise: sum(cur, 'cgst_paise') + sum(cur, 'sgst_paise'),
+        tipsPaise: tipsCur.reduce((s, t) => s + n(t.amountPaise), 0),
+        reversals: { count: reversals.length, amountPaise: reversals.reduce((s, r) => s + r.amountPaise, 0) },
+        adjustments: { count: adjCur.length, amountPaise: adjCur.reduce((s, x) => s + n(x.amount_paise), 0) },
+      };
+      const todays = paid.filter((b) => paidAt(b) >= today);
+      const todaySales = sum(todays, 'total_paise');
       return {
-        from, days: Object.values(days),
-        today: { salesPaise: todaySales, bills: todayBills, avgBillPaise: todayBills ? Math.round(todaySales / todayBills) : 0 },
-        period: { salesPaise: sales, bills: paidBills, orders: orders.size, taxesPaise: taxes, discountsPaise: discounts, tipsPaise: tips },
-        byMode, topItems: [...itemQty.values()].sort((x, y) => y.qty - x.qty).slice(0, 8),
+        range: q.range ?? (days === 1 ? 'today' : days === 30 ? '30d' : '7d'), dayCount: days, from,
+        kpis,
+        previous: { salesPaise: prevSales, bills: prev.length, avgBillPaise: prev.length ? Math.round(prevSales / prev.length) : 0 },
+        change: { salesPct: pct(sales, prevSales), billsPct: pct(cur.length, prev.length) },
+        series: Object.values(series), hourly, busiestHour: busiest.salesPaise > 0 ? busiest.hour : null,
+        byMode,
+        byCategory: [...byCat.values()].sort((x, y) => y.amountPaise - x.amountPaise),
+        byWaiter: [...byWaiter.values()].sort((x, y) => y.salesPaise - x.salesPaise),
+        topItems: [...dish.values()].sort((x, y) => y.qty - x.qty || y.amountPaise - x.amountPaise).slice(0, 10),
+        reversals: { items: reversals.slice(-10).reverse(), reasons: [...reasonCounts.entries()].map(([reason, count]) => ({ reason, count })).sort((x, y) => y.count - x.count) },
+        live: {
+          openTables: live.filter((o) => o.type !== 'takeaway').length, takeaways: live.filter((o) => o.type === 'takeaway').length,
+          unpaidBills: unpaidBills.length, unpaidPaise: sum(unpaidBills, 'total_paise'),
+        },
+        recentBills,
+        // kept for older clients
+        today: { salesPaise: todaySales, bills: todays.length, avgBillPaise: todays.length ? Math.round(todaySales / todays.length) : 0 },
+        period: { salesPaise: sales, bills: cur.length, orders: ordersInPeriod.length, taxesPaise: kpis.taxesPaise, discountsPaise: kpis.discountsPaise, tipsPaise: kpis.tipsPaise },
+        days: Object.values(series),
+      };
+    });
+  }
+
+  /** One bill with its lines and payments, rebuilt from synced events (drill-down from the dashboard). */
+  @RequirePermissions('reports.read')
+  @Get('tenant/bills/:id')
+  bill(@CurrentActor() a: Actor, @Param('id') id: string) {
+    return this.t(a, async (tx) => {
+      const billEvents = await tx.syncEvent.findMany({ where: { entity: 'bill', entityId: id }, orderBy: { createdAt: 'asc' } });
+      if (!billEvents.length) throw notFound('Bill');
+      const bill = Object.assign({}, ...billEvents.map((e) => e.payload as Record<string, unknown>)) as Record<string, unknown>;
+      const orderId = String(bill.order_id);
+      const [orderEvents, lineEvents, payEvents, tipEvents, adjEvents] = await Promise.all([
+        tx.syncEvent.findMany({ where: { entity: 'order', entityId: orderId }, orderBy: { createdAt: 'asc' } }),
+        tx.syncEvent.findMany({ where: { entity: 'order_line', payload: { path: ['order_id'], equals: orderId } }, orderBy: { createdAt: 'asc' } }),
+        tx.syncEvent.findMany({ where: { entity: 'payment', payload: { path: ['billId'], equals: id } }, orderBy: { createdAt: 'asc' } }),
+        tx.syncEvent.findMany({ where: { entity: 'tip_allocation', payload: { path: ['billId'], equals: id } }, orderBy: { createdAt: 'asc' } }),
+        tx.syncEvent.findMany({ where: { entity: 'bill_adjustment', payload: { path: ['bill_id'], equals: id } }, orderBy: { createdAt: 'asc' } }),
+      ]);
+      const order = Object.assign({}, ...orderEvents.map((e) => e.payload as Record<string, unknown>)) as Record<string, unknown>;
+      const lines = new Map<string, Record<string, unknown>>();
+      for (const e of lineEvents) lines.set(e.entityId, { ...lines.get(e.entityId), ...(e.payload as Record<string, unknown>) });
+      const names = new Map((await tx.user.findMany({ select: { id: true, name: true } })).map((u) => [u.id, u.name.split(' (')[0]]));
+      const table = order.table_id ? await tx.table.findUnique({ where: { id: String(order.table_id) }, select: { name: true } }) : null;
+      return {
+        id, invoiceNo: bill.invoice_no, status: bill.status, createdAt: bill.created_at, closedAt: bill.closed_at ?? null,
+        where: order.type === 'takeaway' ? 'Takeaway' : table ? `Table ${table.name}` : '—',
+        waiter: order.waiter_id ? (names.get(String(order.waiter_id)) ?? null) : null,
+        totals: {
+          subtotalPaise: bill.subtotal_paise, discountPaise: bill.discount_paise, cgstPaise: bill.cgst_paise, sgstPaise: bill.sgst_paise,
+          tipPaise: bill.tip_paise, roundOffPaise: bill.round_off_paise, totalPaise: bill.total_paise,
+        },
+        lines: [...lines.values()].map((l) => ({
+          name: l.name_snapshot, qty: l.qty, pricePaise: l.price_snapshot_paise, amountPaise: Number(l.qty ?? 0) * Number(l.price_snapshot_paise ?? 0),
+          status: l.status, notes: l.notes ?? null, reversalReason: l.reversal_reason ?? null,
+        })),
+        payments: payEvents.map((e) => {
+          const p = e.payload as Record<string, unknown>;
+          return { mode: p.mode, amountPaise: p.amountPaise, tenderedPaise: p.tenderedPaise ?? null, changePaise: p.changePaise ?? 0, at: p.at ?? e.createdAt };
+        }),
+        tips: tipEvents.map((e) => {
+          const p = e.payload as Record<string, unknown>;
+          return { waiter: names.get(String(p.waiterId)) ?? null, amountPaise: p.amountPaise };
+        }),
+        adjustments: adjEvents.map((e) => {
+          const p = e.payload as Record<string, unknown>;
+          return { amountPaise: p.amount_paise, reason: p.reason, at: p.at };
+        }),
       };
     });
   }

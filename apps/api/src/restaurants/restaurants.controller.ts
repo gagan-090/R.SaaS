@@ -29,6 +29,8 @@ const RegisterBody = z.object({
   address: z.string().max(500).optional(),
   planCode: z.string().regex(/^[a-z][a-z0-9_]{2,30}$/),
 });
+const RegistrationQuery = z.object({ state: z.enum(['awaiting', 'expired', 'cancelled', 'all']).default('awaiting'), q: z.string().optional() });
+const CancelBody = z.object({ reason: z.string().trim().min(3).max(500) });
 const VerifyBody = z.object({ token: z.string().min(1), password: z.string().min(12).max(256) });
 const ListQuery = z.object({
   q: z.string().optional(),
@@ -101,7 +103,7 @@ export class RestaurantsController {
     const reg = await this.db.platform(async (tx) => {
       await this.assertEmailFree(tx, ownerEmail);
       const pending = await tx.restaurantRegistration.findFirst({
-        where: { ownerEmail, verifiedAt: null, expiresAt: { gt: new Date() } },
+        where: { ownerEmail, verifiedAt: null, cancelledAt: null, expiresAt: { gt: new Date() } },
       });
       if (pending) throw conflict('duplicate_email', 'A registration for this email is already pending verification');
       const plan = await tx.subscriptionPlan.findUnique({ where: { code: b.planCode } });
@@ -113,22 +115,98 @@ export class RestaurantsController {
         },
       });
     });
-    // the console page that sets the password (hash routing: /#/verify-email)
+    const sent = await this.sendVerification(reg.id, token, { ownerEmail, ownerName: b.ownerName, restaurantName: b.restaurantName });
+    Object.assign(audit, { objectType: 'restaurant_registration', objectId: reg.id, after: { ...b, ownerEmail, emailSent: sent.emailSent } });
+    return { registrationId: reg.id, status: 'pending_verification', ownerEmail, ...sent };
+  }
+
+  /** Emails the activation link (console set-password page) and records the attempt on the registration. */
+  private async sendVerification(regId: string, token: string, r: { ownerEmail: string; ownerName: string; restaurantName: string }) {
     const verifyUrl = `${loadEnv().CONSOLE_URL.replace(/\/$/, '')}/#/verify-email?token=${token}`;
-    let emailSent = true;
     let emailError: string | undefined;
     try {
-      await this.mailer.send({ to: ownerEmail, ...verifyRestaurantEmail({ ownerName: b.ownerName, restaurantName: b.restaurantName, url: verifyUrl }) });
+      await this.mailer.send({ to: r.ownerEmail, ...verifyRestaurantEmail({ ownerName: r.ownerName, restaurantName: r.restaurantName, url: verifyUrl }) });
     } catch (e) {
       // the registration stands; the Super Admin gets the link to pass on (or resends after fixing the mail setup)
-      emailSent = false;
       emailError = e instanceof Error ? e.message : 'Email could not be sent';
     }
-    Object.assign(audit, { objectType: 'restaurant_registration', objectId: reg.id, after: { ...b, ownerEmail, emailSent } });
-    return {
-      registrationId: reg.id, status: 'pending_verification', ownerEmail, emailSent,
-      ...(emailSent ? {} : { emailError, verifyUrl }),
+    await this.db.platform((tx) => tx.restaurantRegistration.update({ where: { id: regId }, data: { lastSentAt: new Date(), lastEmailError: emailError ?? null } }));
+    return emailError ? { emailSent: false as const, emailError, verifyUrl } : { emailSent: true as const };
+  }
+
+  // ---------------- registrations awaiting the owner's email confirmation
+
+  /** Super Admin work queue: registrations not yet verified (awaiting, expired or cancelled). */
+  @RequirePermissions('platform.restaurant.read')
+  @Get('registrations')
+  async registrations(@Query(new ZodPipe(RegistrationQuery)) q: z.infer<typeof RegistrationQuery>) {
+    const now = new Date();
+    const where: Prisma.RestaurantRegistrationWhereInput = {
+      verifiedAt: null,
+      ...(q.state === 'awaiting' ? { cancelledAt: null, expiresAt: { gt: now } } : {}),
+      ...(q.state === 'expired' ? { cancelledAt: null, expiresAt: { lte: now } } : {}),
+      ...(q.state === 'cancelled' ? { cancelledAt: { not: null } } : {}),
+      ...(q.q ? { OR: [{ restaurantName: { contains: q.q, mode: 'insensitive' } }, { ownerEmail: { contains: q.q.toLowerCase() } }] } : {}),
     };
+    return this.db.platform(async (tx) => {
+      const [rows, counts] = await Promise.all([
+        tx.restaurantRegistration.findMany({ where, orderBy: { createdAt: 'desc' }, take: 200 }),
+        Promise.all([
+          tx.restaurantRegistration.count({ where: { verifiedAt: null, cancelledAt: null, expiresAt: { gt: now } } }),
+          tx.restaurantRegistration.count({ where: { verifiedAt: null, cancelledAt: null, expiresAt: { lte: now } } }),
+        ]),
+      ]);
+      const plans = await tx.subscriptionPlan.findMany({ where: { code: { in: [...new Set(rows.map((r) => r.planCode))] } } });
+      const planName = new Map(plans.map((p) => [p.code, p.name]));
+      return {
+        counts: { awaiting: counts[0], expired: counts[1] },
+        items: rows.map((r) => ({
+          id: r.id, restaurantName: r.restaurantName, ownerName: r.ownerName, ownerEmail: r.ownerEmail, gstin: r.gstin, address: r.address,
+          planCode: r.planCode, planName: planName.get(r.planCode) ?? r.planCode, createdAt: r.createdAt, expiresAt: r.expiresAt,
+          lastSentAt: r.lastSentAt, sendCount: r.sendCount, lastEmailError: r.lastEmailError, cancelledAt: r.cancelledAt, cancelReason: r.cancelReason,
+          state: r.cancelledAt ? 'cancelled' : r.expiresAt <= now ? 'expired' : 'awaiting',
+        })),
+      };
+    });
+  }
+
+  /** A fresh link (the old one stops working) valid for another 72 hours, emailed again. */
+  @RequirePermissions('platform.restaurant.create')
+  @Audited('restaurant.verification_resent')
+  @Post('registrations/:id/resend')
+  @HttpCode(200)
+  async resend(@Param('id', ParseUUIDPipe) id: string, @AuditCtx() audit: AuditDetails) {
+    const token = randomToken(32);
+    const reg = await this.db.platform(async (tx) => {
+      const r = await tx.restaurantRegistration.findUnique({ where: { id } });
+      if (!r) throw notFound('Registration');
+      if (r.verifiedAt) throw conflict('already_verified', 'The owner has already activated this restaurant');
+      if (r.cancelledAt) throw conflict('cancelled', 'This registration was cancelled; register the restaurant again');
+      await this.assertEmailFree(tx, r.ownerEmail);
+      return tx.restaurantRegistration.update({
+        where: { id }, data: { tokenHash: sha256(token), expiresAt: new Date(Date.now() + 72 * 3600_000), sendCount: { increment: 1 } },
+      });
+    });
+    const sent = await this.sendVerification(reg.id, token, reg);
+    Object.assign(audit, { objectType: 'restaurant_registration', objectId: id, after: { ownerEmail: reg.ownerEmail, sendCount: reg.sendCount, emailSent: sent.emailSent } });
+    return { id, expiresAt: reg.expiresAt, sendCount: reg.sendCount, ...sent };
+  }
+
+  @RequirePermissions('platform.restaurant.create')
+  @Audited('restaurant.registration_cancelled')
+  @Post('registrations/:id/cancel')
+  @HttpCode(200)
+  @ApiBody(apiBody(CancelBody))
+  async cancelRegistration(@Param('id', ParseUUIDPipe) id: string, @Body(zbody(CancelBody)) b: z.infer<typeof CancelBody>, @AuditCtx() audit: AuditDetails) {
+    const r = await this.db.platform(async (tx) => {
+      const r = await tx.restaurantRegistration.findUnique({ where: { id } });
+      if (!r) throw notFound('Registration');
+      if (r.verifiedAt) throw conflict('already_verified', 'The owner has already activated this restaurant');
+      if (r.cancelledAt) throw conflict('cancelled', 'Already cancelled');
+      return tx.restaurantRegistration.update({ where: { id }, data: { cancelledAt: new Date(), cancelReason: b.reason } });
+    });
+    Object.assign(audit, { objectType: 'restaurant_registration', objectId: id, after: { ownerEmail: r.ownerEmail, cancelledAt: r.cancelledAt }, reason: b.reason });
+    return { id, cancelledAt: r.cancelledAt };
   }
 
   private async assertEmailFree(tx: Tx, email: string) {
@@ -152,6 +230,7 @@ export class RestaurantsController {
       const reg = await tx.restaurantRegistration.findUnique({ where: { tokenHash: sha256(b.token) } });
       if (!reg || reg.expiresAt < new Date()) throw badRequest('invalid_token', 'Verification link is invalid or expired');
       if (reg.verifiedAt) throw conflict('already_verified', 'This email has already been verified');
+      if (reg.cancelledAt) throw badRequest('invalid_token', 'This activation link was cancelled. Ask for a new one.');
       await this.assertEmailFree(tx, reg.ownerEmail);
       const plan = await tx.subscriptionPlan.findUnique({ where: { code: reg.planCode } });
       if (!plan) throw badRequest('unknown_plan', 'Plan no longer exists');

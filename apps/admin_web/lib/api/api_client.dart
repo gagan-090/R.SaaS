@@ -112,6 +112,10 @@ class ApiClient {
         'page': '$page',
         'pageSize': '25',
       }) as Json;
+  Future<Json> registrations({String state = 'awaiting', String? q}) async =>
+      await _send('GET', '/restaurants/registrations', query: {'state': state, if (q != null && q.isNotEmpty) 'q': q}) as Json;
+  Future<Json> resendVerification(String id) async => await _send('POST', '/restaurants/registrations/$id/resend') as Json;
+  Future<Json> cancelRegistration(String id, String reason) async => await _send('POST', '/restaurants/registrations/$id/cancel', body: {'reason': reason}) as Json;
   Future<Json> restaurant(String id) async => await _send('GET', '/restaurants/$id') as Json;
   Future<Json> registerRestaurant(Json body) async => await _send('POST', '/restaurants', body: body) as Json;
   Future<Json> setStatus(String id, String action, String reason) async => await _send('POST', '/restaurants/$id/status', body: {'action': action, 'reason': reason}) as Json;
@@ -140,7 +144,8 @@ class ApiClient {
 
   // ---- restaurant console (owner / IT admin)
   Future<Json> overview() async => await _send('GET', '/tenant/overview') as Json;
-  Future<Json> dashboard({int days = 7}) async => await _send('GET', '/tenant/dashboard', query: {'days': '$days'}) as Json;
+  Future<Json> dashboard({String range = '7d'}) async => await _send('GET', '/tenant/dashboard', query: {'range': range}) as Json;
+  Future<Json> billDetail(String id) async => await _send('GET', '/tenant/bills/$id') as Json;
   Future<Json> profile() async => await _send('GET', '/tenant/profile') as Json;
   Future<Json> updateProfile(Json body) async => await _send('PATCH', '/tenant/profile', body: body) as Json;
 

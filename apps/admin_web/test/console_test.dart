@@ -42,13 +42,40 @@ class FakeRestaurantApi {
         'hub': {'online': true, 'lastSeenAt': DateTime.now().toUtc().toIso8601String()},
       };
 
+  String? lastRange;
   Map<String, dynamic> dashboard() => {
-        'from': '2026-10-07T00:00:00Z',
-        'days': [for (var i = 0; i < 7; i++) {'day': '2026-10-${(7 + i).toString().padLeft(2, '0')}', 'salesPaise': i * 150000, 'bills': i * 3}],
+        'range': lastRange ?? '7d', 'dayCount': 7, 'from': '2026-10-07T00:00:00Z',
+        'kpis': {
+          'salesPaise': 900000, 'bills': 18, 'avgBillPaise': 50000, 'orders': 20, 'dineInPaise': 700000, 'takeawayPaise': 200000,
+          'dineInBills': 14, 'takeawayBills': 4, 'discountsPaise': 15000, 'taxesPaise': 42000, 'tipsPaise': 12000,
+          'reversals': {'count': 2, 'amountPaise': 18000}, 'adjustments': {'count': 1, 'amountPaise': -2000},
+        },
+        'previous': {'salesPaise': 800000, 'bills': 16, 'avgBillPaise': 50000},
+        'change': {'salesPct': 12.5, 'billsPct': 12.5},
+        'series': [for (var i = 0; i < 7; i++) {'day': '2026-10-${(7 + i).toString().padLeft(2, '0')}', 'salesPaise': i * 150000, 'bills': i * 3}],
+        'hourly': [for (var h = 0; h < 24; h++) {'hour': h, 'salesPaise': h == 20 ? 500000 : (h == 13 ? 400000 : 0), 'bills': h == 20 ? 10 : (h == 13 ? 8 : 0)}],
+        'busiestHour': 20,
+        'byMode': {'cash': 300000, 'upi': 500000, 'card': 100000},
+        'byCategory': [{'name': 'Mains', 'qty': 40, 'amountPaise': 600000}, {'name': 'Breads', 'qty': 60, 'amountPaise': 120000}],
+        'byWaiter': [{'name': 'Anita', 'salesPaise': 500000, 'bills': 9, 'tipsPaise': 8000}, {'name': 'No waiter', 'salesPaise': 200000, 'bills': 4, 'tipsPaise': 0}],
+        'topItems': [{'name': 'Butter Chicken', 'category': 'Mains', 'qty': 40, 'amountPaise': 1360000}],
+        'reversals': {'items': [], 'reasons': [{'reason': 'Guest changed mind', 'count': 2}]},
+        'live': {'openTables': 3, 'takeaways': 1, 'unpaidBills': 2, 'unpaidPaise': 84000},
+        'recentBills': [{'id': 'bill-1', 'invoiceNo': 'BR01/26-27/000101', 'totalPaise': 74400, 'status': 'paid', 'createdAt': '2026-10-13T14:00:00Z', 'closedAt': '2026-10-13T14:30:00Z', 'where': 'Table 7', 'waiter': 'Anita'}],
         'today': {'salesPaise': 900000, 'bills': 18, 'avgBillPaise': 50000},
-        'period': {'salesPaise': 3150000, 'bills': 63, 'orders': 70, 'taxesPaise': 150000, 'discountsPaise': 0, 'tipsPaise': 42000},
-        'byMode': {'cash': 1000000, 'upi': 1800000, 'card': 350000},
-        'topItems': [{'name': 'Butter Chicken', 'qty': 40, 'amountPaise': 1360000}],
+      };
+
+  Map<String, dynamic> billDetail() => {
+        'id': 'bill-1', 'invoiceNo': 'BR01/26-27/000101', 'status': 'paid', 'createdAt': '2026-10-13T14:00:00Z', 'closedAt': '2026-10-13T14:30:00Z',
+        'where': 'Table 7', 'waiter': 'Anita',
+        'totals': {'subtotalPaise': 68000, 'discountPaise': 0, 'cgstPaise': 1700, 'sgstPaise': 1700, 'tipPaise': 3000, 'roundOffPaise': 0, 'totalPaise': 74400},
+        'lines': [
+          {'name': 'Butter Chicken', 'qty': 2, 'pricePaise': 34000, 'amountPaise': 68000, 'status': 'sent', 'notes': 'less spicy', 'reversalReason': null},
+          {'name': 'Naan', 'qty': 3, 'pricePaise': 6000, 'amountPaise': 18000, 'status': 'reversed', 'notes': null, 'reversalReason': 'Guest changed mind'},
+        ],
+        'payments': [{'mode': 'upi', 'amountPaise': 40000, 'changePaise': 0}, {'mode': 'cash', 'amountPaise': 34400, 'changePaise': 15600}],
+        'tips': [{'waiter': 'Anita', 'amountPaise': 3000}],
+        'adjustments': [{'amountPaise': -2000, 'reason': 'Naan was cold'}],
       };
 
   http.Client client() => MockClient((req) async {
@@ -65,7 +92,10 @@ class FakeRestaurantApi {
           case ('GET', '/tenant/overview'):
             out = overview();
           case ('GET', '/tenant/dashboard'):
+            lastRange = req.url.queryParameters['range'];
             out = dashboard();
+          case ('GET', '/tenant/bills/bill-1'):
+            out = billDetail();
           case ('GET', '/menu/categories'):
             out = cats;
           case ('POST', '/menu/categories'):
@@ -172,8 +202,10 @@ void main() {
       await start(t, size: size, brightness: brightness);
       expect(find.text('Demo Dhaba'), findsOneWidget);
       expect(find.textContaining('GET READY FOR SERVICE'), findsOneWidget);
-      expect(find.byKey(const Key('kpi-today')), findsOneWidget);
-      expect(find.descendant(of: find.byKey(const Key('kpi-today')), matching: find.text('₹9,000')), findsOneWidget);
+      expect(find.byKey(const Key('kpi-sales')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const Key('kpi-sales')), matching: find.text('₹9,000')), findsOneWidget);
+      expect(find.textContaining('▲ 12.5%'), findsWidgets); // sales and bills both up
+      expect(find.byKey(const Key('live-strip')), findsOneWidget);
       expect(find.text('Hub online'), findsOneWidget);
       if (size == phone) {
         await t.tap(find.byKey(const Key('open-nav')));
@@ -282,4 +314,28 @@ void main() {
     expect(base64Decode(out.base64).length, out.bytes.length);
     expect(() => prepareDishPhoto(Uint8List.fromList(utf8.encode('not an image'))), throwsFormatException);
   });
+
+  for (final size in [desktop, phone]) {
+    testWidgets('[${size.width.toInt()}] dashboard: range switch, every section, bill drill-down', (t) async {
+      final api = await start(t, size: size);
+      expect(api.lastRange, 'today', reason: 'opens on today');
+      for (final title in ['SALES BY HOUR · TODAY', 'HOW GUESTS PAID', 'DINE-IN VS TAKEAWAY', 'SALES BY CATEGORY', 'DISCOUNTS, REVERSALS, CORRECTIONS', 'STAFF PERFORMANCE', 'RECENT BILLS']) {
+        expect(find.text(title), findsOneWidget, reason: title);
+      }
+      expect(find.text('Busiest 8 PM'), findsOneWidget);
+      expect(find.text('1× Guest changed mind'.replaceFirst('1×', '2×')), findsOneWidget);
+      await t.tap(find.text('7 days'));
+      await t.pumpAndSettle();
+      expect(api.lastRange, '7d');
+      expect(find.text('SALES BY DAY · 7 DAYS'), findsOneWidget);
+      await t.ensureVisible(find.byKey(const Key('recent-BR01/26-27/000101')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const Key('recent-BR01/26-27/000101')));
+      await t.pumpAndSettle();
+      expect(find.text('Reversed: Guest changed mind'), findsOneWidget);
+      expect(find.text('Tip to Anita'), findsOneWidget);
+      expect(find.text('Naan was cold'), findsOneWidget);
+      expect(find.textContaining('change ₹156'), findsOneWidget);
+    });
+  }
 }

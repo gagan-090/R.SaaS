@@ -38,6 +38,10 @@ class FixtureApi {
           final (s, b) = overrides[key]!;
           return http.Response.bytes(utf8.encode(jsonEncode(b)), s, headers: {'content-type': 'application/json'});
         }
+        if (req.method == 'GET' && path == '/restaurants/registrations') {
+          // not in the recorded fixtures: an empty queue unless a test overrides it
+          return http.Response.bytes(utf8.encode(jsonEncode({'counts': {'awaiting': 0, 'expired': 0}, 'items': []})), 200, headers: {'content-type': 'application/json'});
+        }
         for (final (m, re, file) in _routes) {
           if (m == req.method && RegExp(re).hasMatch(path)) {
             if (file.isEmpty) return http.Response('', 204);

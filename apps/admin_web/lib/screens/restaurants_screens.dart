@@ -22,8 +22,12 @@ class DashboardScreen extends ConsumerWidget {
         api.restaurants(status: 'blocked'),
         api.restaurants(expiresBefore: in30),
         api.audit(),
+        api.registrations(),
       ]);
-      return {'active': r[0]['total'], 'suspended': r[1]['total'], 'blocked': r[2]['total'], 'expiring': r[3]['total'], 'audit': r[4]['items']};
+      return {
+        'active': r[0]['total'], 'suspended': r[1]['total'], 'blocked': r[2]['total'], 'expiring': r[3]['total'], 'audit': r[4]['items'],
+        'awaiting': (r[5]['counts'] as Map)['awaiting'],
+      };
     }
 
     return AsyncView<Map<String, dynamic>>(
@@ -32,6 +36,7 @@ class DashboardScreen extends ConsumerWidget {
         Text('Dashboard', style: Theme.of(c).textTheme.headlineMedium),
         const SizedBox(height: HPSpace.x2),
         Wrap(spacing: HPSpace.lg, runSpacing: HPSpace.lg, children: [
+          _Kpi('Awaiting verification', d['awaiting'], HPTone.pending, () => c.go('/restaurants?status=pending')),
           _Kpi('Active', d['active'], HPTone.success, () => c.go('/restaurants?status=active')),
           _Kpi('Suspended', d['suspended'], HPTone.saffron, () => c.go('/restaurants?status=suspended')),
           _Kpi('Blocked', d['blocked'], HPTone.danger, () => c.go('/restaurants?status=blocked')),
@@ -113,25 +118,53 @@ class _RestaurantsScreenState extends ConsumerState<RestaurantsScreen> {
         _load = _makeLoad();
       });
 
+  /// "pending" restaurants are registrations awaiting the owner's email: they live in their own tab.
+  late bool _awaitingTab = widget.initialStatus == 'pending';
+  int _awaitingReload = 0;
+
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
     final canCreate = auth is SignedIn && auth.can('platform.restaurant.create');
+    final narrow = isNarrowWeb(context);
     return Padding(
-      padding: const EdgeInsets.all(HPSpace.x4),
+      padding: EdgeInsets.all(narrow ? HPSpace.lg : HPSpace.x4),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(children: [
-          Expanded(child: Text('Restaurants', style: Theme.of(context).textTheme.headlineMedium)),
+        Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, runSpacing: HPSpace.md, children: [
+          Text('Restaurants', style: Theme.of(context).textTheme.headlineMedium),
           if (canCreate)
-            SizedBox(width: 240, child: PrimaryButton(label: 'Register restaurant', icon: Icons.add_rounded, height: 52, onPressed: () async {
-              if (await showDialog<bool>(context: context, builder: (_) => const RegisterRestaurantDialog()) == true) _apply();
+            SizedBox(width: 240, child: PrimaryButton(key: const Key('register-restaurant'), label: 'Register restaurant', icon: Icons.add_rounded, height: 52, onPressed: () async {
+              if (await showDialog<bool>(context: context, builder: (_) => const RegisterRestaurantDialog()) == true) {
+                // a new registration waits for the owner's email: show it there
+                setState(() {
+                  _awaitingTab = true;
+                  _awaitingReload++;
+                });
+              }
             })),
         ]),
-        const SizedBox(height: HPSpace.x2),
+        const SizedBox(height: HPSpace.lg),
+        SegmentedButton<bool>(
+          key: const Key('restaurants-tabs'),
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment(value: false, label: Text('Restaurants'), icon: Icon(Icons.storefront_outlined)),
+            ButtonSegment(value: true, label: Text('Awaiting verification'), icon: Icon(Icons.mark_email_unread_outlined)),
+          ],
+          selected: {_awaitingTab},
+          onSelectionChanged: (v) => setState(() => _awaitingTab = v.first),
+        ),
+        const SizedBox(height: HPSpace.lg),
+        if (_awaitingTab) Expanded(child: PendingRegistrations(key: ValueKey(_awaitingReload), canAct: canCreate)) else ..._list(context),
+      ]),
+    );
+  }
+
+  List<Widget> _list(BuildContext context) => [
         Wrap(spacing: HPSpace.md, runSpacing: HPSpace.md, crossAxisAlignment: WrapCrossAlignment.center, children: [
           SizedBox(width: 260, child: TextField(key: const Key('search'), controller: _q, decoration: const InputDecoration(labelText: 'Search name or code', prefixIcon: Icon(Icons.search)), onSubmitted: (_) => _apply())),
           SizedBox(width: 220, child: TextField(controller: _owner, decoration: const InputDecoration(labelText: 'Owner email'), onSubmitted: (_) => _apply())),
-          _Drop(label: 'Status', value: _status, items: const ['pending', 'active', 'suspended', 'blocked'], onChanged: (v) {
+          _Drop(label: 'Status', value: _status == 'pending' ? null : _status, items: const ['active', 'suspended', 'blocked'], onChanged: (v) {
             _status = v;
             _apply();
           }),
@@ -192,9 +225,7 @@ class _RestaurantsScreenState extends ConsumerState<RestaurantsScreen> {
             },
           ),
         ),
-      ]),
-    );
-  }
+      ];
 }
 
 class _Drop extends StatelessWidget {
@@ -246,33 +277,7 @@ class _RegisterRestaurantDialogState extends ConsumerState<RegisterRestaurantDia
       if (!mounted) return;
       if (r['emailSent'] == false) {
         // e.g. Resend sandbox: only the account's own address receives mail until a domain is verified
-        await showDialog<void>(
-          context: context,
-          builder: (c) => HPDialog(
-            title: 'Email not delivered',
-            actions: [PrimaryButton(label: 'Done', height: 52, onPressed: () => Navigator.pop(c))],
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
-              Text('The restaurant is registered, but the email provider said: ${r['emailError']}', style: HPType.body(c.hp.text)),
-              const SizedBox(height: HPSpace.md),
-              Text('Send the owner this activation link yourself (valid 72 hours):', style: HPType.body(c.hp.muted)),
-              const SizedBox(height: HPSpace.sm),
-              Container(
-                padding: const EdgeInsets.all(HPSpace.md),
-                decoration: BoxDecoration(color: c.hp.raised, borderRadius: BorderRadius.circular(12)),
-                child: SelectableText('${r['verifyUrl']}', key: const Key('verify-link'), style: HPType.mono(c.hp.text)),
-              ),
-              const SizedBox(height: HPSpace.sm),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  icon: const Icon(Icons.copy_rounded, size: 18),
-                  label: const Text('Copy link'),
-                  onPressed: () => Clipboard.setData(ClipboardData(text: '${r['verifyUrl']}')),
-                ),
-              ),
-            ]),
-          ),
-        );
+        await showActivationLinkDialog(context, r);
         if (mounted) Navigator.pop(context, true);
         return;
       }
@@ -564,4 +569,199 @@ class _AuditScreenState extends State<AuditScreen> {
 }
 
 /// P8 Plans (feature flags + limits).
+/// Shown when the email provider refused the message: the Super Admin passes the link on another way.
+Future<void> showActivationLinkDialog(BuildContext context, Map<String, dynamic> r) => showDialog<void>(
+      context: context,
+      builder: (c) => HPDialog(
+        title: 'Email not delivered',
+        actions: [PrimaryButton(label: 'Done', height: 52, onPressed: () => Navigator.pop(c))],
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+          Text('The email provider said: ${r['emailError']}', style: HPType.body(c.hp.text)),
+          const SizedBox(height: HPSpace.md),
+          Text('Send the owner this activation link yourself (valid 72 hours):', style: HPType.body(c.hp.muted)),
+          const SizedBox(height: HPSpace.sm),
+          Container(
+            padding: const EdgeInsets.all(HPSpace.md),
+            decoration: BoxDecoration(color: c.hp.raised, borderRadius: BorderRadius.circular(12)),
+            child: SelectableText('${r['verifyUrl']}', key: const Key('verify-link'), style: HPType.mono(c.hp.text)),
+          ),
+          const SizedBox(height: HPSpace.sm),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              icon: const Icon(Icons.copy_rounded, size: 18),
+              label: const Text('Copy link'),
+              onPressed: () => Clipboard.setData(ClipboardData(text: '${r['verifyUrl']}')),
+            ),
+          ),
+        ]),
+      ),
+    );
+
+String _ago(Object? iso) {
+  final d = DateTime.tryParse('${iso ?? ''}');
+  if (d == null) return '—';
+  final m = DateTime.now().difference(d).inMinutes;
+  if (m < 1) return 'just now';
+  if (m < 60) return '$m min ago';
+  if (m < 1440) return '${m ~/ 60} h ago';
+  return '${m ~/ 1440} d ago';
+}
+
+String _expiresIn(Object? iso) {
+  final d = DateTime.tryParse('${iso ?? ''}');
+  if (d == null) return '—';
+  final m = d.difference(DateTime.now()).inMinutes;
+  if (m <= 0) return 'expired ${_ago(iso)}';
+  if (m < 60) return 'expires in $m min';
+  return 'expires in ${m ~/ 60} h';
+}
+
+/// Registrations waiting for the owner to confirm their email: resend a fresh link or cancel.
+class PendingRegistrations extends ConsumerStatefulWidget {
+  const PendingRegistrations({super.key, required this.canAct});
+  final bool canAct;
+  @override
+  ConsumerState<PendingRegistrations> createState() => _PendingRegistrationsState();
+}
+
+class _PendingRegistrationsState extends ConsumerState<PendingRegistrations> {
+  String _state = 'awaiting';
+  String _q = '';
+  int _reload = 0;
+  final _busy = <String>{};
+
+  Future<void> _resend(Map<String, dynamic> r) async {
+    setState(() => _busy.add(r['id'] as String));
+    try {
+      final res = await ref.read(apiProvider).resendVerification(r['id'] as String);
+      if (!mounted) return;
+      setState(() => _busy.remove(r['id'])); // stop the spinner before any dialog opens
+      if (res['emailSent'] == false) {
+        await showActivationLinkDialog(context, res);
+      } else {
+        showDone(context, 'New link sent to ${r['ownerEmail']}');
+      }
+      setState(() => _reload++);
+    } catch (e) {
+      if (mounted) showError(context, e);
+    } finally {
+      if (mounted) setState(() => _busy.remove(r['id']));
+    }
+  }
+
+  Future<void> _cancel(Map<String, dynamic> r) async {
+    final reason = await ReasonDialog.show(context, title: 'Cancel ${r['restaurantName']}?', confirmLabel: 'Cancel registration', message: 'The activation link stops working. You can register the restaurant again later.');
+    if (reason == null) return;
+    try {
+      await ref.read(apiProvider).cancelRegistration(r['id'] as String, reason);
+      if (mounted) showDone(context, 'Registration cancelled');
+      setState(() => _reload++);
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.hp;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, crossAxisAlignment: WrapCrossAlignment.center, children: [
+        for (final (k, label) in const [('awaiting', 'Awaiting'), ('expired', 'Link expired'), ('cancelled', 'Cancelled'), ('all', 'All')])
+          ChoiceChip(key: Key('reg-$k'), label: Text(label), selected: _state == k, onSelected: (_) => setState(() => _state = k)),
+        SizedBox(width: 260, child: HPSearchField(hint: 'Restaurant or owner email', onChanged: (v) => setState(() => _q = v.trim()))),
+      ]),
+      const SizedBox(height: HPSpace.lg),
+      Expanded(
+        child: AsyncView<Map<String, dynamic>>(
+          key: ValueKey('$_state|$_q|$_reload'),
+          load: () => ref.read(apiProvider).registrations(state: _state, q: _q),
+          isEmpty: (d) => (d['items'] as List).isEmpty,
+          emptyTitle: _state == 'awaiting' ? 'Nobody is waiting to verify' : 'Nothing here',
+          builder: (c, d, reload) => ListView(children: [
+            for (final r in (d['items'] as List).cast<Map<String, dynamic>>())
+              Padding(
+                padding: const EdgeInsets.only(bottom: HPSpace.md),
+                child: Card(
+                  key: Key('registration-${r['restaurantName']}'),
+                  child: Padding(
+                    padding: const EdgeInsets.all(HPSpace.lg),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(color: p.pending.withValues(alpha: .14), borderRadius: BorderRadius.circular(12)),
+                          child: Icon(Icons.mark_email_unread_outlined, color: p.pending),
+                        ),
+                        const SizedBox(width: HPSpace.md),
+                        Expanded(
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text('${r['restaurantName']}', style: HPType.titleCard(p.text)),
+                            Text('${r['ownerName']} · ${r['ownerEmail']}', style: HPType.body(p.muted), overflow: TextOverflow.ellipsis),
+                          ]),
+                        ),
+                        StatusChip(
+                          label: switch (r['state']) { 'expired' => 'Link expired', 'cancelled' => 'Cancelled', _ => 'Awaiting owner' },
+                          tone: switch (r['state']) { 'expired' => HPTone.saffron, 'cancelled' => HPTone.danger, _ => HPTone.pending },
+                        ),
+                      ]),
+                      const SizedBox(height: HPSpace.md),
+                      Wrap(spacing: HPSpace.lg, runSpacing: HPSpace.xs, children: [
+                        _Fact(Icons.workspace_premium_outlined, '${r['planName']}'),
+                        _Fact(Icons.send_outlined, 'Sent ${_ago(r['lastSentAt'] ?? r['createdAt'])}${(r['sendCount'] as int? ?? 1) > 1 ? ' · ${r['sendCount']}×' : ''}'),
+                        if (r['state'] != 'cancelled') _Fact(Icons.timer_outlined, _expiresIn(r['expiresAt'])),
+                        if (r['cancelReason'] != null) _Fact(Icons.block_outlined, 'Cancelled: ${r['cancelReason']}'),
+                      ]),
+                      if (r['lastEmailError'] != null && r['state'] != 'cancelled')
+                        Container(
+                          margin: const EdgeInsets.only(top: HPSpace.md),
+                          padding: const EdgeInsets.all(HPSpace.sm),
+                          decoration: BoxDecoration(color: p.danger.withValues(alpha: .1), borderRadius: BorderRadius.circular(10)),
+                          child: Row(children: [
+                            Icon(Icons.error_outline_rounded, size: 18, color: p.danger),
+                            const SizedBox(width: HPSpace.sm),
+                            Expanded(child: Text('Last email not delivered: ${r['lastEmailError']}', style: HPType.body(p.text).copyWith(fontSize: 13))),
+                          ]),
+                        ),
+                      if (widget.canAct && r['state'] != 'cancelled') ...[
+                        const SizedBox(height: HPSpace.md),
+                        Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, children: [
+                          SizedBox(
+                            width: 200,
+                            child: PrimaryButton(
+                              key: Key('resend-${r['restaurantName']}'),
+                              label: r['state'] == 'expired' ? 'Send a new link' : 'Resend email',
+                              icon: Icons.forward_to_inbox_rounded,
+                              height: 44,
+                              busy: _busy.contains(r['id']),
+                              onPressed: () => _resend(r),
+                            ),
+                          ),
+                          SizedBox(width: 120, child: SecondaryButton(key: Key('cancel-${r['restaurantName']}'), label: 'Cancel', height: 44, onPressed: () => _cancel(r))),
+                        ]),
+                      ],
+                    ]),
+                  ),
+                ),
+              ),
+          ]),
+        ),
+      ),
+    ]);
+  }
+}
+
+class _Fact extends StatelessWidget {
+  const _Fact(this.icon, this.text);
+  final IconData icon;
+  final String text;
+  @override
+  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 16, color: context.hp.muted),
+        const SizedBox(width: 6),
+        Text(text, style: HPType.body(context.hp.muted)),
+      ]);
+}
+
 String apiErrorText(Object e) => e is ApiException ? e.message : '$e';
