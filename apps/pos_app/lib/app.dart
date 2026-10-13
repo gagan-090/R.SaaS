@@ -19,7 +19,7 @@ class PosApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: HPTheme.service(brightness: Brightness.light),
       darkTheme: HPTheme.service(),
-      themeMode: ThemeMode.system,
+      themeMode: ref.watch(themeModeProvider), // Auto (device setting) unless Light / Dark is chosen in More
       home: AnimatedSwitcher(
         duration: const Duration(milliseconds: 220),
         child: setup.when(

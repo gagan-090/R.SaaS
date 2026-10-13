@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiBody, ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import type { AuditDetails } from '../common/actor';
@@ -6,7 +6,7 @@ import { AuditCtx } from '../common/actor';
 import { Audited, RequirePermissions } from '../common/decorators';
 import { badRequest, conflict, notFound } from '../common/errors';
 import { FEATURE_FLAGS } from '../common/permissions';
-import { apiBody, zbody } from '../common/validation';
+import { apiBody, zbody, ZodPipe } from '../common/validation';
 import { DbService } from '../db/db.service';
 
 const flags = Object.keys(FEATURE_FLAGS);
@@ -18,7 +18,8 @@ const PlanBody = z.object({
   pricePaise: z.number().int().nonnegative(),
   billingCycle: z.enum(['monthly', 'yearly']).default('monthly'),
 });
-const PlanPatch = PlanBody.omit({ code: true }).partial();
+const PlanPatch = PlanBody.omit({ code: true }).extend({ archived: z.boolean() }).partial();
+const ListQuery = z.object({ includeArchived: z.enum(['true', 'false']).default('false') });
 
 @ApiTags('plans')
 @ApiBearerAuth()
@@ -28,8 +29,16 @@ export class PlansController {
 
   @RequirePermissions('platform.restaurant.read')
   @Get()
-  list() {
-    return this.db.platform((tx) => tx.subscriptionPlan.findMany({ orderBy: { pricePaise: 'asc' } }));
+  async list(@Query(new ZodPipe(ListQuery)) q: z.infer<typeof ListQuery>) {
+    return this.db.platform(async (tx) => {
+      const plans = await tx.subscriptionPlan.findMany({
+        where: q.includeArchived === 'true' ? {} : { archived: false },
+        orderBy: [{ archived: 'asc' }, { pricePaise: 'asc' }, { name: 'asc' }],
+        include: { _count: { select: { licenses: { where: { status: 'active' } } } } },
+      });
+      // activeLicenses: how many restaurants are on the plan right now (shown before archiving / repricing)
+      return plans.map(({ _count, ...p }) => ({ ...p, activeLicenses: _count.licenses }));
+    });
   }
 
   @RequirePermissions('platform.plan.manage')

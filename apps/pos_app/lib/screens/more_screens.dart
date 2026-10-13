@@ -68,7 +68,17 @@ class MoreScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: HPSpace.lg),
-              Text('Light or dark follows this device\'s setting.', textAlign: TextAlign.center, style: HPType.body(p.faint)),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(HPSpace.lg),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    Text('Appearance', style: HPType.label(p.text)),
+                    Text('Auto follows this device\'s light / dark setting.', style: HPType.body(p.muted)),
+                    const SizedBox(height: HPSpace.md),
+                    ThemeModeSwitch(value: ref.watch(themeModeProvider), onChanged: ref.read(themeModeProvider.notifier).set),
+                  ]),
+                ),
+              ),
             ]),
           ),
         ),

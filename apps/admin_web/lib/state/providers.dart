@@ -1,7 +1,9 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api/api_client.dart';
+
 
 final apiProvider = Provider<ApiClient>((ref) => ApiClient());
 
@@ -80,3 +82,35 @@ class AuthNotifier extends Notifier<AuthState> with ChangeNotifier {
 }
 
 final authProvider = NotifierProvider<AuthNotifier, AuthState>(AuthNotifier.new);
+
+/// Plans that can be sold right now (not archived) — used by registration, license changes and filters.
+final activePlansProvider = FutureProvider<List<Json>>((ref) async => (await ref.read(apiProvider).plans()).cast<Json>());
+
+/// Light / dark / follow the device. Remembered on this device (browser storage on the web).
+class ThemeModeNotifier extends Notifier<ThemeMode> {
+  static const _key = 'appearance';
+
+  @override
+  ThemeMode build() {
+    _load();
+    return ThemeMode.system;
+  }
+
+  Future<void> _load() async {
+    try {
+      final v = (await SharedPreferences.getInstance()).getString(_key);
+      if (v != null) state = ThemeMode.values.firstWhere((m) => m.name == v, orElse: () => ThemeMode.system);
+    } catch (_) {
+      // storage unavailable (private window, tests): stay on "follow the device"
+    }
+  }
+
+  Future<void> set(ThemeMode mode) async {
+    state = mode;
+    try {
+      await (await SharedPreferences.getInstance()).setString(_key, mode.name);
+    } catch (_) {}
+  }
+}
+
+final themeModeProvider = NotifierProvider<ThemeModeNotifier, ThemeMode>(ThemeModeNotifier.new);

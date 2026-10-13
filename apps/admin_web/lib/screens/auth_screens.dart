@@ -6,13 +6,21 @@ import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 import '../api/api_client.dart';
 import '../state/providers.dart';
 
-class _AuthFrame extends StatelessWidget {
+class _AuthFrame extends ConsumerWidget {
   const _AuthFrame({required this.title, required this.subtitle, required this.child});
   final String title;
   final String subtitle;
   final Widget child;
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context, WidgetRef ref) => Scaffold(
+        appBar: AppBar(
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: HPSpace.lg),
+              child: ThemeModeSwitch(compact: true, value: ref.watch(themeModeProvider), onChanged: ref.read(themeModeProvider.notifier).set),
+            ),
+          ],
+        ),
         body: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(HPSpace.x2),

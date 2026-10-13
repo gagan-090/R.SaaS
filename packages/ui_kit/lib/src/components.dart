@@ -911,3 +911,32 @@ class DishCard extends StatelessWidget {
     );
   }
 }
+
+// ------------------------------------------------------------------ appearance
+
+/// Appearance picker: follow the device (default), always light, or always dark.
+class ThemeModeSwitch extends StatelessWidget {
+  const ThemeModeSwitch({super.key, required this.value, required this.onChanged, this.compact = false});
+  final ThemeMode value;
+  final ValueChanged<ThemeMode> onChanged;
+
+  /// Icons only (sidebars, top bars).
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) => SegmentedButton<ThemeMode>(
+        key: const Key('theme-mode'),
+        showSelectedIcon: false,
+        style: compact ? const ButtonStyle(visualDensity: VisualDensity.compact, minimumSize: WidgetStatePropertyAll(Size(0, 40))) : null,
+        segments: [
+          ButtonSegment(value: ThemeMode.system, icon: const Icon(Icons.brightness_auto_rounded, size: 18), label: compact ? null : const Text('Auto'), tooltip: 'Follow this device'),
+          ButtonSegment(value: ThemeMode.light, icon: const Icon(Icons.light_mode_rounded, size: 18), label: compact ? null : const Text('Light'), tooltip: 'Light'),
+          ButtonSegment(value: ThemeMode.dark, icon: const Icon(Icons.dark_mode_rounded, size: 18), label: compact ? null : const Text('Dark'), tooltip: 'Dark'),
+        ],
+        selected: {value},
+        onSelectionChanged: (v) {
+          HapticFeedback.selectionClick();
+          onChanged(v.first);
+        },
+      );
+}

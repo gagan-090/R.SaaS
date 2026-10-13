@@ -440,4 +440,20 @@ void main() {
     expect(hub.adjustments.single['approver'], 'u-own');
     expect(hub.adjustments.single['pin'], '9999');
   });
+
+  testWidgets('appearance: Dark from More overrides a light device; Auto follows it again', (t) async {
+    await start(t, size: phone, brightness: Brightness.light);
+    await signIn(t, 'Ravi', '1234');
+    Brightness now() => Theme.of(t.element(find.byType(Scaffold).last)).brightness;
+    expect(now(), Brightness.light);
+    await nav(t, 'More');
+    await t.ensureVisible(find.byKey(const Key('theme-mode')));
+    await t.pumpAndSettle();
+    await t.tap(find.byTooltip('Dark'));
+    await t.pumpAndSettle();
+    expect(now(), Brightness.dark);
+    await t.tap(find.byTooltip('Follow this device'));
+    await t.pumpAndSettle();
+    expect(now(), Brightness.light);
+  });
 }

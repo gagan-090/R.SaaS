@@ -114,7 +114,10 @@ class ApiClient {
   Future<Json> licenseAction(String id, String action, String reason, {String? planCode}) async =>
       await _send('POST', '/restaurants/$id/licenses', body: {'action': action, 'reason': reason, 'planCode': ?planCode}) as Json;
   Future<Json> recordPayment(String id, Json body) async => await _send('POST', '/restaurants/$id/payments', body: body) as Json;
-  Future<List<dynamic>> plans() async => await _send('GET', '/plans') as List<dynamic>;
+  Future<List<dynamic>> plans({bool includeArchived = false}) async =>
+      await _send('GET', '/plans', query: {if (includeArchived) 'includeArchived': 'true'}) as List<dynamic>;
+  Future<Json> createPlan(Json body) async => await _send('POST', '/plans', body: body) as Json;
+  Future<Json> updatePlan(String id, Json body) async => await _send('PATCH', '/plans/$id', body: body) as Json;
 
   // ---- platform admins
   Future<List<dynamic>> admins() async => await _send('GET', '/platform/admins') as List<dynamic>;

@@ -5,6 +5,7 @@ import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 
 import 'screens/admins_screen.dart';
 import 'screens/auth_screens.dart';
+import 'screens/plans_screen.dart';
 import 'screens/console/dashboard_screen.dart';
 import 'screens/console/devices_screen.dart';
 import 'screens/console/menu_screen.dart';
@@ -78,7 +79,7 @@ class AdminApp extends ConsumerWidget {
         debugShowCheckedModeBanner: false,
         theme: HPTheme.backOffice(),
         darkTheme: HPTheme.backOffice(brightness: Brightness.dark),
-        themeMode: ThemeMode.system, // follows the device / browser setting
+        themeMode: ref.watch(themeModeProvider), // Auto follows the device / browser; Light or Dark if chosen
         routerConfig: ref.watch(routerProvider),
       );
 }
@@ -151,6 +152,21 @@ class ConsoleShell extends ConsumerWidget {
                       ),
                     ),
                 ]),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: HPSpace.lg),
+                child: Theme(
+                  data: Theme.of(context).copyWith(
+                    segmentedButtonTheme: SegmentedButtonThemeData(
+                      style: ButtonStyle(
+                        backgroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? HPColors.saffron : Colors.transparent),
+                        foregroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? HPColors.onSaffron : _onSidebar(p)),
+                        side: WidgetStatePropertyAll(BorderSide(color: _onSidebar(p).withValues(alpha: .3))),
+                      ),
+                    ),
+                  ),
+                  child: ThemeModeSwitch(compact: true, value: ref.watch(themeModeProvider), onChanged: ref.read(themeModeProvider.notifier).set),
+                ),
               ),
               if (me != null)
                 Padding(

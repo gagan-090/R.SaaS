@@ -143,6 +143,7 @@ model SubscriptionPlan {
   limits       Json
   pricePaise   Int          @map("price_paise")
   billingCycle BillingCycle @default(monthly) @map("billing_cycle")
+  archived     Boolean      @default(false) // hidden from new sales; existing licenses keep working
   createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
   licenses     License[]

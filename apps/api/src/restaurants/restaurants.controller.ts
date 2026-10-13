@@ -26,7 +26,7 @@ const RegisterBody = z.object({
   restaurantName: z.string().trim().min(1).max(160),
   gstin: z.string().regex(GSTIN, 'invalid GSTIN').optional(),
   address: z.string().max(500).optional(),
-  planCode: z.enum(PLAN_DEFAULTS.map((p) => p.code) as [string, ...string[]]),
+  planCode: z.string().regex(/^[a-z][a-z0-9_]{2,30}$/),
 });
 const VerifyBody = z.object({ token: z.string().min(1), password: z.string().min(12).max(256) });
 const ListQuery = z.object({
@@ -103,6 +103,8 @@ export class RestaurantsController {
         where: { ownerEmail, verifiedAt: null, expiresAt: { gt: new Date() } },
       });
       if (pending) throw conflict('duplicate_email', 'A registration for this email is already pending verification');
+      const plan = await tx.subscriptionPlan.findUnique({ where: { code: b.planCode } });
+      if (!plan || plan.archived) throw badRequest('unknown_plan', 'Choose an active plan');
       return tx.restaurantRegistration.create({
         data: {
           ownerEmail, ownerName: b.ownerName, restaurantName: b.restaurantName, gstin: b.gstin, address: b.address,
@@ -289,9 +291,17 @@ export class RestaurantsController {
       if (!planCode) throw badRequest('plan_required', 'planCode is required');
       const plan = await tx.subscriptionPlan.findUnique({ where: { code: planCode } });
       if (!plan) throw badRequest('unknown_plan', 'Unknown plan');
+      // renewing an archived plan keeps a restaurant where it is; moving onto one is not allowed
+      if (plan.archived && plan.code !== current?.plan.code) throw badRequest('plan_archived', `${plan.name} is archived; choose an active plan`);
       if ((b.action === 'upgrade' || b.action === 'downgrade') && current) {
-        const rank = (c: string) => PLAN_DEFAULTS.findIndex((p) => p.code === c);
-        const dir = rank(plan.code) - rank(current.plan.code);
+        // built-in plans rank by tier; plans the Super Admin adds rank by price
+        const rank = (p: { code: string; pricePaise: number }) => {
+          const i = PLAN_DEFAULTS.findIndex((d) => d.code === p.code);
+          return i >= 0 && p.pricePaise === 0 ? i : p.pricePaise;
+        };
+        const dir = PLAN_DEFAULTS.some((d) => d.code === plan.code) && PLAN_DEFAULTS.some((d) => d.code === current.plan.code)
+          ? PLAN_DEFAULTS.findIndex((d) => d.code === plan.code) - PLAN_DEFAULTS.findIndex((d) => d.code === current.plan.code)
+          : rank(plan) - rank(current.plan);
         if (b.action === 'upgrade' ? dir <= 0 : dir >= 0) throw badRequest('invalid_plan_change', `${plan.code} is not a ${b.action} from ${current.plan.code}`);
       }
       const now = new Date();

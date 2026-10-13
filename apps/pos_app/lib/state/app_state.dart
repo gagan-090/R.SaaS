@@ -1,7 +1,9 @@
 import 'dart:convert';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../hub/hub_api.dart';
 import '../hub/hub_mode.dart';
@@ -126,3 +128,32 @@ final hubTickProvider = Provider<int>((ref) {
   ref.watch(hubEventsProvider);
   return DateTime.now().microsecondsSinceEpoch;
 });
+
+/// Light / dark / follow the device. Remembered on this device (browser storage on the web).
+class ThemeModeNotifier extends Notifier<ThemeMode> {
+  static const _key = 'appearance';
+
+  @override
+  ThemeMode build() {
+    _load();
+    return ThemeMode.system;
+  }
+
+  Future<void> _load() async {
+    try {
+      final v = (await SharedPreferences.getInstance()).getString(_key);
+      if (v != null) state = ThemeMode.values.firstWhere((m) => m.name == v, orElse: () => ThemeMode.system);
+    } catch (_) {
+      // storage unavailable (private window, tests): stay on "follow the device"
+    }
+  }
+
+  Future<void> set(ThemeMode mode) async {
+    state = mode;
+    try {
+      await (await SharedPreferences.getInstance()).setString(_key, mode.name);
+    } catch (_) {}
+  }
+}
+
+final themeModeProvider = NotifierProvider<ThemeModeNotifier, ThemeMode>(ThemeModeNotifier.new);

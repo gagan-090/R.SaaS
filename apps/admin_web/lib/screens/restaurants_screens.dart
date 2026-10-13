@@ -134,7 +134,7 @@ class _RestaurantsScreenState extends ConsumerState<RestaurantsScreen> {
             _status = v;
             _apply();
           }),
-          _Drop(label: 'Plan', value: _plan, items: const ['standard', 'professional', 'premium'], onChanged: (v) {
+          _Drop(label: 'Plan', value: _plan, items: [for (final p in ref.watch(activePlansProvider).valueOrNull ?? const <Json>[]) p['code'] as String], onChanged: (v) {
             _plan = v;
             _apply();
           }),
@@ -273,16 +273,18 @@ class _RegisterRestaurantDialogState extends ConsumerState<RegisterRestaurantDia
             const SizedBox(height: HPSpace.md),
             TextFormField(controller: _c['address'], decoration: const InputDecoration(labelText: 'Address (optional)')),
             const SizedBox(height: HPSpace.md),
-            DropdownButtonFormField<String>(
-              initialValue: _plan,
-              decoration: const InputDecoration(labelText: 'Plan'),
-              items: const [
-                DropdownMenuItem(value: 'standard', child: Text('Standard')),
-                DropdownMenuItem(value: 'professional', child: Text('Professional')),
-                DropdownMenuItem(value: 'premium', child: Text('Premium')),
-              ],
-              onChanged: (v) => setState(() => _plan = v!),
-            ),
+            Consumer(builder: (c, ref, _) {
+              final plans = ref.watch(activePlansProvider).valueOrNull ?? const <Json>[];
+              final codes = plans.map((p) => p['code'] as String).toList();
+              return DropdownButtonFormField<String>(
+                key: const Key('register-plan'),
+                initialValue: codes.contains(_plan) ? _plan : (codes.isEmpty ? null : codes.first),
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Plan'),
+                items: [for (final p in plans) DropdownMenuItem(value: p['code'] as String, child: Text('${p['name']} · ${formatPaise(p['pricePaise'] as int)}/${p['billingCycle'] == 'yearly' ? 'yr' : 'mo'}'))],
+                onChanged: (v) => setState(() => _plan = v!),
+              );
+            }),
           ]),
         ),
       );
@@ -316,10 +318,21 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
   Future<void> _license(String action, String? currentPlan) async {
     String? plan = currentPlan;
     if (action == 'upgrade' || action == 'downgrade' || action == 'issue') {
+      final plans = await ref.read(activePlansProvider.future);
+      if (!mounted) return;
       plan = await showDialog<String>(
         context: context,
         builder: (c) => SimpleDialog(title: Text('Choose plan to $action'), children: [
-          for (final p in ['standard', 'professional', 'premium']) SimpleDialogOption(onPressed: () => Navigator.pop(c, p), child: Text(p)),
+          for (final p in plans)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(c, p['code'] as String),
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('${p['name']}'),
+                trailing: Text('${formatPaise(p['pricePaise'] as int)}/${p['billingCycle'] == 'yearly' ? 'yr' : 'mo'}'),
+                selected: p['code'] == currentPlan,
+              ),
+            ),
         ]),
       );
       if (plan == null) return;
@@ -518,29 +531,4 @@ class _AuditScreenState extends State<AuditScreen> {
 }
 
 /// P8 Plans (feature flags + limits).
-class PlansScreen extends ConsumerWidget {
-  const PlansScreen({super.key});
-  @override
-  Widget build(BuildContext context, WidgetRef ref) => AsyncView<List<dynamic>>(
-        load: () => ref.read(apiProvider).plans(),
-        builder: (c, plans, _) => ListView(padding: const EdgeInsets.all(HPSpace.x4), children: [
-          Text('Plans', style: Theme.of(c).textTheme.headlineMedium),
-          const SizedBox(height: HPSpace.sm),
-          const Text('Prices are placeholders until the client supplies them. Limits marked "client" are set per restaurant.'),
-          const SizedBox(height: HPSpace.x2),
-          Wrap(spacing: HPSpace.lg, runSpacing: HPSpace.lg, children: [
-            for (final p in plans.cast<Map<String, dynamic>>())
-              SizedBox(
-                width: 340,
-                child: SectionCard(title: '${p['name']} · ${formatPaise(p['pricePaise'] as int)}/${p['billingCycle']}', child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Wrap(spacing: 6, runSpacing: 6, children: [for (final f in (p['featureFlags'] as List)) Chip(label: Text('$f'), visualDensity: VisualDensity.compact)]),
-                  const SizedBox(height: HPSpace.md),
-                  for (final e in (p['limits'] as Map).entries) Text('${e.key}: ${e.value ?? 'client'}', style: HPType.body(context.hp.muted)),
-                ])),
-              ),
-          ]),
-        ]),
-      );
-}
-
 String apiErrorText(Object e) => e is ApiException ? e.message : '$e';

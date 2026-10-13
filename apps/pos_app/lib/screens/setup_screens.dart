@@ -134,7 +134,11 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
               constraints: const BoxConstraints(maxWidth: 520),
               child: AutofillGroup(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  const Align(alignment: Alignment.centerLeft, child: _Brand()),
+                  Row(children: [
+                    const _Brand(),
+                    const Spacer(),
+                    ThemeModeSwitch(compact: true, value: ref.watch(themeModeProvider), onChanged: ref.read(themeModeProvider.notifier).set),
+                  ]),
                   const SizedBox(height: HPSpace.x2),
                   Text('Set up this device', style: HPType.titleScreen(p.text)),
                   const SizedBox(height: HPSpace.xs),
