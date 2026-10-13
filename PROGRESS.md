@@ -99,7 +99,7 @@ Build: `flutter build web --release` → **✓ Built build/web** (compile check)
 accepted, Gradle transform errors, then the disk filled (ENOSPC). Windows build needs a Windows PC.
 Not built: camera QR scanning, C9 adjustment dialog, C10 shift summary, waiter table scoping, KDS (chef sees a placeholder).
 
-### M8 Printing — DONE (2026-10-13 07:20 IST)
+### M8 Printing — DONE (2026-10-13 06:58 IST)
 Built in `packages/hub_server/lib/src/printing.dart`: one receipt layout model rendered as ESC/POS (ESC @, align, emphasis, double size,
 feed, partial cut; ASCII-only with ₹→Rs) for 80 mm / 48 chars or 58 mm / 32 chars, and as a PDF fallback (dart `pdf`, Courier on a roll).
 Customer tax invoice (name, address, GSTIN, invoice no. + date, table, waiter, item/qty/rate/amount, subtotal, discount, CGST/SGST per rate,
@@ -112,3 +112,46 @@ snapshot receipts in `test/golden_receipts/` checked by hand against the maths, 
 unreachable printer → 502 on test print and PDF fallback on jobs, cashier cannot change printers, waiter cannot print bills).
 Not built: shift/day summary print (needs C10 shifts), franchise invoice PDF (cloud, Premium), POS buttons for reprint / PDF viewing
 (the hub routes exist; the POS UI does not call them yet).
+
+### Final check — 2026-10-13 07:03 IST
+Docker daemon unavailable, so this ran on the private Postgres :5433 against a **new empty database `rsaas_clean`** (`prisma migrate reset` refused without your consent, so I did not drop the dev DB).
+```
+### 2026-10-13 06:59 IST fresh database rsaas_clean (created empty just before)
+### migrate deploy
+3 migrations found in prisma/migrations
+Applying migration `20261012172547_init`
+Applying migration `20261012172600_rls_grants`
+Applying migration `20261012180000_tenant_code_seq`
+The following migration(s) have been applied:
+All migrations have been successfully applied.
+### seed
+$ node scripts/with-migration-url.js ts-node --transpile-only prisma/seed.ts
+Created Super Admin admin@example.com
+### API tests
+PASS test/auth.spec.ts (11.006 s)
+PASS test/restaurants.spec.ts
+PASS test/tenancy.spec.ts
+PASS test/sync.spec.ts
+PASS test/ratelimit.spec.ts
+PASS test/golden.spec.ts
+Test Suites: 6 passed, 6 total
+Tests:       73 passed, 73 total
+### packages/core: dart analyze + test
+No issues found!
+00:00 +49: All tests passed!
+### packages/hub_server: dart analyze + test
+No issues found!
+00:08 +36: All tests passed!
+### packages/ui_kit: flutter analyze + test
+No issues found! (ran in 6.2s)
+00:03 +6: All tests passed!
+### apps/admin_web: flutter analyze + test
+No issues found! (ran in 3.9s)
+00:10 +4: All tests passed!
+### apps/pos_app: flutter analyze + test
+No issues found! (ran in 4.5s)
+00:05 +6: All tests passed!
+### secret scan (full history)
+7:01AM INF 10 commits scanned.
+7:01AM INF no leaks found
+```
