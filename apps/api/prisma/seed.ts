@@ -88,17 +88,12 @@ async function main() {
       data: { code: 'R000000', name: 'Demo Dhaba', ownerEmail: demoEmail, gstin: '27AAAPA1234A1Z5', address: 'MG Road, Pune', status: 'active' },
     });
     const branch = await prisma.branch.create({ data: { tenantId: tenant.id, code: 'BR01', name: 'Demo Dhaba — MG Road', gstin: tenant.gstin, address: tenant.address } });
-    const mk = async (name: string, role: 'owner' | 'cashier' | 'waiter', mail?: string, pw?: string) =>
-      prisma.user.create({
-        data: {
-          tenantId: tenant.id, name, email: mail, passwordHash: pw ? await hash(pw) : null, pinHash: await hash(pin),
-          roles: { create: { tenantId: tenant.id, role, branchIds: [] } },
-        },
-      });
-    await mk('Demo Owner', 'owner', demoEmail, ownerPassword);
-    await mk('Ravi (Cashier)', 'cashier');
-    await mk('Anita (Waiter)', 'waiter');
-    await mk('Sohan (Waiter)', 'waiter');
+    await prisma.user.create({
+      data: {
+        tenantId: tenant.id, name: 'Demo Owner', email: demoEmail, passwordHash: await hash(ownerPassword), pinHash: await hash(pin),
+        roles: { create: { tenantId: tenant.id, role: 'owner', branchIds: [] } },
+      },
+    });
     const floor = await prisma.floor.create({ data: { tenantId: tenant.id, branchId: branch.id, name: 'Ground floor' } });
     for (let i = 1; i <= 8; i++) {
       await prisma.table.create({
@@ -120,7 +115,7 @@ async function main() {
         },
       });
     }
-    const plan = await prisma.subscriptionPlan.findUniqueOrThrow({ where: { code: 'standard' } });
+    const plan = await prisma.subscriptionPlan.findUniqueOrThrow({ where: { code: DEMO_PLAN } });
     const id = uuidv7();
     const startsAt = new Date();
     const endsAt = new Date(Date.now() + 30 * 86400_000);
@@ -135,6 +130,43 @@ async function main() {
     await prisma.license.create({ data: { id, tenantId: tenant.id, planId: plan.id, startsAt, endsAt, signedToken: token, issuedBy: sa.id, reason: 'demo seed' } });
     console.log(`Created demo restaurant "Demo Dhaba" — owner ${demoEmail} / ${ownerPassword}; staff PIN ${pin}`);
   }
+  await ensureDemoStaffAndPlan(demoEmail, email);
+}
+
+/** Demo plan: Premium by default so every role (incl. chef / IT admin / auditor and the KDS) can be tried. */
+const DEMO_PLAN = (process.env.DEMO_PLAN || 'premium') as 'standard' | 'professional' | 'premium';
+
+/** One PIN user per restaurant role (all PIN 1234) and a license on DEMO_PLAN. Idempotent, also for older seeds. */
+async function ensureDemoStaffAndPlan(demoEmail: string, superAdminEmail: string) {
+  const tenant = await prisma.restaurantTenant.findUniqueOrThrow({ where: { ownerEmail: demoEmail } });
+  const staff: [string, 'cashier' | 'waiter' | 'chef' | 'it_admin' | 'auditor'][] = [
+    ['Ravi (Cashier)', 'cashier'], ['Anita (Waiter)', 'waiter'], ['Sohan (Waiter)', 'waiter'],
+    ['Kunal (Chef)', 'chef'], ['Imran (IT Admin)', 'it_admin'], ['Asha (Auditor)', 'auditor'],
+  ];
+  for (const [name, role] of staff) {
+    if (await prisma.user.findFirst({ where: { tenantId: tenant.id, name } })) continue;
+    await prisma.user.create({
+      data: { tenantId: tenant.id, name, pinHash: await hash('1234'), roles: { create: { tenantId: tenant.id, role, branchIds: [] } } },
+    });
+    console.log(`Added demo ${role}: ${name} (PIN 1234)`);
+  }
+  const plan = await prisma.subscriptionPlan.findUniqueOrThrow({ where: { code: DEMO_PLAN } });
+  const now = new Date();
+  const current = await prisma.license.findFirst({ where: { tenantId: tenant.id, status: 'active' }, orderBy: { createdAt: 'desc' } });
+  if (current && current.planId === plan.id && current.endsAt > now) return;
+  await prisma.license.updateMany({ where: { tenantId: tenant.id, status: 'active' }, data: { status: 'superseded' } });
+  const id = uuidv7();
+  const endsAt = new Date(Date.now() + 30 * 86400_000);
+  const token = signLicense(
+    {
+      v: 1, lic: id, tid: tenant.id, plan: plan.code, features: plan.featureFlags, limits: plan.limits as Record<string, number | null>,
+      nbf: Math.floor(now.getTime() / 1000) - 60, exp: Math.floor(endsAt.getTime() / 1000), grace_days: 7, iat: Math.floor(Date.now() / 1000),
+    },
+    need('LICENSE_SIGNING_PRIVATE_KEY'),
+  );
+  const sa = await prisma.platformAdmin.findUniqueOrThrow({ where: { email: superAdminEmail } });
+  await prisma.license.create({ data: { id, tenantId: tenant.id, planId: plan.id, startsAt: now, endsAt, signedToken: token, issuedBy: sa.id, reason: `demo seed: ${plan.code}`, status: 'active' } });
+  console.log(`Demo restaurant licensed on ${plan.code}`);
 }
 
 main()

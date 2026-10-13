@@ -43,3 +43,10 @@ backups/
 docs/*(1).pdf
 pakages/
 .hubdata/
+
+# Android release signing (never commit)
+**/android/key.properties
+**/android/keystore/
+
+# built APKs (shared outside git)
+release/

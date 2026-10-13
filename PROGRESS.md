@@ -155,3 +155,19 @@ No issues found! (ran in 4.5s)
 7:01AM INF 10 commits scanned.
 7:01AM INF no leaks found
 ```
+
+### Release APK + every role on Android — (2026-10-13, after the night build)
+Asked by Gagan: push to GitHub, a release APK that works with the backend, every role smooth.
+- Pushed `main` to `origin` (private repo `gagan-090/R.SaaS`).
+- Hub: K1 kitchen display (`GET /kds/tickets`, `POST /kds/tickets/:id/status`, new → preparing → ready → served, `kds` feature,
+  outbox + WebSocket), KOT status on each order, waiters see only their own tips, `ifPrinter` auto-print after billing.
+- POS: role homes (order roles → tables, chef → KDS, IT admin → setup), permission-filtered menu, phone layouts (Menu/Order tabs,
+  compact status bar and staff tiles, adaptive dish tiles), two-column bill screen on wide screens, reprint + C9 adjustments from bill
+  history, printers screen (T3), tips screen, device reset, sign-out that closes screens before clearing the session (crash fix),
+  toasts that replace each other, pairing QR prefers the Wi-Fi address.
+- Seed: one PIN user per role (chef, IT admin, auditor added), demo restaurant on Premium, idempotent on older databases.
+- Android: INTERNET permission in release, LAN cleartext for the dev API, release signing from gitignored key.properties + keystore.
+Test: `cd packages/hub_server && dart test` → **+39 passed** (+3 KDS/tips) and **e2e against the live API** (`test/e2e_cloud_test.dart`,
+owner login → register-hub → pull → owner/cashier/waiter/chef/IT admin/auditor flows → **37 events pushed, 0 rejected, 0 conflicts**).
+Test: `cd apps/pos_app && flutter test` → **+19 passed** (13 new in `roles_test.dart`: every role at 1280×800, 360×740 and 411×891,
+no overflow; waiter→chef→waiter READY; IT admin printers; owner DUPLICATE reprint + adjustment; cashier adjustment needs owner PIN).

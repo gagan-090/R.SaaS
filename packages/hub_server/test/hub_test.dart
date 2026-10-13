@@ -275,7 +275,7 @@ void main() {
       expect(again.json['waiterId'], Harness.waiter); // default = order's waiter
       expect((await h.post('/bills/${bill['id']}/tip', session: cashier, body: {'amountPaise': 2000, 'waiterId': Harness.chef})).code, 'not_a_waiter');
       final report = (await h.get('/reports/tips', session: cashier)).body! as List;
-      expect(report, [{'waiter_id': Harness.waiter, 'tip_paise': 2000, 'bills': 1}]);
+      expect(report, [{'waiter_id': Harness.waiter, 'waiter_name': 'Anita', 'tip_paise': 2000, 'bills': 1}]);
     });
 
     test('dine-in tip without any waiter prompts for one', () async {

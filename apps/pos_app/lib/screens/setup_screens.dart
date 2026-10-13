@@ -9,9 +9,12 @@ import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 import '../hub/hub_api.dart';
 import '../hub/hub_mode.dart';
 import '../state/app_state.dart';
+import 'role_screens.dart';
 
-void toast(BuildContext c, String msg, {bool error = false}) =>
-    ScaffoldMessenger.of(c).showSnackBar(SnackBar(content: Text(msg), backgroundColor: error ? HPColors.chili : HPColors.emberRaised));
+/// Short message at the bottom. A new message replaces the current one, so staff never read a stale toast.
+void toast(BuildContext c, String msg, {bool error = false}) => ScaffoldMessenger.of(c)
+  ..hideCurrentSnackBar()
+  ..showSnackBar(SnackBar(content: Text(msg), backgroundColor: error ? HPColors.chili : HPColors.emberRaised, duration: Duration(seconds: error ? 4 : 2)));
 
 String errText(Object e) => e is HubApiException ? e.message : '$e';
 
@@ -108,7 +111,7 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
                   TextField(controller: _name, decoration: const InputDecoration(labelText: 'Device name')),
                   const SizedBox(height: HPSpace.lg),
                   Wrap(spacing: HPSpace.lg, runSpacing: HPSpace.lg, children: [
-                    SizedBox(width: 460, child: _card('Pair with a hub', Icons.qr_code_scanner_rounded, [
+                    SizedBox(width: _cardWidth(context), child: _card('Pair with a hub', Icons.qr_code_scanner_rounded, [
                       TextField(key: const Key('pair-payload'), controller: _payload, decoration: const InputDecoration(labelText: 'Scan QR (or paste its text)', helperText: 'Camera scanning: see MORNING.md')),
                       const SizedBox(height: HPSpace.md),
                       Text('or enter it by hand', style: HPType.body(HPColors.husk)),
@@ -126,7 +129,7 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
                       PrimaryButton(label: 'Pair', busy: _busy, onPressed: _pair),
                     ])),
                     if (HubHost.supported)
-                      SizedBox(width: 460, child: _card('This device is the hub', Icons.router_rounded, [
+                      SizedBox(width: _cardWidth(context), child: _card('This device is the hub', Icons.router_rounded, [
                         Text('Use the main cashier PC. It keeps working when the internet is down; keep it on a UPS.', style: HPType.body(HPColors.husk)),
                         const SizedBox(height: HPSpace.md),
                         TextField(controller: _cloud, decoration: const InputDecoration(labelText: 'Cloud API URL')),
@@ -145,6 +148,8 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
           ),
         ),
       );
+
+  double _cardWidth(BuildContext c) => (MediaQuery.sizeOf(c).width - 2 * HPSpace.x2).clamp(260.0, 460.0);
 
   Widget _card(String title, IconData icon, List<Widget> children) => Card(
         child: Padding(
@@ -207,6 +212,29 @@ class _HubStatusScreenState extends ConsumerState<HubStatusScreen> {
                   ])
                 : const LoadingState(),
           ),
+        if (ref.watch(sessionProvider)?.can('device.manage') ?? false) ...[
+          const SizedBox(height: HPSpace.x2),
+          DangerButton(
+            label: 'Reset this device',
+            onPressed: () async {
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (c) => HPDialog(
+                  title: 'Reset this device?',
+                  actions: [
+                    SecondaryButton(label: 'Cancel', onPressed: () => Navigator.pop(c)),
+                    DangerButton(label: 'Reset', onPressed: () => Navigator.pop(c, true)),
+                  ],
+                  child: const Text('It forgets its hub pairing and must be set up again. Bills already on the hub are kept.'),
+                ),
+              );
+              if (ok != true || !context.mounted) return;
+              ref.read(sessionProvider.notifier).state = null;
+              Navigator.of(context).popUntil((r) => r.isFirst);
+              await ref.read(setupProvider.notifier).reset();
+            },
+          ),
+        ],
       ]),
     );
   }
@@ -261,25 +289,25 @@ class _StaffLoginScreenState extends ConsumerState<StaffLoginScreen> {
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 720),
                       child: Column(children: [
-                        Text(_user == null ? 'Who is working?' : 'Hello, ${_user!['name']}', style: HPType.titleScreen(HPColors.ghee)),
-                        const SizedBox(height: HPSpace.x2),
+                        Text(_user == null ? 'Who is working?' : 'Hello, ${'${_user!['name']}'.split(' (').first}', style: HPType.titleScreen(HPColors.ghee), textAlign: TextAlign.center),
+                        SizedBox(height: isNarrow(context) ? HPSpace.lg : HPSpace.x2),
                         if (_user == null)
-                          Wrap(spacing: HPSpace.md, runSpacing: HPSpace.md, alignment: WrapAlignment.center, children: [
+                          Wrap(spacing: isNarrow(context) ? HPSpace.sm : HPSpace.md, runSpacing: isNarrow(context) ? HPSpace.sm : HPSpace.md, alignment: WrapAlignment.center, children: [
                             for (final u in s.data!)
                               SizedBox(
-                                width: 160,
+                                width: isNarrow(context) ? 100 : 160,
                                 child: Card(
                                   child: InkWell(
                                     key: Key('staff-${u['name']}'),
                                     borderRadius: BorderRadius.circular(HPRadius.card),
                                     onTap: () => setState(() => _user = u),
                                     child: Padding(
-                                      padding: const EdgeInsets.all(HPSpace.lg),
+                                      padding: EdgeInsets.all(isNarrow(context) ? HPSpace.sm : HPSpace.lg),
                                       child: Column(children: [
-                                        CircleAvatar(radius: 26, backgroundColor: HPColors.emberRaised, child: Text('${u['name']}'[0], style: HPType.titleCard(HPColors.saffron))),
+                                        CircleAvatar(radius: isNarrow(context) ? 20 : 26, backgroundColor: HPColors.emberRaised, child: Text('${u['name']}'[0], style: HPType.titleCard(HPColors.saffron))),
                                         const SizedBox(height: HPSpace.sm),
-                                        Text('${u['name']}', style: HPType.label(HPColors.ghee), overflow: TextOverflow.ellipsis),
-                                        Text((u['roles'] as List).join(', '), style: HPType.body(HPColors.husk).copyWith(fontSize: 12)),
+                                        Text('${u['name']}'.split(' (').first, style: HPType.label(HPColors.ghee), overflow: TextOverflow.ellipsis),
+                                        Text((u['roles'] as List).map((r) => '$r'.replaceAll('_', ' ')).join(', '), style: HPType.body(HPColors.husk).copyWith(fontSize: 12), overflow: TextOverflow.ellipsis),
                                       ]),
                                     ),
                                   ),
@@ -316,7 +344,7 @@ class _StaffLoginScreenState extends ConsumerState<StaffLoginScreen> {
   }
 }
 
-/// S4 Status bar on every screen: hub online/offline, sync counts, signed-in user.
+/// S4 Status bar on every screen: hub online/offline, sync counts, role menu, signed-in user. Compact on phones.
 class StatusBar extends ConsumerWidget {
   const StatusBar({super.key, this.showUser = true, this.title});
   final bool showUser;
@@ -327,37 +355,49 @@ class StatusBar extends ConsumerWidget {
     final session = ref.watch(sessionProvider);
     final setup = ref.watch(setupProvider).valueOrNull;
     final online = !ev.hasError;
-    return Column(children: [
-      Container(
-        height: 56,
-        padding: const EdgeInsets.symmetric(horizontal: HPSpace.lg),
-        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: HPColors.clayLine))),
-        child: Row(children: [
-          Text(title ?? 'House Plating', style: HPType.titleCard(HPColors.ghee)),
-          const SizedBox(width: HPSpace.lg),
-          StatusChip(label: online ? 'Hub online' : 'Hub offline', tone: online ? HPTone.success : HPTone.danger, icon: online ? Icons.wifi_rounded : Icons.wifi_off_rounded),
-          const SizedBox(width: HPSpace.sm),
-          const _SyncChip(),
-          const Spacer(),
-          if (setup?.isHub ?? false)
-            IconButton(tooltip: 'Hub status', icon: const Icon(Icons.router_rounded), onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HubStatusScreen()))),
-          if (showUser && session != null) ...[
-            Text(session.name, style: HPType.label(HPColors.ghee)),
-            IconButton(tooltip: 'Switch user', icon: const Icon(Icons.logout_rounded), onPressed: () {
-              ref.read(hubApiProvider)?.sessionToken = null;
-              ref.read(sessionProvider.notifier).state = null;
-              Navigator.of(context).popUntil((r) => r.isFirst);
-            }),
-          ],
-        ]),
-      ),
-      if (!online) const OfflineBanner(message: 'Kitchen hub offline — orders paused until it is back'),
-    ]);
+    final narrow = isNarrow(context);
+    final canPop = Navigator.of(context).canPop();
+    return SafeArea(
+      bottom: false,
+      child: Column(children: [
+        Container(
+          height: 56,
+          padding: EdgeInsets.symmetric(horizontal: narrow ? HPSpace.xs : HPSpace.lg),
+          decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: HPColors.clayLine))),
+          child: Row(children: [
+            if (canPop) IconButton(tooltip: 'Back', icon: const Icon(Icons.arrow_back_rounded), onPressed: () => Navigator.of(context).maybePop()),
+            Flexible(child: Text(title ?? 'House Plating', style: HPType.titleCard(HPColors.ghee), overflow: TextOverflow.ellipsis)),
+            SizedBox(width: narrow ? HPSpace.xs : HPSpace.lg),
+            if (narrow)
+              Tooltip(message: online ? 'Hub online' : 'Hub offline', child: Icon(online ? Icons.wifi_rounded : Icons.wifi_off_rounded, color: online ? HPColors.cardamom : HPColors.chili, size: 20))
+            else
+              StatusChip(label: online ? 'Hub online' : 'Hub offline', tone: online ? HPTone.success : HPTone.danger, icon: online ? Icons.wifi_rounded : Icons.wifi_off_rounded),
+            const SizedBox(width: HPSpace.xs),
+            _SyncChip(compact: narrow),
+            const Spacer(),
+            if ((setup?.isHub ?? false) && !narrow)
+              IconButton(tooltip: 'Hub status', icon: const Icon(Icons.router_rounded), onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HubStatusScreen()))),
+            if (showUser && session != null) ...[
+              const RoleMenuButton(),
+              if (!narrow) Text(session.name, style: HPType.label(HPColors.ghee)),
+              IconButton(key: const Key('switch-user'), tooltip: 'Switch user (${session.name})', icon: const Icon(Icons.logout_rounded), onPressed: () {
+                // close every open screen first, then sign out, so no screen rebuilds without a user
+                Navigator.of(context).popUntil((r) => r.isFirst);
+                ref.read(hubApiProvider)?.sessionToken = null;
+                ref.read(sessionProvider.notifier).state = null;
+              }),
+            ],
+          ]),
+        ),
+        if (!online) const OfflineBanner(message: 'Kitchen hub offline — orders paused until it is back'),
+      ]),
+    );
   }
 }
 
 class _SyncChip extends ConsumerWidget {
-  const _SyncChip();
+  const _SyncChip({this.compact = false});
+  final bool compact;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(hubTickProvider);
@@ -368,6 +408,16 @@ class _SyncChip extends ConsumerWidget {
       builder: (c, s) {
         if (!s.hasData) return const SizedBox.shrink();
         final pending = s.data!['pending'] as int, failed = s.data!['failed'] as int;
+        if (compact) {
+          final color = failed > 0 ? HPColors.chili : pending > 0 ? HPColors.saffron : HPColors.husk;
+          return Tooltip(
+            message: failed > 0 ? '$failed failed to sync' : pending > 0 ? '$pending waiting to sync' : 'All synced',
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(failed > 0 ? Icons.sync_problem_rounded : Icons.cloud_sync_rounded, size: 20, color: color),
+              if (failed + pending > 0) Text(' ${failed > 0 ? failed : pending}', style: HPType.body(color)),
+            ]),
+          );
+        }
         if (failed > 0) return StatusChip(label: '$failed failed to sync', tone: HPTone.danger);
         return StatusChip(label: pending > 0 ? '$pending waiting to sync' : 'All synced', tone: pending > 0 ? HPTone.saffron : HPTone.neutral, icon: Icons.cloud_sync_rounded);
       },

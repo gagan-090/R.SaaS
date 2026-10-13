@@ -75,21 +75,15 @@ on your Windows PC; pick "This device is the hub" on first start. Tests: `pnpm -
    Overnight tests used a private Postgres 18 cluster in `.localdb/pg` (gitignored), started with
    `/Library/PostgreSQL/18/bin/pg_ctl -D .localdb/pg -o "-p 5433 -k /tmp" start`. It is still running (`… stop` to stop it). It holds databases
    `rsaas` (dev) and `rsaas_clean` (final check). Both are safe to drop.
-2. **Android APK not built.** Three blockers:
-   - Android SDK licences are not accepted. I did not accept them for you; run `flutter doctor --android-licenses`.
-   - Gradle cache transform errors.
-   - **The disk filled up (ENOSPC)** during the build. It is now at ~3–5 GB free of 466 GB; Gradle needs several GB.
-   Free space first (for example `~/.gradle/caches`, which I did not touch because it is outside the repo), then run `cd apps/pos_app && flutter build apk --debug`.
-   I removed the `-XX:+HeapDumpOnOutOfMemoryError` flag from `android/gradle.properties` so a crash cannot drop a multi-GB heap file.
+2. **Android release APK: built (13 Oct).** `release/HousePlatingPOS-0.1.0-release.apk` (gitignored, 42.6 MB, arm + arm64,
+   signed with the new upload key in `apps/pos_app/android/keystore/` + `key.properties`, both gitignored; **back them up**).
+   Phone setup and every role: `docs/ANDROID.md`. Not yet run on a physical phone (none was connected). Disk is still nearly full
+   (~1.4 GB free); `~/.gradle` is 23 GB if you need space.
 3. **Windows build needs your Windows PC** (`flutter build windows`). It has never been compiled for Windows; only web, analyze and widget tests ran.
 4. **Xcode is incomplete**, so there are no macOS desktop builds. That is not needed for the product.
-5. **POS gaps**, not built:
-   - camera QR scanning (paste the payload or type IP + code instead)
-   - C9 adjustment dialog (the hub route exists)
-   - C10 shift summary and its print
-   - waiter assigned-table scoping
-   - KDS (the chef sees a placeholder)
-   - reprint and PDF buttons in C8 (the hub routes `POST /bills/:id/print` and `/kot/:id/print` exist)
+5. **POS gaps**, not built: camera QR scanning (paste the payload or type IP + code instead), C10 shift summary and its print,
+   waiter assigned-table scoping, KDS recipe/approval/stock screens (K2–K4). Kitchen display, reprint, adjustments, printers, tips and
+   all six role homes are built (see `docs/SCREEN_MAP.md`). Hub mode on Android runs while the app is open (no background service yet).
 6. **Cloud side of sync is storage only.** Hub events land in `sync_events` and are deduped. Projection into cloud orders/bills and the reconciliation report is Day-10 work.
 7. Cleanup you can do: delete the old typo folder `pakages/` (its `style.md` was copied to `packages/ui_kit/STYLE.md`) and `docs/*(1).pdf`
    (byte-identical duplicate of the playbook). Both are gitignored, not deleted.

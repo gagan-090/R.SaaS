@@ -41,6 +41,21 @@ abstract class HubApi {
   Future<List<Json>> bills(DateTime day);
   Future<Json> syncStatus();
   Stream<Json> events();
+
+  // kitchen display (K1)
+  Future<List<Json>> kdsTickets();
+  Future<Json> setTicketStatus(String ticketId, String status);
+
+  // reports, printing, adjustments
+  Future<List<Json>> tips();
+
+  /// Prints a bill (reprints are marked DUPLICATE by the hub). Returns `status`: printed | pdf | no_printer.
+  Future<Json> printBill(String billId, {bool ifPrinter = false});
+  Future<Json> reprintKot(String ticketId);
+  Future<Json> printers();
+  Future<Json> savePrinters(Json settings);
+  Future<Json> testPrint(String target);
+  Future<Json> adjust(String billId, {required int amountPaise, required String reason, String? approverUserId, String? approverPin});
 }
 
 /// One idempotency key per payment *attempt*: retries of the same attempt reuse it, so a dropped
@@ -65,6 +80,23 @@ class HttpHubApi extends HubApi {
         'x-device-token': deviceToken,
         if (sessionToken != null) 'authorization': 'Bearer $sessionToken',
       };
+
+  /// Print routes answer JSON when the printer took the job, otherwise the PDF itself (no printer / unreachable).
+  Future<Json> _print(String path, Object body) async {
+    final req = http.Request('POST', Uri.parse('$baseUrl$path'))..headers.addAll(_h)..body = jsonEncode(body);
+    final http.Response res;
+    try {
+      res = await http.Response.fromStream(await _http.send(req).timeout(const Duration(seconds: 15)));
+    } catch (_) {
+      throw HubApiException(0, 'hub_offline', 'Kitchen hub offline');
+    }
+    if ((res.headers['content-type'] ?? '').startsWith('application/pdf')) {
+      return {'status': 'pdf', 'error': res.headers['x-print-error'], 'copyNo': int.tryParse(res.headers['x-print-copy'] ?? ''), 'pdfBytes': res.bodyBytes.length};
+    }
+    final decoded = res.body.isEmpty ? const <String, dynamic>{} : jsonDecode(utf8.decode(res.bodyBytes)) as Json;
+    if (res.statusCode >= 400) throw HubApiException(res.statusCode, '${decoded['code'] ?? 'error'}', '${decoded['message'] ?? 'Print failed'}');
+    return decoded;
+  }
 
   Future<dynamic> _send(String method, String path, {Object? body, Map<String, String>? extra}) async {
     final req = http.Request(method, Uri.parse('$baseUrl$path'))..headers.addAll({..._h, ...?extra});
@@ -132,6 +164,27 @@ class HttpHubApi extends HubApi {
       (await _send('GET', '/bills?date=${day.toIso8601String().substring(0, 10)}') as List).cast<Json>();
   @override
   Future<Json> syncStatus() async => await _send('GET', '/sync/status') as Json;
+
+  @override
+  Future<List<Json>> kdsTickets() async => (await _send('GET', '/kds/tickets') as List).cast<Json>();
+  @override
+  Future<Json> setTicketStatus(String ticketId, String status) async => await _send('POST', '/kds/tickets/$ticketId/status', body: {'status': status}) as Json;
+  @override
+  Future<List<Json>> tips() async => (await _send('GET', '/reports/tips') as List).cast<Json>();
+  @override
+  Future<Json> printBill(String billId, {bool ifPrinter = false}) => _print('/bills/$billId/print', {'ifPrinter': ifPrinter});
+  @override
+  Future<Json> reprintKot(String ticketId) => _print('/kot/$ticketId/print', const {});
+  @override
+  Future<Json> printers() async => await _send('GET', '/printers') as Json;
+  @override
+  Future<Json> savePrinters(Json settings) async => await _send('PUT', '/printers', body: settings) as Json;
+  @override
+  Future<Json> testPrint(String target) async => await _send('POST', '/printers/$target/test') as Json;
+  @override
+  Future<Json> adjust(String billId, {required int amountPaise, required String reason, String? approverUserId, String? approverPin}) async =>
+      await _send('POST', '/bills/$billId/adjustments',
+          body: {'amountPaise': amountPaise, 'reason': reason, 'approverUserId': ?approverUserId, 'approverPin': ?approverPin}) as Json;
 
   @override
   Stream<Json> events() {

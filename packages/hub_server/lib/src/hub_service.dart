@@ -310,6 +310,7 @@ class HubService {
       'lines': lines,
       'totals': computeBill(_inputs(lines)).toJson(),
       'bill': bill,
+      'tickets': await ticketsForOrder(id),
     };
   }
 
@@ -674,8 +675,10 @@ class HubService {
     });
   }
 
-  Future<List<Map<String, Object?>>> tipsByWaiter() => db.query(
-      'SELECT waiter_id, sum(amount_paise) AS tip_paise, count(*) AS bills FROM tip_allocations GROUP BY waiter_id ORDER BY tip_paise DESC');
+  Future<List<Map<String, Object?>>> tipsByWaiter({String? waiterId}) => db.query(
+      'SELECT t.waiter_id, u.name AS waiter_name, sum(t.amount_paise) AS tip_paise, count(*) AS bills FROM tip_allocations t '
+      'LEFT JOIN users u ON u.id = t.waiter_id ${waiterId == null ? '' : 'WHERE t.waiter_id = ? '}GROUP BY t.waiter_id ORDER BY tip_paise DESC',
+      [if (waiterId != null) waiterId]);
 
   /// AC-07: every payment carries an idempotency key; a repeated key returns the first result and never charges twice.
   Future<Map<String, Object?>> addPayment(Actor a, String billId, String? idempotencyKey,
@@ -734,6 +737,53 @@ class HubService {
       return response;
     });
   }
+
+  // ------------------------------------------------------------------ kitchen display (K1)
+
+  static const _kdsFlow = {'new': ['preparing', 'ready'], 'preparing': ['ready'], 'ready': ['served']};
+
+  /// Live kitchen queue: every ticket not yet served, oldest first, with its lines (reversed lines flagged
+  /// so the kitchen stops cooking them), table / takeaway, waiter and age.
+  Future<List<Map<String, Object?>>> kdsTickets() async {
+    final tickets = await db.query("SELECT * FROM kitchen_tickets WHERE status <> 'served' ORDER BY created_at, kot_no");
+    final out = <Map<String, Object?>>[];
+    for (final k in tickets) {
+      final o = await _order(k['order_id']! as String);
+      final ids = (jsonDecode(k['line_ids_json']! as String) as List).cast<String>().toSet();
+      final lines = (await _lines(o['id']! as String)).where((l) => ids.contains(l['id']));
+      out.add({
+        'id': k['id'], 'kotNo': k['kot_no'], 'status': k['status'], 'createdAt': k['created_at'], 'readyAt': k['ready_at'],
+        'orderId': o['id'], 'where': await _where(o), 'waiter': await _userName(o['waiter_id']),
+        'lines': [
+          for (final l in lines) {'id': l['id'], 'name': l['name_snapshot'], 'qty': l['qty'], 'notes': l['notes'], 'reversed': l['status'] == 'reversed'},
+        ],
+      });
+    }
+    return out;
+  }
+
+  /// Chef moves a ticket new → preparing → ready → served (new → ready allowed for quick items).
+  Future<Map<String, Object?>> setTicketStatus(Actor a, String ticketId, String status) async {
+    a.require('kds.update');
+    await requireFeature('kds');
+    return _tx(() async {
+      final k = await db.selectOne('SELECT * FROM kitchen_tickets WHERE id = ?', [ticketId]);
+      if (k == null) throw notFound('Kitchen ticket');
+      final allowed = _kdsFlow[k['status']] ?? const <String>[];
+      if (!allowed.contains(status)) throw conflict('bad_transition', 'Ticket is ${k['status']}; it cannot become $status');
+      final at = nowIso(clock());
+      final col = '${status}_at'; // preparing_at / ready_at / served_at — fixed set above, never user text
+      await db.execute('UPDATE kitchen_tickets SET status = ?, $col = ? WHERE id = ?', [status, at, ticketId]);
+      final row = (await db.selectOne('SELECT * FROM kitchen_tickets WHERE id = ?', [ticketId]))!;
+      await _outbox('kitchen_ticket', ticketId, 'update', row);
+      _raise('kds.ticket_status', {'ticketId': ticketId, 'orderId': k['order_id'], 'kotNo': k['kot_no'], 'status': status});
+      return row;
+    });
+  }
+
+  /// Kitchen status per KOT for an order (the waiter sees "ready" on the order screen).
+  Future<List<Map<String, Object?>>> ticketsForOrder(String orderId) =>
+      db.query('SELECT id, kot_no, status, created_at, ready_at FROM kitchen_tickets WHERE order_id = ? ORDER BY kot_no', [orderId]);
 
   Future<Map<String, Object?>> _insertAdjustment(Actor a, String billId, String type, int amountPaise, String reason, String? approvedBy) async {
     final id = uuidv7();

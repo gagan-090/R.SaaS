@@ -63,6 +63,8 @@ class Harness {
     final features = {
       'standard': ['tables', 'orders.dinein', 'orders.takeaway', 'menu', 'billing', 'offline.single'],
       'professional': ['tables', 'orders.dinein', 'orders.takeaway', 'menu', 'billing', 'offline.single', 'floors', 'multi_cashier', 'waiter_app', 'lan_hub'],
+      'premium': ['tables', 'orders.dinein', 'orders.takeaway', 'menu', 'billing', 'offline.single', 'floors', 'multi_cashier', 'waiter_app', 'lan_hub',
+        'franchise', 'roles.extended', 'kds', 'recipes', 'menu.approval', 'inventory', 'shifts'],
     }[plan]!;
     final t = now.millisecondsSinceEpoch ~/ 1000;
     return _sign({

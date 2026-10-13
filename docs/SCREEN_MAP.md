@@ -36,13 +36,21 @@ Every portal screen uses `AsyncView` for loading, empty and error states. Every 
 | C5 | Bill preview: lines, subtotal, discount, CGST, SGST, tip, round-off, total | cashier | All | `POST /orders/:id/bill` | Built |
 | C6 | Payment: cash keypad + change, UPI, card, split across modes | cashier | All | `POST /bills/:id/payments` (`Idempotency-Key`) | Built (tests: split UPI + cash with change; retry reuses the same idempotency key) |
 | C7 | Tip: waiter picker (defaults to the order's waiter) | cashier | All | `POST /bills/:id/tip` | Built (test: tip to a waiter) |
-| C8 | Bill history: today's bills, reprint | cashier | All | `GET /bills?date=` | Built (reprint button not wired yet; hub route `POST /bills/:id/print` exists) |
-| C9 | Adjustment dialog (PIN) | cashier | All | `POST /bills/:id/adjustments` | Planned |
+| C8 | Bill history: today's bills, reprint | cashier | All | `GET /bills?date=`, `POST /bills/:id/print` | Built (test: owner reprint prints DUPLICATE; no printer → message) |
+| C9 | Adjustment dialog (PIN) | cashier | All | `POST /bills/:id/adjustments` | Built from C8 (tests: owner posts directly; cashier needs owner + PIN) |
 | C10 | Shift summary | cashier | All | — | Planned |
-| W1–W4 | Waiter: my tables, take order, order status, my tips | waiter | Pro+ | same order routes | Planned (Day 12) |
-| K1–K4 | KDS queue, recipe editor, approval inbox, kitchen stock | chef | Premium | `POST /kds/tickets/:id/status` (not built) | Planned (Days 14–16) |
+| W1–W4 | Waiter: my tables, take order, order status, my tips | waiter | Pro+ | same order routes, `GET /reports/tips` (own only) | Built on C1/C2: waiter opens tables as themselves, sends KOT, sees KOT status (READY), cannot bill; Tips shows own tips. Assigned-table scoping not built |
+| K1 | KDS queue: tickets with table, waiter, age, notes, cancelled lines; Start → Ready → Served | chef | Premium | `GET /kds/tickets`, `POST /kds/tickets/:id/status` | Built (hub tests + widget test: chef moves ticket, waiter sees READY) |
+| K2–K4 | Recipe editor, approval inbox, kitchen stock | chef | Premium | — | Planned (Days 14–16) |
 | O1–O6 | Owner dashboard, reports, menu management, publish, staff, franchise invoice | owner | All / Premium | cloud tenant routes | Planned |
-| T1–T5 | Devices, floors & tables editor, printers, inventory, shifts | IT admin | All / Premium | cloud tenant routes; printers: hub `GET/PUT /printers`, `POST /printers/:target/test` | Planned (T3 hub routes built in M8) |
+| T0 | IT admin home: printers, hub & devices, sync health | IT admin | Premium | — | Built |
+| T3 | Printers: bill / kitchen printer IP, port, 80/58 mm, test print | IT admin, owner | All | `GET/PUT /printers`, `POST /printers/:target/test` | Built (test: IT admin saves + test print; cashier refused by hub) |
+| T1, T2, T4, T5 | Devices list, floors & tables editor, inventory, shifts | IT admin | All / Premium | cloud tenant routes | Planned |
+| A0 | Auditor: read-only table map, orders and bill history (no write buttons; hub refuses writes) | auditor | Premium | read routes | Built (test + e2e) |
 | A1–A2 | Audit log, read-only reports | auditor | Premium | `GET /audit` | Planned |
 
 Shared requirements: loading, empty and error states on every screen; Windows keyboard shortcuts for the cashier; touch targets of at least 48 dp on Android.
+
+Phones (< 720 dp wide): the order screen becomes Menu / Order tabs, the status bar compacts to icons, staff tiles shrink, and the bill screen is one column. Wide screens (≥ 900 dp) show bill totals and the payment keypad side by side so Pay is always visible. `test/roles_test.dart` runs every role at 1280×800, 360×740 and 411×891 and fails on any overflow.
+
+Role homes after PIN login: owner / cashier / waiter / auditor → table map; chef → K1 kitchen display; IT admin → T0 setup. The status-bar menu lists only what the role may open (Tables, Kitchen display, Bill history, Tips, Printers, Hub & devices).

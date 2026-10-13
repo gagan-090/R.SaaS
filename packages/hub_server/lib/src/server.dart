@@ -108,8 +108,20 @@ class HubServer {
     });
     r.get('/reports/tips', (Request q) async {
       final a = await _staff(q);
-      if (!a.permissions.contains('reports.read') && !a.permissions.contains('payment.take')) throw forbidden('missing_permission', 'Missing permission: reports.read');
-      return _json(await hub.tipsByWaiter());
+      if (a.permissions.contains('reports.read') || a.permissions.contains('payment.take')) return _json(await hub.tipsByWaiter());
+      // waiters (reports.own) see only their own tips
+      if (a.permissions.contains('reports.own')) return _json(await hub.tipsByWaiter(waiterId: a.userId));
+      throw forbidden('missing_permission', 'Missing permission: reports.read');
+    });
+
+    // ---- kitchen display
+    r.get('/kds/tickets', (Request q) async {
+      (await _staff(q)).require('kds.read');
+      return _json(await hub.kdsTickets());
+    });
+    r.post('/kds/tickets/<id>/status', (Request q, String id) async {
+      final a = await _staff(q);
+      return _json(await hub.setTicketStatus(a, id, '${(await _body(q))['status']}'));
     });
     r.get('/sync/status', (Request q) async {
       await _actor(q);
@@ -161,7 +173,13 @@ class HubServer {
     });
 
     // ---- bills
-    r.post('/bills/<id>/print', (Request q, String id) async => _printed(await hub.printDocument(await _staff(q), 'bill', id, pdfOnly: (await _body(q))['pdf'] == true)));
+    r.post('/bills/<id>/print', (Request q, String id) async {
+      final a = await _staff(q);
+      final b = await _body(q);
+      // ifPrinter: the POS auto-prints after billing only when a printer is set up (no PDF, no copy counted)
+      if (b['ifPrinter'] == true && !await hub.hasPrinter('bill')) return _json({'status': 'no_printer'});
+      return _printed(await hub.printDocument(a, 'bill', id, pdfOnly: b['pdf'] == true));
+    });
     r.post('/bills/<id>/payments', (Request q, String id) async {
       final a = await _staff(q);
       final b = await _body(q);

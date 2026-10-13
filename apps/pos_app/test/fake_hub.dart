@@ -15,6 +15,9 @@ class FakeHubApi extends HubApi {
     {'id': 'u-cash', 'name': 'Ravi', 'roles': ['cashier'], 'pin': '1234'},
     {'id': 'u-own', 'name': 'Owner', 'roles': ['owner'], 'pin': '9999'},
     {'id': 'u-w1', 'name': 'Anita', 'roles': ['waiter'], 'pin': '5555'},
+    {'id': 'u-chef', 'name': 'Kunal', 'roles': ['chef'], 'pin': '7777'},
+    {'id': 'u-it', 'name': 'Imran', 'roles': ['it_admin'], 'pin': '3333'},
+    {'id': 'u-aud', 'name': 'Asha', 'roles': ['auditor'], 'pin': '2222'},
   ];
   final tables = [
     {'id': 't1', 'floor_id': 'f1', 'name': '1', 'seats': 4},
@@ -36,7 +39,10 @@ class FakeHubApi extends HubApi {
       for (final l in lines) LineInput(pricePaise: l['price_snapshot_paise'] as int, qty: l['qty'] as int, taxRateBp: l['tax_rate_snapshot_bp'] as int, reversed: l['status'] == 'reversed'),
     ]);
     final bill = bills$.values.where((b) => b['order_id'] == id).firstOrNull;
-    return {...o, 'table_name': tables.where((x) => x['id'] == o['table_id']).firstOrNull?['name'], 'totals': t.toJson(), 'bill': bill};
+    return {
+      ...o, 'table_name': tables.where((x) => x['id'] == o['table_id']).firstOrNull?['name'], 'totals': t.toJson(), 'bill': bill,
+      'tickets': [for (final k in tickets.where((k) => k['orderId'] == id)) {'id': k['id'], 'kot_no': k['kotNo'], 'status': k['status']}],
+    };
   }
 
   @override
@@ -48,11 +54,17 @@ class FakeHubApi extends HubApi {
     final u = staffList.firstWhere((s) => s['id'] == userId);
     if (u['pin'] != pin) throw HubApiException(401, 'invalid_pin', 'Wrong user or PIN');
     sessionToken = 'sess-$userId';
+    // same grants as packages/hub_server/lib/src/permissions.dart
     final perms = switch ((u['roles'] as List).first) {
-      'owner' => ['order.read', 'order.write', 'order.transfer', 'order.reverse', 'order.reverse.sent', 'discount.apply', 'payment.take', 'kds.read'],
-      'cashier' => ['order.read', 'order.write', 'order.transfer', 'order.reverse', 'payment.take', 'kds.read'],
-      _ => ['order.read', 'order.write', 'order.transfer', 'order.reverse', 'kds.read'],
+      'owner' => ['floor.read', 'menu.read', 'order.read', 'order.write', 'order.transfer', 'order.reverse', 'order.reverse.sent', 'discount.apply',
+          'payment.take', 'bill.adjust', 'kds.read', 'device.manage', 'clock', 'reports.read', 'reports.own'],
+      'cashier' => ['floor.read', 'menu.read', 'order.read', 'order.write', 'order.transfer', 'order.reverse', 'payment.take', 'kds.read', 'clock', 'reports.own'],
+      'waiter' => ['floor.read', 'menu.read', 'order.read', 'order.write', 'order.transfer', 'order.reverse', 'kds.read', 'clock', 'reports.own'],
+      'chef' => ['menu.read', 'kds.read', 'kds.update', 'clock'],
+      'it_admin' => ['floor.read', 'menu.read', 'device.manage', 'clock', 'reports.read'],
+      _ => ['floor.read', 'menu.read', 'order.read', 'kds.read', 'reports.read'], // auditor
     };
+    _perms = perms.toSet();
     return {'sessionToken': sessionToken, 'user': {'id': userId, 'name': u['name']}, 'permissions': perms};
   }
 
@@ -107,12 +119,78 @@ class FakeHubApi extends HubApi {
     return _orderView(orderId);
   }
 
+  final tickets = <Json>[];
   @override
   Future<Json> sendKot(String orderId) async {
+    final sent = <Json>[];
     for (final l in (orders[orderId]!['lines'] as List).cast<Json>().where((l) => l['status'] == 'pending')) {
       l['status'] = 'sent';
+      sent.add(l);
     }
-    return {'kotNo': 1};
+    final o = orders[orderId]!;
+    final k = {
+      'id': _id('k'), 'kotNo': tickets.length + 1, 'status': 'new', 'createdAt': DateTime.now().toUtc().toIso8601String(), 'orderId': orderId,
+      'where': o['table_id'] == null ? 'TAKEAWAY' : 'Table ${tables.firstWhere((t) => t['id'] == o['table_id'])['name']}',
+      'waiter': staffList.where((u) => u['id'] == o['waiter_id']).firstOrNull?['name'],
+      'lines': [for (final l in sent) {'id': l['id'], 'name': l['name_snapshot'], 'qty': l['qty'], 'notes': l['notes'], 'reversed': false}],
+    };
+    tickets.add(k);
+    events$.add({'type': 'kds.ticket_created', 'data': {'orderId': orderId}});
+    return {'ticketId': k['id'], 'kotNo': k['kotNo']};
+  }
+
+  @override
+  Future<List<Json>> kdsTickets() async => tickets.where((k) => k['status'] != 'served').toList();
+
+  @override
+  Future<Json> setTicketStatus(String ticketId, String status) async {
+    if (!_perms.contains('kds.update')) throw HubApiException(403, 'missing_permission', 'Missing permission: kds.update');
+    final k = tickets.firstWhere((k) => k['id'] == ticketId);
+    k['status'] = status;
+    events$.add({'type': 'kds.ticket_status', 'data': {'orderId': k['orderId'], 'status': status}});
+    return k;
+  }
+
+  Set<String> _perms = {};
+
+  @override
+  Future<List<Json>> tips() async => [
+        if (lastTip != null) {'waiter_id': lastTip!['waiterId'], 'waiter_name': 'Anita', 'tip_paise': lastTip!['amountPaise'], 'bills': 1},
+      ];
+
+  /// Printer stand-in: null = none configured (the hub answers with a PDF / no_printer).
+  Json printerSettings = {};
+  final printed = <String>[];
+  @override
+  Future<Json> printBill(String billId, {bool ifPrinter = false}) async {
+    if (printerSettings['bill'] == null) return ifPrinter ? {'status': 'no_printer'} : {'status': 'pdf', 'error': 'no_printer'};
+    printed.add(billId);
+    return {'status': 'printed', 'copyNo': printed.where((b) => b == billId).length};
+  }
+
+  @override
+  Future<Json> reprintKot(String ticketId) async => {'status': 'printed', 'copyNo': 2};
+  @override
+  Future<Json> printers() async => printerSettings;
+  @override
+  Future<Json> savePrinters(Json settings) async {
+    if (!_perms.contains('device.manage')) throw HubApiException(403, 'missing_permission', 'Missing permission: device.manage');
+    return printerSettings = {for (final e in settings.entries) if (e.value != null) e.key: e.value};
+  }
+
+  final testPrints = <String>[];
+  @override
+  Future<Json> testPrint(String target) async {
+    testPrints.add(target);
+    return {'status': 'printed', 'target': target};
+  }
+
+  final adjustments = <Json>[];
+  @override
+  Future<Json> adjust(String billId, {required int amountPaise, required String reason, String? approverUserId, String? approverPin}) async {
+    final a = {'billId': billId, 'amountPaise': amountPaise, 'reason': reason, 'approver': approverUserId, 'pin': approverPin};
+    adjustments.add(a);
+    return a;
   }
 
   final reversals = <Json>[];

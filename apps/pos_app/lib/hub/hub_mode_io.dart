@@ -58,13 +58,29 @@ class HubHost {
     return pairing = PairingPayload(host: ip, port: port, code: code, fingerprint: fingerprint);
   }
 
+  /// The address other terminals on the restaurant Wi-Fi can reach: a private LAN address, preferring Wi-Fi /
+  /// Ethernet interfaces over mobile data (rmnet/ccmni on Android phones).
   static Future<String> _lanAddress() async {
-    for (final ni in await NetworkInterface.list(type: InternetAddressType.IPv4)) {
-      for (final a in ni.addresses) {
-        if (!a.isLoopback) return a.address;
-      }
+    bool private(String ip) {
+      final p = ip.split('.').map(int.parse).toList();
+      return p[0] == 10 || (p[0] == 192 && p[1] == 168) || (p[0] == 172 && p[1] >= 16 && p[1] <= 31);
     }
-    return '127.0.0.1';
+
+    int score(NetworkInterface ni, InternetAddress a) {
+      final n = ni.name.toLowerCase();
+      var s = 0;
+      if (private(a.address)) s += 10;
+      if (n.startsWith('wlan') || n.startsWith('wi-fi') || n.startsWith('en') || n.startsWith('eth') || n.contains('wireless')) s += 5;
+      if (n.startsWith('rmnet') || n.startsWith('ccmni') || n.startsWith('pdp') || n.startsWith('tun')) s -= 20;
+      return s;
+    }
+
+    final candidates = [
+      for (final ni in await NetworkInterface.list(type: InternetAddressType.IPv4))
+        for (final a in ni.addresses)
+          if (!a.isLoopback && !a.isLinkLocal) (ni, a),
+    ]..sort((x, y) => score(y.$1, y.$2).compareTo(score(x.$1, x.$2)));
+    return candidates.isEmpty ? '127.0.0.1' : candidates.first.$2.address;
   }
 
   Future<void> stop() async {

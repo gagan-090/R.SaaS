@@ -1,10 +1,20 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 
 import '../hub/hub_api.dart';
 import '../state/app_state.dart';
+import 'role_screens.dart';
 import 'setup_screens.dart';
+
+String _localTime(String iso) {
+  final t = DateTime.tryParse(iso)?.toLocal();
+  if (t == null) return iso;
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${two(t.day)}/${two(t.month)} ${two(t.hour)}:${two(t.minute)}';
+}
 
 String _shortId(String id) => id.length <= 4 ? id : '…${id.substring(id.length - 4)}';
 
@@ -13,21 +23,17 @@ Color _hex(Object? v, Color fallback) {
   return s.length == 6 ? Color(int.parse('FF$s', radix: 16)) : fallback;
 }
 
-/// Role routing after PIN login: kitchen-only roles get the KDS, everyone else the table map.
+/// Role routing after PIN login: service roles get the table map, kitchen roles the KDS, IT admins the setup home.
+/// Every action is still enforced by the hub; this only picks the most useful first screen.
 class RoleHome extends ConsumerWidget {
   const RoleHome({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final s = ref.watch(sessionProvider)!;
-    if (s.isKitchenOnly) {
-      return const Scaffold(
-        body: Column(children: [
-          StatusBar(title: 'Kitchen'),
-          Expanded(child: EmptyState(icon: Icons.soup_kitchen_outlined, title: 'Kitchen Display arrives with Premium', message: 'KDS queue (K1) is scheduled for Day 15. Tickets are already created by KOT on the hub.')),
-        ]),
-      );
-    }
-    return const TableMapScreen();
+    final s = ref.watch(sessionProvider);
+    if (s == null) return const SizedBox.shrink(); // signing out: this screen is being closed
+    if (s.can('order.read')) return const TableMapScreen(); // owner, cashier, waiter, auditor (read-only)
+    if (s.can('kds.read')) return const KitchenScreen(); // chef
+    return const AdminHomeScreen(); // IT admin
   }
 }
 
@@ -70,7 +76,8 @@ class _TableMapScreenState extends ConsumerState<TableMapScreen> {
   @override
   Widget build(BuildContext context) {
     final api = ref.watch(hubApiProvider)!;
-    final session = ref.watch(sessionProvider)!;
+    final session = ref.watch(sessionProvider);
+    if (session == null) return const SizedBox.shrink(); // signing out: this screen is being closed
     ref.watch(hubTickProvider);
     return Scaffold(
       body: Column(children: [
@@ -89,22 +96,21 @@ class _TableMapScreenState extends ConsumerState<TableMapScreen> {
               return Padding(
                 padding: const EdgeInsets.all(HPSpace.x2),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  Row(children: [
+                  Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, crossAxisAlignment: WrapCrossAlignment.center, children: [
                     for (final f in floors)
-                      Padding(padding: const EdgeInsets.only(right: HPSpace.sm), child: CategoryChip(label: '${f['name']}', selected: f['id'] == floorId, onTap: () => setState(() => _floor = f['id'] as String))),
-                    const Spacer(),
+                      CategoryChip(label: '${f['name']}', selected: f['id'] == floorId, onTap: () => setState(() => _floor = f['id'] as String)),
+                    if (!session.can('order.write')) const StatusChip(label: 'Read-only', icon: Icons.visibility_outlined),
                     if (session.can('order.read'))
-                      SizedBox(width: 170, child: SecondaryButton(label: 'Bill history', icon: Icons.receipt_long_rounded, height: 48, onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BillHistoryScreen())))),
-                    const SizedBox(width: HPSpace.sm),
+                      SizedBox(width: 160, child: SecondaryButton(label: 'Bills', icon: Icons.receipt_long_rounded, height: 48, onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BillHistoryScreen())))),
                     if (session.can('order.write'))
-                      SizedBox(width: 170, child: PrimaryButton(label: 'Takeaway', icon: Icons.shopping_bag_outlined, height: 48, onPressed: () => _open(api, type: 'takeaway'))),
+                      SizedBox(width: 160, child: PrimaryButton(label: 'Takeaway', icon: Icons.shopping_bag_outlined, height: 48, onPressed: () => _open(api, type: 'takeaway'))),
                   ]),
                   const SizedBox(height: HPSpace.x2),
                   Expanded(
                     child: tables.isEmpty
                         ? const EmptyState(title: 'No tables on this floor', message: 'Add tables in the owner/IT admin setup.')
                         : SingleChildScrollView(
-                            child: Wrap(spacing: HPSpace.lg, runSpacing: HPSpace.lg, children: [
+                            child: Wrap(spacing: isNarrow(context) ? HPSpace.md : HPSpace.lg, runSpacing: isNarrow(context) ? HPSpace.md : HPSpace.lg, children: [
                               for (final t in tables)
                                 TableTile(
                                   key: Key('table-${t['name']}'),
@@ -244,7 +250,13 @@ class _OrderScreenState extends ConsumerState<OrderScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final session = ref.watch(sessionProvider)!;
+    final session = ref.watch(sessionProvider);
+    if (session == null) return const SizedBox.shrink(); // signing out: this screen is being closed
+    // live: KOT status changes from the kitchen and edits from other terminals reload this order
+    ref.listen(hubEventsProvider, (_, next) {
+      final d = next.valueOrNull?['data'];
+      if (d is Map && d['orderId'] == widget.orderId) _load();
+    });
     if (_error != null) return Scaffold(body: Column(children: [const StatusBar(), Expanded(child: ErrorState(message: errText(_error!), onRetry: _load))]));
     if (_order == null || _menu == null) return const Scaffold(body: LoadingState());
     final o = _order!;
@@ -255,99 +267,125 @@ class _OrderScreenState extends ConsumerState<OrderScreen> {
     final pending = lines.where((l) => l['status'] == 'pending').toList();
     final sent = lines.where((l) => l['status'] == 'sent').toList();
     final reversed = lines.where((l) => l['status'] == 'reversed').toList();
+    final tickets = ((o['tickets'] as List?) ?? const []).cast<Json>();
     final totals = o['totals'] as Json;
     final editable = o['status'] == 'open' && session.can('order.write');
     final title = o['table_id'] == null ? 'Takeaway' : 'Table ${_tableName(o)}';
+    final narrow = isNarrow(context);
+    final canBill = session.can('payment.take');
+
+    final menuPane = Padding(
+      padding: EdgeInsets.all(narrow ? HPSpace.md : HPSpace.lg),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SizedBox(
+          height: 48,
+          child: ListView(scrollDirection: Axis.horizontal, children: [
+            for (final c in cats) Padding(padding: const EdgeInsets.only(right: HPSpace.sm), child: CategoryChip(label: '${c['name']}', selected: c['id'] == cat, onTap: () => setState(() => _cat = c['id'] as String))),
+          ]),
+        ),
+        SizedBox(height: narrow ? HPSpace.md : HPSpace.lg),
+        Expanded(
+          child: items.isEmpty
+              ? const EmptyState(title: 'No dishes in this category')
+              : GridView.extent(maxCrossAxisExtent: narrow ? 210 : 220, mainAxisSpacing: narrow ? HPSpace.sm : HPSpace.md, crossAxisSpacing: narrow ? HPSpace.sm : HPSpace.md, childAspectRatio: narrow ? 1.05 : .95, children: [
+                  for (final i in items)
+                    // feedback on phones is the Order tab label (count + total), not a toast that would cover the buttons
+                    _DishTile(item: i, enabled: editable && i['available'] == 1, onAdd: () => _do(() => _api.addLines(widget.orderId, [{'menuItemId': i['id'], 'qty': 1}]))),
+                ]),
+        ),
+      ]),
+    );
+
+    final orderPane = Container(
+      decoration: BoxDecoration(color: HPColors.ember, border: narrow ? null : const Border(left: BorderSide(color: HPColors.clayLine))),
+      padding: EdgeInsets.all(narrow ? HPSpace.lg : HPSpace.x2),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Expanded(child: Text(title, style: HPType.titleScreen(HPColors.ghee), overflow: TextOverflow.ellipsis)),
+          if (o['table_id'] != null && session.can('order.transfer') && (o['status'] == 'open' || o['status'] == 'billed'))
+            TextButton.icon(onPressed: _transfer, icon: const Icon(Icons.swap_horiz_rounded), label: const Text('Transfer')),
+        ]),
+        Wrap(spacing: HPSpace.xs, runSpacing: HPSpace.xs, children: [
+          StatusChip(label: '${o['status']}', tone: o['status'] == 'open' ? HPTone.saffron : HPTone.danger),
+          for (final k in tickets)
+            StatusChip(
+              key: Key('kot-${k['kot_no']}-${k['status']}'),
+              label: 'KOT ${k['kot_no']}: ${k['status']}',
+              icon: k['status'] == 'ready' ? Icons.notifications_active_rounded : Icons.soup_kitchen_outlined,
+              tone: switch (k['status']) { 'ready' => HPTone.success, 'served' => HPTone.neutral, _ => HPTone.pending },
+            ),
+        ]),
+        const SizedBox(height: HPSpace.md),
+        Expanded(
+          child: ListView(children: [
+            if (sent.isNotEmpty) Text('IN THE KITCHEN', style: HPType.overline(HPColors.husk)),
+            for (final l in sent) _LineRow(line: l, onReverse: session.can('order.reverse') && o['status'] != 'paid' ? () => _reverse(l) : null),
+            if (sent.isNotEmpty && pending.isNotEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: HPSpace.sm), child: Divider()),
+            if (pending.isNotEmpty) Text('NEW', style: HPType.overline(HPColors.saffron)),
+            for (final l in pending)
+              _LineRow(
+                line: l,
+                stepper: editable ? QtyStepper(qty: l['qty'] as int, onChanged: (q) => _do(() => _api.updateLine(widget.orderId, l['id'] as String, qty: q))) : null,
+                onReverse: session.can('order.reverse') ? () => _reverse(l) : null,
+              ),
+            if (reversed.isNotEmpty) ...[
+              const SizedBox(height: HPSpace.sm),
+              for (final l in reversed) Text('✕ ${l['name_snapshot']} — ${l['reversal_reason']}', style: HPType.body(HPColors.smoke).copyWith(decoration: TextDecoration.lineThrough)),
+            ],
+            if (lines.isEmpty) Padding(padding: const EdgeInsets.only(top: HPSpace.x4), child: EmptyState(title: narrow ? 'Add dishes from the Menu tab' : 'Tap a dish to add it')),
+          ]),
+        ),
+        const Divider(),
+        _TotalRow('Subtotal', totals['subtotalPaise'] as int),
+        _TotalRow('CGST', totals['cgstPaise'] as int),
+        _TotalRow('SGST', totals['sgstPaise'] as int),
+        _TotalRow('Round-off', totals['roundOffPaise'] as int),
+        Row(children: [
+          Text('To pay', style: HPType.label(HPColors.husk)),
+          const Spacer(),
+          Text(formatPaise(totals['totalPaise'] as int), key: const Key('order-total'), style: HPType.displayTotal(HPColors.saffron).copyWith(fontSize: narrow ? 30 : 36)),
+        ]),
+        const SizedBox(height: HPSpace.md),
+        Row(children: [
+          if (session.can('order.write')) ...[
+            Expanded(child: SecondaryButton(label: 'Send KOT', onPressed: editable && pending.isNotEmpty ? () => _do(() => _api.sendKot(widget.orderId)) : null)),
+            const SizedBox(width: HPSpace.sm),
+          ],
+          Expanded(
+            child: canBill
+                ? PrimaryButton(
+                    label: 'Bill & pay',
+                    height: 56,
+                    onPressed: (o['status'] == 'open' || o['status'] == 'billed') && lines.any((l) => l['status'] != 'reversed')
+                        ? () async {
+                            await Navigator.of(context).push(MaterialPageRoute(builder: (_) => BillScreen(orderId: widget.orderId)));
+                            await _load();
+                          }
+                        : null,
+                  )
+                : Text(session.can('order.write') ? 'The cashier bills this order' : 'Read-only', textAlign: TextAlign.center, style: HPType.body(HPColors.husk)),
+          ),
+        ]),
+      ]),
+    );
 
     return Scaffold(
       body: Column(children: [
         StatusBar(title: title),
         Expanded(
-          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            // ---- menu
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(HPSpace.lg),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  SizedBox(
-                    height: 48,
-                    child: ListView(scrollDirection: Axis.horizontal, children: [
-                      for (final c in cats) Padding(padding: const EdgeInsets.only(right: HPSpace.sm), child: CategoryChip(label: '${c['name']}', selected: c['id'] == cat, onTap: () => setState(() => _cat = c['id'] as String))),
+          child: narrow
+              ? DefaultTabController(
+                  length: 2,
+                  initialIndex: editable ? 0 : 1,
+                  child: Column(children: [
+                    TabBar(tabs: [
+                      const Tab(key: Key('tab-menu'), text: 'Menu'),
+                      Tab(key: const Key('tab-order'), text: 'Order · ${lines.where((l) => l['status'] != 'reversed').length} · ${formatPaise(totals['totalPaise'] as int)}'),
                     ]),
-                  ),
-                  const SizedBox(height: HPSpace.lg),
-                  Expanded(
-                    child: items.isEmpty
-                        ? const EmptyState(title: 'No dishes in this category')
-                        : GridView.extent(maxCrossAxisExtent: 220, mainAxisSpacing: HPSpace.md, crossAxisSpacing: HPSpace.md, childAspectRatio: .95, children: [
-                            for (final i in items) _DishTile(item: i, enabled: editable && i['available'] == 1, onAdd: () => _do(() => _api.addLines(widget.orderId, [{'menuItemId': i['id'], 'qty': 1}]))),
-                          ]),
-                  ),
-                ]),
-              ),
-            ),
-            // ---- order panel
-            Container(
-              width: 400,
-              decoration: const BoxDecoration(color: HPColors.ember, border: Border(left: BorderSide(color: HPColors.clayLine))),
-              padding: const EdgeInsets.all(HPSpace.x2),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                Row(children: [
-                  Expanded(child: Text(title, style: HPType.titleScreen(HPColors.ghee))),
-                  if (o['table_id'] != null && session.can('order.transfer') && (o['status'] == 'open' || o['status'] == 'billed'))
-                    TextButton.icon(onPressed: _transfer, icon: const Icon(Icons.swap_horiz_rounded), label: const Text('Transfer')),
-                ]),
-                StatusChip(label: '${o['status']}', tone: o['status'] == 'open' ? HPTone.saffron : HPTone.danger),
-                const SizedBox(height: HPSpace.md),
-                Expanded(
-                  child: ListView(children: [
-                    if (sent.isNotEmpty) Text('IN THE KITCHEN', style: HPType.overline(HPColors.husk)),
-                    for (final l in sent) _LineRow(line: l, onReverse: session.can('order.reverse') && o['status'] != 'paid' ? () => _reverse(l) : null),
-                    if (sent.isNotEmpty && pending.isNotEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: HPSpace.sm), child: Divider()),
-                    if (pending.isNotEmpty) Text('NEW', style: HPType.overline(HPColors.saffron)),
-                    for (final l in pending)
-                      _LineRow(
-                        line: l,
-                        stepper: editable ? QtyStepper(qty: l['qty'] as int, onChanged: (q) => _do(() => _api.updateLine(widget.orderId, l['id'] as String, qty: q))) : null,
-                        onReverse: session.can('order.reverse') ? () => _reverse(l) : null,
-                      ),
-                    if (reversed.isNotEmpty) ...[
-                      const SizedBox(height: HPSpace.sm),
-                      for (final l in reversed) Text('✕ ${l['name_snapshot']} — ${l['reversal_reason']}', style: HPType.body(HPColors.smoke).copyWith(decoration: TextDecoration.lineThrough)),
-                    ],
-                    if (lines.isEmpty) const Padding(padding: EdgeInsets.only(top: HPSpace.x4), child: EmptyState(title: 'Tap a dish to add it')),
+                    Expanded(child: TabBarView(children: [menuPane, orderPane])),
                   ]),
-                ),
-                const Divider(),
-                _TotalRow('Subtotal', totals['subtotalPaise'] as int),
-                _TotalRow('CGST', totals['cgstPaise'] as int),
-                _TotalRow('SGST', totals['sgstPaise'] as int),
-                _TotalRow('Round-off', totals['roundOffPaise'] as int),
-                Row(children: [
-                  Text('To pay', style: HPType.label(HPColors.husk)),
-                  const Spacer(),
-                  Text(formatPaise(totals['totalPaise'] as int), key: const Key('order-total'), style: HPType.displayTotal(HPColors.saffron).copyWith(fontSize: 36)),
-                ]),
-                const SizedBox(height: HPSpace.md),
-                Row(children: [
-                  Expanded(child: SecondaryButton(label: 'Send KOT', onPressed: editable && pending.isNotEmpty ? () => _do(() => _api.sendKot(widget.orderId)) : null)),
-                  const SizedBox(width: HPSpace.sm),
-                  Expanded(
-                    child: PrimaryButton(
-                      label: 'Bill & pay',
-                      height: 56,
-                      onPressed: session.can('payment.take') && (o['status'] == 'open' || o['status'] == 'billed') && lines.any((l) => l['status'] != 'reversed')
-                          ? () async {
-                              await Navigator.of(context).push(MaterialPageRoute(builder: (_) => BillScreen(orderId: widget.orderId)));
-                              await _load();
-                            }
-                          : null,
-                    ),
-                  ),
-                ]),
-              ]),
-            ),
-          ]),
+                )
+              : Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [Expanded(child: menuPane), SizedBox(width: 400, child: orderPane)]),
         ),
       ]),
     );
@@ -369,23 +407,25 @@ class _DishTile extends StatelessWidget {
         key: Key('dish-${item['name']}'),
         borderRadius: BorderRadius.circular(HPRadius.card),
         onTap: enabled ? onAdd : null,
-        child: Padding(
-          padding: const EdgeInsets.all(HPSpace.md),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              PlateIcon(base: _hex(pc?['base'], HPColors.saffron), sauce: _hex(pc?['sauce'], HPColors.ghee), garnish: _hex(pc?['garnish'], HPColors.cardamom), size: 56),
+        child: LayoutBuilder(builder: (c, box) {
+          final small = box.maxWidth < 170; // phones: two compact columns
+          return Padding(
+            padding: EdgeInsets.all(small ? HPSpace.sm : HPSpace.md),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                PlateIcon(base: _hex(pc?['base'], HPColors.saffron), sauce: _hex(pc?['sauce'], HPColors.ghee), garnish: _hex(pc?['garnish'], HPColors.cardamom), size: small ? 40 : 56),
+                const Spacer(),
+                VegMark(isVeg: item['is_veg'] == 1 || item['is_veg'] == true),
+              ]),
               const Spacer(),
-              VegMark(isVeg: item['is_veg'] == 1 || item['is_veg'] == true),
+              Text('${item['name']}', style: HPType.titleCard(HPColors.ghee).copyWith(fontSize: small ? 15 : 17), maxLines: 2, overflow: TextOverflow.ellipsis),
+              Row(children: [
+                Expanded(child: Text(formatPaise(item['price_paise'] as int), style: HPType.label(HPColors.husk), overflow: TextOverflow.ellipsis)),
+                Icon(Icons.add_circle_rounded, color: enabled ? HPColors.saffron : HPColors.smoke, size: small ? 22 : 24),
+              ]),
             ]),
-            const Spacer(),
-            Text('${item['name']}', style: HPType.titleCard(HPColors.ghee).copyWith(fontSize: 17), maxLines: 2, overflow: TextOverflow.ellipsis),
-            Row(children: [
-              Text(formatPaise(item['price_paise'] as int), style: HPType.label(HPColors.husk)),
-              const Spacer(),
-              Icon(Icons.add_circle_rounded, color: enabled ? HPColors.saffron : HPColors.smoke),
-            ]),
-          ]),
-        ),
+          );
+        }),
       ),
     );
   }
@@ -471,6 +511,8 @@ class _BillScreenState extends ConsumerState<BillScreen> {
           discount: _discountBp == null ? null : {'type': 'percent', 'bp': _discountBp},
           discountReason: _discountReason.text.trim().isEmpty ? null : _discountReason.text.trim());
       setState(() => _bill = b);
+      // Build Spec §13: the bill prints when generated — only if a bill printer is set up
+      if (mounted) unawaited(printBillWithFeedback(context, _api, b['id'] as String, ifPrinter: true));
     } catch (e) {
       if (mounted) toast(context, errText(e), error: true);
     } finally {
@@ -539,89 +581,111 @@ class _BillScreenState extends ConsumerState<BillScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final session = ref.watch(sessionProvider)!;
+    final session = ref.watch(sessionProvider);
+    if (session == null) return const SizedBox.shrink(); // signing out: this screen is being closed
     if (_order == null) return const Scaffold(body: LoadingState());
     final totals = _bill == null ? _order!['totals'] as Json : null;
+    Widget paidView() => Column(children: [
+      const Icon(Icons.check_circle_rounded, size: 72, color: HPColors.cardamom),
+      Text('Paid', style: HPType.titleScreen(HPColors.ghee)),
+      if (_change! > 0) Text('Change due ${formatPaise(_change!)}', key: const Key('change-due'), style: HPType.displayTotal(HPColors.saffron)),
+      const SizedBox(height: HPSpace.x2),
+      SecondaryButton(key: const Key('paid-print'), label: 'Print bill', icon: Icons.print_rounded, onPressed: () => printBillWithFeedback(context, _api, _bill!['id'] as String)),
+      const SizedBox(height: HPSpace.sm),
+      PrimaryButton(label: 'Back to tables', onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst)),
+    ]);
+    final summary = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(HPSpace.x2),
+          child: Column(children: [
+            _TotalRow('Subtotal', (_bill?['subtotal_paise'] ?? totals!['subtotalPaise']) as int),
+            _TotalRow('Discount', -((_bill?['discount_paise'] ?? totals!['discountPaise']) as int)),
+            _TotalRow('CGST', (_bill?['cgst_paise'] ?? totals!['cgstPaise']) as int),
+            _TotalRow('SGST', (_bill?['sgst_paise'] ?? totals!['sgstPaise']) as int),
+            _TotalRow('Tip', (_bill?['tip_paise'] ?? totals!['tipPaise']) as int),
+            _TotalRow('Round-off', (_bill?['round_off_paise'] ?? totals!['roundOffPaise']) as int),
+            const Divider(),
+            Row(children: [
+              Text(_bill == null ? 'Total' : 'Remaining', style: HPType.label(HPColors.husk)),
+              const Spacer(),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(formatPaise(_bill == null ? totals!['totalPaise'] as int : _remaining), key: const Key('amount-due'), style: HPType.displayTotal(HPColors.saffron)),
+                ),
+              ),
+            ]),
+          ]),
+        ),
+      ),
+      if (_bill != null) ...[
+        const SizedBox(height: HPSpace.sm),
+        Row(children: [
+          Text('PAYMENT', style: HPType.overline(HPColors.husk)),
+          const Spacer(),
+          if (_paid == 0) TextButton.icon(onPressed: _tip, icon: const Icon(Icons.volunteer_activism_outlined), label: const Text('Add tip')),
+        ]),
+        for (final p in _payments) ListTile(dense: true, title: Text('${p['mode']}'.toUpperCase()), trailing: Text(formatPaise(p['amountPaise'] as int))),
+      ],
+    ]);
+    final generate = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      if (session.can('discount.apply')) ...[
+        Text('DISCOUNT', style: HPType.overline(HPColors.husk)),
+        Wrap(spacing: HPSpace.sm, children: [
+          for (final bp in [null, 500, 1000, 1500]) ChoiceChip(label: Text(bp == null ? 'None' : '${bp ~/ 100}%'), selected: _discountBp == bp, onSelected: (_) => setState(() => _discountBp = bp)),
+        ]),
+        if ((_discountBp ?? 0) > 1000) TextField(controller: _discountReason, decoration: const InputDecoration(labelText: 'Reason (required above 10%)')),
+        const SizedBox(height: HPSpace.lg),
+      ],
+      PrimaryButton(label: 'Generate bill', busy: _busy, onPressed: _generate),
+    ]);
+    final payment = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      SegmentedButton<String>(
+        segments: const [
+          ButtonSegment(value: 'cash', label: Text('Cash'), icon: Icon(Icons.payments_outlined)),
+          ButtonSegment(value: 'upi', label: Text('UPI'), icon: Icon(Icons.qr_code_2_rounded)),
+          ButtonSegment(value: 'card', label: Text('Card'), icon: Icon(Icons.credit_card_rounded)),
+        ],
+        selected: {_mode},
+        onSelectionChanged: (s) => setState(() { _mode = s.first; _pendingKey = null; }),
+      ),
+      const SizedBox(height: HPSpace.sm),
+      Text(_amount.isEmpty ? '₹0' : '₹$_amount', key: const Key('entered-amount'), textAlign: TextAlign.center, style: HPType.displayTotal(HPColors.ghee).copyWith(fontSize: 36)),
+      NumericKeypad(
+        onKey: (d) => setState(() { _amount = _amount.length < 7 ? _amount + d : _amount; _pendingKey = null; }),
+        onBackspace: () => setState(() { _amount = _amount.isEmpty ? '' : _amount.substring(0, _amount.length - 1); _pendingKey = null; }),
+        onClear: () => setState(() { _amount = ''; _pendingKey = null; }),
+        quickAmounts: [('Exact', (_remaining + 99) ~/ 100), ('₹500', 500), ('₹1,000', 1000), ('₹2,000', 2000)],
+        onQuickAmount: (v) => setState(() { _amount = '$v'; _pendingKey = null; }),
+      ),
+      const SizedBox(height: HPSpace.sm),
+      PrimaryButton(label: 'Pay ${_mode.toUpperCase()}', busy: _busy, onPressed: _amount.isEmpty ? null : _pay),
+    ]);
+    // Wide screens (tablet / PC): totals left, keypad right, so the Pay button is always on screen.
+    final wide = MediaQuery.sizeOf(context).width >= 900 && _bill != null && _change == null;
+    Widget scroll(Widget child, double maxWidth) => SingleChildScrollView(
+          padding: const EdgeInsets.all(HPSpace.lg),
+          child: Center(child: ConstrainedBox(constraints: BoxConstraints(maxWidth: maxWidth), child: child)),
+        );
     return Scaffold(
       body: Column(children: [
         StatusBar(title: _bill == null ? 'Bill preview' : 'Bill ${_bill!['invoice_no']}'),
         Expanded(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(HPSpace.x2),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 560),
-                child: _change != null
-                    ? Column(children: [
-                        const Icon(Icons.check_circle_rounded, size: 72, color: HPColors.cardamom),
-                        Text('Paid', style: HPType.titleScreen(HPColors.ghee)),
-                        if (_change! > 0) Text('Change due ${formatPaise(_change!)}', key: const Key('change-due'), style: HPType.displayTotal(HPColors.saffron)),
-                        const SizedBox(height: HPSpace.x2),
-                        PrimaryButton(label: 'Back to tables', onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst)),
-                      ])
-                    : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(HPSpace.x2),
-                            child: Column(children: [
-                              _TotalRow('Subtotal', (_bill?['subtotal_paise'] ?? totals!['subtotalPaise']) as int),
-                              _TotalRow('Discount', -((_bill?['discount_paise'] ?? totals!['discountPaise']) as int)),
-                              _TotalRow('CGST', (_bill?['cgst_paise'] ?? totals!['cgstPaise']) as int),
-                              _TotalRow('SGST', (_bill?['sgst_paise'] ?? totals!['sgstPaise']) as int),
-                              _TotalRow('Tip', (_bill?['tip_paise'] ?? totals!['tipPaise']) as int),
-                              _TotalRow('Round-off', (_bill?['round_off_paise'] ?? totals!['roundOffPaise']) as int),
-                              const Divider(),
-                              Row(children: [
-                                Text(_bill == null ? 'Total' : 'Remaining', style: HPType.label(HPColors.husk)),
-                                const Spacer(),
-                                Text(formatPaise(_bill == null ? totals!['totalPaise'] as int : _remaining), key: const Key('amount-due'), style: HPType.displayTotal(HPColors.saffron)),
-                              ]),
-                            ]),
-                          ),
-                        ),
-                        const SizedBox(height: HPSpace.lg),
-                        if (_bill == null) ...[
-                          if (session.can('discount.apply')) ...[
-                            Text('DISCOUNT', style: HPType.overline(HPColors.husk)),
-                            Wrap(spacing: HPSpace.sm, children: [
-                              for (final bp in [null, 500, 1000, 1500]) ChoiceChip(label: Text(bp == null ? 'None' : '${bp ~/ 100}%'), selected: _discountBp == bp, onSelected: (_) => setState(() => _discountBp = bp)),
-                            ]),
-                            if ((_discountBp ?? 0) > 1000) TextField(controller: _discountReason, decoration: const InputDecoration(labelText: 'Reason (required above 10%)')),
-                            const SizedBox(height: HPSpace.lg),
-                          ],
-                          PrimaryButton(label: 'Generate bill', busy: _busy, onPressed: _generate),
-                        ] else ...[
-                          Row(children: [
-                            Text('PAYMENT', style: HPType.overline(HPColors.husk)),
-                            const Spacer(),
-                            if (_paid == 0) TextButton.icon(onPressed: _tip, icon: const Icon(Icons.volunteer_activism_outlined), label: const Text('Add tip')),
-                          ]),
-                          SegmentedButton<String>(
-                            segments: const [
-                              ButtonSegment(value: 'cash', label: Text('Cash'), icon: Icon(Icons.payments_outlined)),
-                              ButtonSegment(value: 'upi', label: Text('UPI'), icon: Icon(Icons.qr_code_2_rounded)),
-                              ButtonSegment(value: 'card', label: Text('Card'), icon: Icon(Icons.credit_card_rounded)),
-                            ],
-                            selected: {_mode},
-                            onSelectionChanged: (s) => setState(() { _mode = s.first; _pendingKey = null; }),
-                          ),
-                          const SizedBox(height: HPSpace.md),
-                          Text(_amount.isEmpty ? '₹0' : '₹$_amount', key: const Key('entered-amount'), textAlign: TextAlign.center, style: HPType.displayTotal(HPColors.ghee)),
-                          NumericKeypad(
-                            onKey: (d) => setState(() { _amount = _amount.length < 7 ? _amount + d : _amount; _pendingKey = null; }),
-                            onBackspace: () => setState(() { _amount = _amount.isEmpty ? '' : _amount.substring(0, _amount.length - 1); _pendingKey = null; }),
-                            onClear: () => setState(() { _amount = ''; _pendingKey = null; }),
-                            quickAmounts: [('Exact', (_remaining + 99) ~/ 100), ('₹500', 500), ('₹1,000', 1000), ('₹2,000', 2000)],
-                            onQuickAmount: (v) => setState(() { _amount = '$v'; _pendingKey = null; }),
-                          ),
-                          const SizedBox(height: HPSpace.md),
-                          PrimaryButton(label: 'Pay ${_mode.toUpperCase()}', busy: _busy, onPressed: _amount.isEmpty ? null : _pay),
-                          for (final p in _payments) ListTile(dense: true, title: Text('${p['mode']}'.toUpperCase()), trailing: Text(formatPaise(p['amountPaise'] as int))),
-                        ],
-                      ]),
-              ),
-            ),
-          ),
+          child: wide
+              ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Expanded(child: scroll(summary, 520)),
+                  Expanded(child: scroll(payment, 480)),
+                ])
+              : scroll(
+                  _change != null
+                      ? paidView()
+                      : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                          summary,
+                          const SizedBox(height: HPSpace.lg),
+                          if (_bill == null) generate else payment,
+                        ]),
+                  560),
         ),
       ]),
     );
@@ -634,6 +698,7 @@ class BillHistoryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final api = ref.watch(hubApiProvider)!;
+    ref.watch(hubTickProvider);
     return Scaffold(
       body: Column(children: [
         const StatusBar(title: 'Bill history'),
@@ -648,8 +713,14 @@ class BillHistoryScreen extends ConsumerWidget {
                 for (final b in s.data!)
                   Padding(
                     padding: const EdgeInsets.only(bottom: HPSpace.sm),
-                    child: OrderCard(title: '${b['invoice_no']}', subtitle: '${b['created_at']}'.replaceFirst('T', ' ').substring(0, 16),
-                        total: formatPaise(b['total_paise'] as int), status: '${b['status']}', tone: b['status'] == 'paid' ? HPTone.success : HPTone.saffron),
+                    child: OrderCard(
+                        key: Key('bill-${b['invoice_no']}'),
+                        title: '${b['invoice_no']}',
+                        subtitle: _localTime('${b['created_at']}'),
+                        total: formatPaise(b['total_paise'] as int),
+                        status: '${b['status']}',
+                        tone: b['status'] == 'paid' ? HPTone.success : HPTone.saffron,
+                        onTap: () => showBillActions(context, ref, b)),
                   ),
               ]);
             },
