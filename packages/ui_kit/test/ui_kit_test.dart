@@ -150,4 +150,14 @@ void main() {
     expect(taps, 0);
     expect(find.text('Sold out'), findsOneWidget);
   });
+
+  testWidgets('selected chips use text that is readable on the accent fill (light back office: paper on wine)', (t) async {
+    for (final theme in [HPTheme.backOffice(), HPTheme.backOffice(brightness: Brightness.dark), HPTheme.service(), HPTheme.service(brightness: Brightness.light)]) {
+      await t.pumpWidget(hostTheme(FilterChip(label: const Text('Kitchen display'), selected: true, onSelected: (_) {}), theme));
+      await t.pumpAndSettle(); // MaterialApp animates between themes
+      final p = theme.extension<HPPalette>()!;
+      final rich = t.widget<RichText>(find.descendant(of: find.text('Kitchen display'), matching: find.byType(RichText)));
+      expect(rich.text.style?.color, p.onAccent);
+    }
+  });
 }

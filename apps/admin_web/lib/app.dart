@@ -13,6 +13,7 @@ import 'screens/console/settings_screen.dart';
 import 'screens/console/staff_screen.dart';
 import 'screens/console/tables_screen.dart';
 import 'screens/restaurants_screens.dart';
+import 'screens/verify_screen.dart';
 import 'state/providers.dart';
 import 'widgets/common.dart';
 
@@ -35,6 +36,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final s = ref.read(authProvider);
       final loc = state.matchedLocation;
+      if (loc == '/verify-email') return null; // the emailed link works whether or not someone is signed in
       return switch (s) {
         SignedOut() => loc == '/login' ? null : '/login',
         MfaChallenge() || MfaEnrollment() => loc == '/mfa' ? null : '/mfa',
@@ -45,6 +47,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       GoRoute(path: '/mfa', builder: (_, _) => const MfaScreen()),
+      GoRoute(path: '/verify-email', builder: (_, s) => VerifyEmailScreen(token: s.uri.queryParameters['token'])),
       ShellRoute(
         builder: (c, s, child) => ConsoleShell(location: s.matchedLocation, nav: platformNav, brand: 'Platform', child: child),
         routes: [

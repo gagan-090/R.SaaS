@@ -163,7 +163,9 @@ abstract final class HPTheme {
         backgroundColor: p.surface,
         selectedColor: p.accent,
         side: BorderSide(color: p.line),
-        labelStyle: HPType.label(p.text).copyWith(fontSize: 14),
+        // selected chips sit on the accent fill (saffron / wine), so their text switches to onAccent
+        // (chips resolve state on the label *colour*, so it must be a WidgetStateColor)
+        labelStyle: HPType.label().copyWith(fontSize: 14, color: WidgetStateColor.resolveWith((s) => s.contains(WidgetState.selected) ? p.onAccent : p.text)),
         secondaryLabelStyle: HPType.label(p.onAccent).copyWith(fontSize: 14),
         checkmarkColor: p.onAccent,
         shape: const StadiumBorder(),

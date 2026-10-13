@@ -15,6 +15,7 @@ import { badRequest, conflict, notFound } from '../common/errors';
 import { PLAN_DEFAULTS } from '../common/permissions';
 import { apiBody, zbody, ZodPipe } from '../common/validation';
 import { DbService, Tx } from '../db/db.service';
+import { verifyRestaurantEmail } from '../mail/templates';
 import { LicenseService } from '../licensing/license.service';
 import { Mailer } from '../mail/mail.service';
 
@@ -112,13 +113,22 @@ export class RestaurantsController {
         },
       });
     });
-    await this.mailer.send({
-      to: ownerEmail,
-      subject: `Verify your email to activate ${b.restaurantName}`,
-      text: `Confirm your email and set your password (valid 72 hours): ${loadEnv().PUBLIC_API_URL}/verify-email?token=${token}`,
-    });
-    Object.assign(audit, { objectType: 'restaurant_registration', objectId: reg.id, after: { ...b, ownerEmail } });
-    return { registrationId: reg.id, status: 'pending_verification', ownerEmail };
+    // the console page that sets the password (hash routing: /#/verify-email)
+    const verifyUrl = `${loadEnv().CONSOLE_URL.replace(/\/$/, '')}/#/verify-email?token=${token}`;
+    let emailSent = true;
+    let emailError: string | undefined;
+    try {
+      await this.mailer.send({ to: ownerEmail, ...verifyRestaurantEmail({ ownerName: b.ownerName, restaurantName: b.restaurantName, url: verifyUrl }) });
+    } catch (e) {
+      // the registration stands; the Super Admin gets the link to pass on (or resends after fixing the mail setup)
+      emailSent = false;
+      emailError = e instanceof Error ? e.message : 'Email could not be sent';
+    }
+    Object.assign(audit, { objectType: 'restaurant_registration', objectId: reg.id, after: { ...b, ownerEmail, emailSent } });
+    return {
+      registrationId: reg.id, status: 'pending_verification', ownerEmail, emailSent,
+      ...(emailSent ? {} : { emailError, verifyUrl }),
+    };
   }
 
   private async assertEmailFree(tx: Tx, email: string) {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
@@ -234,7 +235,7 @@ class _RegisterRestaurantDialogState extends ConsumerState<RegisterRestaurantDia
     if (!_form.currentState!.validate()) return;
     setState(() => _busy = true);
     try {
-      await ref.read(apiProvider).registerRestaurant({
+      final r = await ref.read(apiProvider).registerRestaurant({
         'ownerEmail': _c['ownerEmail']!.text.trim(),
         'ownerName': _c['ownerName']!.text.trim(),
         'restaurantName': _c['restaurantName']!.text.trim(),
@@ -243,6 +244,38 @@ class _RegisterRestaurantDialogState extends ConsumerState<RegisterRestaurantDia
         'planCode': _plan,
       });
       if (!mounted) return;
+      if (r['emailSent'] == false) {
+        // e.g. Resend sandbox: only the account's own address receives mail until a domain is verified
+        await showDialog<void>(
+          context: context,
+          builder: (c) => HPDialog(
+            title: 'Email not delivered',
+            actions: [PrimaryButton(label: 'Done', height: 52, onPressed: () => Navigator.pop(c))],
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+              Text('The restaurant is registered, but the email provider said: ${r['emailError']}', style: HPType.body(c.hp.text)),
+              const SizedBox(height: HPSpace.md),
+              Text('Send the owner this activation link yourself (valid 72 hours):', style: HPType.body(c.hp.muted)),
+              const SizedBox(height: HPSpace.sm),
+              Container(
+                padding: const EdgeInsets.all(HPSpace.md),
+                decoration: BoxDecoration(color: c.hp.raised, borderRadius: BorderRadius.circular(12)),
+                child: SelectableText('${r['verifyUrl']}', key: const Key('verify-link'), style: HPType.mono(c.hp.text)),
+              ),
+              const SizedBox(height: HPSpace.sm),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  icon: const Icon(Icons.copy_rounded, size: 18),
+                  label: const Text('Copy link'),
+                  onPressed: () => Clipboard.setData(ClipboardData(text: '${r['verifyUrl']}')),
+                ),
+              ),
+            ]),
+          ),
+        );
+        if (mounted) Navigator.pop(context, true);
+        return;
+      }
       showDone(context, 'Verification email sent to ${_c['ownerEmail']!.text.trim()}');
       Navigator.pop(context, true);
     } on ApiException catch (e) {

@@ -35,6 +35,10 @@ export const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   MAIL_FROM: z.string().optional(),
+  // Resend (https://resend.com) — when set, email goes through Resend instead of SMTP / the console
+  RESEND_API_KEY: z.string().startsWith('re_', 'RESEND_API_KEY must start with re_').optional(),
+  // Where people open the web console; links in emails (verify, set password) point here
+  CONSOLE_URL: z.string().url().default('http://localhost:8080'),
   SENTRY_DSN_API: z.string().optional(),
 });
 

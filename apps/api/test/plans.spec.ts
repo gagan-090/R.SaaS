@@ -50,3 +50,37 @@ describe('plans', () => {
     await t.http().patch(api(`/plans/${standard.id}`)).set(bearer(sa)).send({ pricePaise: -5 }).expect(400);
   });
 });
+
+describe('verification email', () => {
+  let t: TestApp;
+  let sa: string;
+  beforeAll(async () => {
+    t = await createTestApp();
+    sa = (await loginAdmin(t, await createAdmin(t, ['Super Admin']))).accessToken;
+  });
+  afterAll(() => t.close());
+
+  it('links to the console set-password page, with HTML and text; a failed send still hands the link to the Super Admin', async () => {
+    const ownerEmail = `${uniq('o')}@example.test`;
+    const r = (await t.http().post(api('/restaurants')).set('Authorization', `Bearer ${sa}`)
+      .send({ ownerEmail, ownerName: 'Meera', restaurantName: 'Spice Route', planCode: 'standard' }).expect(201)).body;
+    expect(r).toMatchObject({ emailSent: true, status: 'pending_verification' });
+    expect(r.verifyUrl).toBeUndefined(); // the token only travels by email when the email works
+    const m = t.mailer.sent.at(-1)!;
+    expect(m.to).toBe(ownerEmail);
+    expect(m.subject).toBe('Activate Spice Route on House Plating');
+    expect(m.text).toMatch(/\/#\/verify-email\?token=[A-Za-z0-9_-]+/);
+    expect(m.html).toContain('Confirm email &amp; set password');
+    expect(m.html).toContain('Meera');
+
+    t.mailer.failNext = true;
+    const failed = (await t.http().post(api('/restaurants')).set('Authorization', `Bearer ${sa}`)
+      .send({ ownerEmail: `${uniq('o')}@example.test`, ownerName: 'X', restaurantName: 'Y', planCode: 'standard' }).expect(201)).body;
+    expect(failed.emailSent).toBe(false);
+    expect(failed.emailError).toContain('own email');
+    expect(failed.verifyUrl).toMatch(/\/#\/verify-email\?token=/);
+    // the link works: the owner sets a password and the restaurant is created
+    const token = new URL(failed.verifyUrl.replace('/#/', '/')).searchParams.get('token');
+    await t.http().post(api('/restaurants/verify-email')).send({ token, password: `Pw-${uniq('v')}-9` }).expect(201);
+  });
+});

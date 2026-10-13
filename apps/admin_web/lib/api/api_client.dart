@@ -98,6 +98,10 @@ class ApiClient {
 
   Future<Json> me() async => await _send('GET', '/me') as Json;
 
+  /// Owner opens the emailed link: confirms the email, sets the password, and the restaurant is created.
+  Future<Json> verifyEmail(String token, String password) async =>
+      await _send('POST', '/restaurants/verify-email', body: {'token': token, 'password': password}) as Json;
+
   // ---- restaurants
   Future<Json> restaurants({String? q, String? status, String? plan, String? owner, String? expiresBefore, int page = 1}) async => await _send('GET', '/restaurants', query: {
         if (q != null && q.isNotEmpty) 'q': q,

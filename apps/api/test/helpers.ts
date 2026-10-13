@@ -9,11 +9,17 @@ import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/bootstrap';
 import { encrypt } from '../src/common/crypto';
 import { loadEnv } from '../src/config/env';
-import { Mailer, MailMessage } from '../src/mail/mail.service';
+import { MailError, Mailer, MailMessage } from '../src/mail/mail.service';
 
 export class CaptureMailer extends Mailer {
   sent: MailMessage[] = [];
+  /** Simulate the provider refusing the next message (e.g. Resend sandbox recipient not allowed). */
+  failNext = false;
   async send(m: MailMessage) {
+    if (this.failNext) {
+      this.failNext = false;
+      throw new MailError('You can only send testing emails to your own email address');
+    }
     this.sent.push(m);
   }
   lastTokenFor(to: string): string {
