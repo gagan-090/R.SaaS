@@ -2,7 +2,7 @@ import { Body, Controller, Get, Headers, HttpCode, Ip, Param, ParseUUIDPipe, Pos
 import { ApiBody, ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { AuthService } from '../auth/auth.service';
+import { AuthService, hashPassword } from '../auth/auth.service';
 import { loadEnv } from '../config/env';
 import type { Actor, AppRequest, AuditDetails } from '../common/actor';
 import { AuditCtx, CurrentActor } from '../common/actor';
@@ -16,6 +16,14 @@ import { DbService, Tx } from '../db/db.service';
 import { Mailer } from '../mail/mail.service';
 
 const InviteBody = z.object({ email: z.string().email(), name: z.string().min(1).max(120), roleIds: z.array(z.string().uuid()).min(1) });
+const CreateAdminBody = z.object({
+  email: z.string().trim().toLowerCase().email(),
+  name: z.string().trim().min(1).max(120),
+  password: z.string().min(12).max(256),
+  roleIds: z.array(z.string().uuid()).min(1).optional(),
+});
+const ActivateAdminBody = z.object({ password: z.string().min(12).max(256) });
+const MfaPolicyBody = z.object({ enabled: z.boolean(), reason: z.string().trim().min(3).max(500) });
 const RolesBody = z.object({ roleIds: z.array(z.string().uuid()) });
 const ReasonBody = z.object({ reason: z.string().trim().min(3).max(500) });
 const RoleBody = z.object({
@@ -47,7 +55,7 @@ async function rolePerms(tx: Tx, roleIds: string[]) {
 
 const adminView = (a: Prisma.PlatformAdminGetPayload<{ include: { roles: { include: { role: true } }; mfa: true } }>) => ({
   id: a.id, email: a.email, name: a.name, status: a.status, lastLoginAt: a.lastLoginAt,
-  mfaEnrolled: !!a.mfa?.enrolledAt, roles: a.roles.map((r) => ({ id: r.role.id, name: r.role.name })),
+  mfaEnabled: a.mfaEnabled, mfaEnrolled: !!a.mfa?.enrolledAt, roles: a.roles.map((r) => ({ id: r.role.id, name: r.role.name })),
 });
 
 @ApiTags('platform')
@@ -93,6 +101,68 @@ export class PlatformController {
     });
     Object.assign(audit, { objectType: 'admin', objectId: admin.id, after: adminView(admin) });
     return adminView(admin);
+  }
+
+  /** Creates a usable account without email delivery. The three-field form defaults to Onboarding Admin. */
+  @RequirePermissions('platform.admin.invite')
+  @Audited('platform.admin.created')
+  @Post('admins/create')
+  @ApiBody(apiBody(CreateAdminBody))
+  async createAdmin(@Body(zbody(CreateAdminBody)) b: z.infer<typeof CreateAdminBody>, @CurrentActor() actor: Actor, @AuditCtx() audit: AuditDetails) {
+    const passwordHash = await hashPassword(b.password);
+    let admin;
+    try {
+      admin = await this.db.platform(async (tx) => {
+        const defaultRole = !b.roleIds ? await tx.platformRole.findUnique({ where: { name: 'Onboarding Admin' } }) : null;
+        if (!b.roleIds && !defaultRole) throw badRequest('unknown_role', 'The default Onboarding Admin role is missing');
+        const roleIds = [...new Set(b.roleIds ?? [defaultRole!.id])];
+        const { perms } = await rolePerms(tx, roleIds);
+        assertSubset(actor, perms);
+        if (await tx.platformAdmin.findUnique({ where: { email: b.email } })) {
+          throw conflict('duplicate_email', 'An admin with this email already exists. For an invited admin, use Set password & activate.');
+        }
+        if (await tx.user.findUnique({ where: { email: b.email } })) throw conflict('duplicate_email', 'Email belongs to a restaurant user');
+        return tx.platformAdmin.create({
+          data: {
+            email: b.email, name: b.name, passwordHash, status: 'active', invitedById: actor.id,
+            roles: { create: roleIds.map((roleId) => ({ roleId, assignedBy: actor.id })) },
+          },
+          include: { roles: { include: { role: true } }, mfa: true },
+        });
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw conflict('duplicate_email', 'An admin with this email already exists');
+      throw e;
+    }
+    const view = adminView(admin);
+    Object.assign(audit, { objectType: 'admin', objectId: admin.id, after: view });
+    return view;
+  }
+
+  /** Finishes only a pending invitation; never resets an active admin's password or MFA. */
+  @RequirePermissions('platform.admin.invite')
+  @Audited('platform.admin.activated')
+  @Post('admins/:id/activate')
+  @HttpCode(200)
+  @ApiBody(apiBody(ActivateAdminBody))
+  async activateAdmin(@Param('id', ParseUUIDPipe) id: string, @Body(zbody(ActivateAdminBody)) b: z.infer<typeof ActivateAdminBody>, @CurrentActor() actor: Actor, @AuditCtx() audit: AuditDetails) {
+    const passwordHash = await hashPassword(b.password);
+    const { before, after } = await this.db.platform(async (tx) => {
+      const target = await tx.platformAdmin.findUnique({ where: { id }, include: { roles: { include: { role: true } }, mfa: true } });
+      if (!target) throw notFound('Admin');
+      assertSubset(actor, target.roles.flatMap((r) => r.role.permissions));
+      if (target.status !== 'invited') throw conflict('not_invited', 'Only invited admins can be activated here');
+      const changed = await tx.platformAdmin.updateMany({
+        where: { id, status: 'invited' },
+        data: { passwordHash, status: 'active', inviteTokenHash: null, inviteExpiresAt: null, failedLoginCount: 0, lockedUntil: null },
+      });
+      if (changed.count !== 1) throw conflict('not_invited', 'This invitation has already been activated');
+      await tx.refreshToken.updateMany({ where: { subjectType: 'admin', subjectId: id, revokedAt: null }, data: { revokedAt: new Date() } });
+      const updated = await tx.platformAdmin.findUniqueOrThrow({ where: { id }, include: { roles: { include: { role: true } }, mfa: true } });
+      return { before: adminView(target), after: adminView(updated) };
+    });
+    Object.assign(audit, { objectType: 'admin', objectId: id, before, after, reason: 'Admin completed a pending invitation with a password directly' });
+    return after;
   }
 
   @RequirePermissions('platform.admin.roles')
@@ -141,6 +211,33 @@ export class PlatformController {
   }
 
   /** AC-03: needs platform.mfa.reset + a fresh step-up token; writes an audit event and a notification atomically. */
+  @RequirePermissions('platform.mfa.reset')
+  @Post('admins/:id/mfa/policy')
+  @HttpCode(200)
+  @ApiBody(apiBody(MfaPolicyBody))
+  async setMfaPolicy(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(zbody(MfaPolicyBody)) b: z.infer<typeof MfaPolicyBody>,
+    @CurrentActor() actor: Actor,
+    @Headers('x-step-up-token') stepUp: string | undefined,
+    @Req() req: AppRequest,
+  ) {
+    if (actor.type !== 'admin' || !actor.roles.includes('Super Admin')) throw forbidden('super_admin_only', 'Only Super Admins can turn MFA on or off');
+    this.auth.requireStepUp(actor, stepUp);
+    return this.db.platform(async (tx) => {
+      const target = await tx.platformAdmin.findUnique({ where: { id }, include: { roles: { include: { role: true } }, mfa: true } });
+      if (!target) throw notFound('Admin');
+      if (target.mfaEnabled === b.enabled) return { ...adminView(target), sessionsRevoked: false };
+      const updated = await tx.platformAdmin.update({ where: { id }, data: { mfaEnabled: b.enabled } });
+      await tx.refreshToken.updateMany({ where: { subjectType: 'admin', subjectId: id, revokedAt: null }, data: { revokedAt: new Date() } });
+      await this.audit.record({ action: 'platform.admin.mfa_policy_changed', objectType: 'admin', objectId: id,
+        before: { mfaEnabled: target.mfaEnabled }, after: { mfaEnabled: updated.mfaEnabled }, reason: b.reason }, actor,
+        { ip: req.ip, sessionId: actor.sessionId, requestId: req.requestId }, tx);
+      return { ...adminView({ ...target, ...updated }), sessionsRevoked: true };
+    });
+  }
+
+  /** Reset an authenticator while preserving the account's MFA policy. */
   @RequirePermissions('platform.mfa.reset')
   @Post('admins/:id/mfa/reset')
   @HttpCode(200)

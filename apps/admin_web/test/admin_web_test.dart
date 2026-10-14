@@ -131,4 +131,87 @@ void main() {
     expect(jsonDecode(reset.body), {'reason': 'Lost phone, identity checked'});
     expect(find.textContaining('notification sent'), findsOneWidget);
   });
+
+  for (final size in [const Size(1600, 1000), const Size(390, 844)]) {
+    testWidgets('Add admin uses only name, email and password at width ${size.width}', (t) async {
+      final fx = await pumpApp(t);
+      await signIn(t);
+      t.view.physicalSize = size;
+      final container = ProviderScope.containerOf(t.element(find.byType(AdminApp)));
+      container.read(routerProvider).go('/admins');
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const Key('add-platform-admin')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const Key('save-platform-admin')));
+      await t.pumpAndSettle();
+      expect(fx.where('POST', '/platform/admins'), isEmpty);
+      expect(find.text('Enter the admin’s name'), findsOneWidget);
+      expect(find.text('Enter a valid email'), findsOneWidget);
+      expect(find.text('Use at least 12 characters'), findsOneWidget);
+      await t.enterText(find.byKey(const Key('new-admin-name')), 'New Admin');
+      await t.enterText(find.byKey(const Key('new-admin-email')), 'new@example.test');
+      await t.ensureVisible(find.byKey(const Key('new-admin-password')));
+      await t.enterText(find.byKey(const Key('new-admin-password')), 'Long-admin-test-password');
+      final created = {'id': 'new-id', 'email': 'new@example.test', 'name': 'New Admin', 'status': 'active', 'roles': [{'id': 'r1', 'name': 'Onboarding Admin'}], 'mfaEnrolled': false};
+      fx.overrides['POST /platform/admins/create'] = (201, created);
+      fx.overrides['GET /platform/admins'] = (200, [created]);
+      await t.tap(find.byKey(const Key('save-platform-admin')));
+      await t.pumpAndSettle();
+      expect(jsonDecode(fx.where('POST', '/platform/admins/create').single.body), {'name': 'New Admin', 'email': 'new@example.test', 'password': 'Long-admin-test-password'});
+      expect(find.text('New Admin'), findsOneWidget);
+      expect(find.text('Active'), findsOneWidget);
+      expect(find.byKey(const Key('save-platform-admin')), findsNothing);
+      expect(t.takeException(), isNull);
+    });
+  }
+
+  testWidgets('an invited admin can be activated with a password using the existing account', (t) async {
+    final fx = await pumpApp(t);
+    final invited = {'id': 'invited-id', 'name': 'Invited Admin', 'email': 'pending@example.test', 'status': 'invited', 'roles': [{'id': 'r1', 'name': 'Platform Auditor'}], 'mfaEnrolled': false};
+    fx.overrides['GET /platform/admins'] = (200, [invited]);
+    await signIn(t);
+    await t.tap(find.text('Admins'));
+    await t.pumpAndSettle();
+    await t.tap(find.descendant(of: find.byKey(const Key('admin-pending@example.test')), matching: find.byTooltip('Actions')));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Set password & activate'));
+    await t.pumpAndSettle();
+    expect(t.widget<TextField>(find.descendant(of: find.byKey(const Key('new-admin-email')), matching: find.byType(TextField))).readOnly, isTrue);
+    await t.enterText(find.byKey(const Key('new-admin-password')), 'Long-activation-password');
+    fx.overrides['POST /platform/admins/invited-id/activate'] = (200, {...invited, 'status': 'active'});
+    fx.overrides['GET /platform/admins'] = (200, [{...invited, 'status': 'active'}]);
+    await t.tap(find.byKey(const Key('save-platform-admin')));
+    await t.pumpAndSettle();
+    expect(jsonDecode(fx.where('POST', '/activate').single.body), {'password': 'Long-activation-password'});
+    expect(fx.where('POST', '/create'), isEmpty);
+    expect(find.text('Active'), findsOneWidget);
+    expect(find.text('Invited'), findsNothing);
+  });
+
+  testWidgets('duplicate email error keeps the Add admin form open for correction', (t) async {
+    final fx = await pumpApp(t);
+    await signIn(t);
+    await t.tap(find.text('Admins'));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('add-platform-admin')));
+    await t.pumpAndSettle();
+    await t.enterText(find.byKey(const Key('new-admin-name')), 'Existing');
+    await t.enterText(find.byKey(const Key('new-admin-email')), 'existing@example.test');
+    await t.enterText(find.byKey(const Key('new-admin-password')), 'Long-existing-password');
+    fx.overrides['POST /platform/admins/create'] = (409, {'code': 'duplicate_email', 'message': 'An admin with this email already exists'});
+    await t.tap(find.byKey(const Key('save-platform-admin')));
+    await t.pumpAndSettle();
+    expect(find.text('An admin with this email already exists'), findsOneWidget);
+    expect(find.byKey(const Key('new-admin-password')), findsOneWidget);
+    expect(find.byKey(const Key('save-platform-admin')), findsOneWidget);
+  });
+
+  testWidgets('P11: the audit log page lists events', (t) async {
+    await pumpApp(t);
+    await signIn(t);
+    await t.tap(find.byKey(const Key('nav-Audit log')));
+    await t.pumpAndSettle();
+    expect(find.text('No history yet'), findsNothing);
+    expect(find.byType(ExpansionTile), findsWidgets);
+  });
 }

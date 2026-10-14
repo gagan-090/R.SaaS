@@ -116,7 +116,8 @@ class ApiClient {
     return (r['recoveryCodes'] as List).cast<String>();
   }
 
-  Future<String> stepUp(String password, String code) async => (await _send('POST', '/auth/step-up', body: {'password': password, 'code': code}) as Json)['stepUpToken'] as String;
+  Future<String> stepUp(String password, String code) async => (await _send('POST', '/auth/step-up', body: {'password': password, if (code.isNotEmpty) 'code': code}) as Json)['stepUpToken'] as String;
+  Future<Json> setAdminMfa(String id, bool enabled, String reason, String stepUpToken) async => await _send('POST', '/platform/admins/$id/mfa/policy', body: {'enabled': enabled, 'reason': reason}, headers: {'x-step-up-token': stepUpToken}) as Json;
 
   Future<void> logout() async {
     if (refreshToken != null) {
@@ -162,6 +163,8 @@ class ApiClient {
   Future<List<dynamic>> admins() async => await _send('GET', '/platform/admins') as List<dynamic>;
   Future<List<dynamic>> roles() async => await _send('GET', '/platform/roles') as List<dynamic>;
   Future<Json> invite(String email, String name, List<String> roleIds) async => await _send('POST', '/platform/admins', body: {'email': email, 'name': name, 'roleIds': roleIds}) as Json;
+  Future<Json> createAdmin(String email, String name, String password) async => await _send('POST', '/platform/admins/create', body: {'email': email, 'name': name, 'password': password}) as Json;
+  Future<Json> activateAdmin(String id, String password) async => await _send('POST', '/platform/admins/$id/activate', body: {'password': password}) as Json;
   Future<Json> setRoles(String id, List<String> roleIds) async => await _send('PATCH', '/platform/admins/$id/roles', body: {'roleIds': roleIds}) as Json;
   Future<Json> deactivate(String id, String reason) async => await _send('POST', '/platform/admins/$id/deactivate', body: {'reason': reason}) as Json;
   Future<Json> resetMfa(String id, String reason, String stepUpToken) async =>

@@ -359,6 +359,17 @@ class HubService {
     };
   }
 
+  Future<Map<String, Object?>> toggleItemAvailability(Actor a, String itemId) async {
+    a.require('menu.publish');
+    final item = await db.selectOne('SELECT id, available, name FROM items WHERE id = ?', [itemId]);
+    if (item == null) throw notFound('Item');
+    final cur = item['available'] == 1 || item['available'] == true;
+    final next = cur ? 0 : 1;
+    await db.execute('UPDATE items SET available = ? WHERE id = ?', [next, itemId]);
+    _raise('menu.item_availability', {'id': itemId, 'available': next == 1});
+    return {'id': itemId, 'available': next == 1, 'name': item['name']};
+  }
+
   /// Staff tiles for the PIN login screen — names, roles and whether a PIN is set; never PIN hashes.
   Future<List<Map<String, Object?>>> staff() async => [
         for (final u in await db.query("SELECT id, name, roles_json, pin_hash IS NOT NULL AS has_pin FROM users WHERE status = 'active' ORDER BY name"))

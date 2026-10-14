@@ -12,7 +12,7 @@ export const PLATFORM_PERMISSIONS = {
   'platform.payment.record': 'Record a subscription payment',
   'platform.plan.manage': 'Create and edit subscription plans',
   'platform.admin.read': 'List platform admins and roles',
-  'platform.admin.invite': 'Invite platform admins',
+  'platform.admin.invite': 'Create or invite platform admins; activate pending invitations',
   'platform.admin.roles': 'Assign roles to platform admins / create roles',
   'platform.admin.deactivate': 'Deactivate a platform admin',
   'platform.mfa.reset': "Reset another admin's MFA (requires step-up)",
@@ -147,11 +147,11 @@ const PREMIUM: FeatureFlag[] = [
 
 /** Seeded plans. Prices are placeholders until the client supplies them (Chef's Defaults). */
 export const PLAN_DEFAULTS = [
-  { code: 'standard', name: 'Standard', featureFlags: STANDARD, pricePaise: 0,
+  { code: 'standard', name: 'Standard', tier: 1, featureFlags: STANDARD, pricePaise: 0,
     limits: { branches: 1, floorsPerBranch: 1, devicesPerBranch: 1, concurrentCashiers: 1, staffPerBranch: null } },
-  { code: 'professional', name: 'Professional', featureFlags: PROFESSIONAL, pricePaise: 0,
+  { code: 'professional', name: 'Professional', tier: 2, featureFlags: PROFESSIONAL, pricePaise: 0,
     limits: { branches: 1, floorsPerBranch: null, devicesPerBranch: null, concurrentCashiers: null, staffPerBranch: null } },
-  { code: 'premium', name: 'Premium', featureFlags: PREMIUM, pricePaise: 0,
+  { code: 'premium', name: 'Premium', tier: 3, featureFlags: PREMIUM, pricePaise: 0,
     limits: { branches: null, floorsPerBranch: null, devicesPerBranch: null, concurrentCashiers: null, staffPerBranch: null } },
 ] as const;
 

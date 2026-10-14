@@ -16,8 +16,10 @@ const PlanBody = z.object({
   name: z.string().min(1).max(60),
   featureFlags: z.array(z.string()).refine((a) => a.every((f) => flags.includes(f)), 'unknown feature flag'),
   limits: z.record(z.string(), z.number().int().nonnegative().nullable()),
-  pricePaise: z.number().int().nonnegative(),
-  billingCycle: z.enum(['monthly', 'yearly']).default('monthly'),
+  pricePaise: z.number().int().nonnegative(), // per month
+  yearlyPricePaise: z.number().int().nonnegative().optional(), // per year; default 12 × monthly
+  tier: z.number().int().min(1).max(1000).optional(), // order: Standard 1 < Professional 2 < Premium 3
+  billingCycle: z.enum(['monthly', 'yearly']).default('monthly'), // cycle offered first
 });
 const PlanPatch = PlanBody.omit({ code: true }).extend({ archived: z.boolean() }).partial();
 const ListQuery = z.object({ includeArchived: z.enum(['true', 'false']).default('false') });
@@ -34,7 +36,7 @@ export class PlansController {
     return this.db.platform(async (tx) => {
       const plans = await tx.subscriptionPlan.findMany({
         where: q.includeArchived === 'true' ? {} : { archived: false },
-        orderBy: [{ archived: 'asc' }, { pricePaise: 'asc' }, { name: 'asc' }],
+        orderBy: [{ archived: 'asc' }, { tier: 'asc' }, { pricePaise: 'asc' }, { name: 'asc' }],
         include: { _count: { select: { licenses: { where: { status: 'active' } } } } },
       });
       // activeLicenses: how many restaurants are on the plan right now (shown before archiving / repricing)
@@ -49,7 +51,8 @@ export class PlansController {
   async create(@Body(zbody(PlanBody)) b: z.infer<typeof PlanBody>, @AuditCtx() audit: AuditDetails) {
     const plan = await this.db.platform(async (tx) => {
       if (await tx.subscriptionPlan.findUnique({ where: { code: b.code } })) throw conflict('duplicate_plan', 'Plan code exists');
-      return tx.subscriptionPlan.create({ data: b });
+      const tier = b.tier ?? ((await tx.subscriptionPlan.aggregate({ _max: { tier: true }, where: { tier: { lt: 100 } } }))._max.tier ?? 0) + 1;
+      return tx.subscriptionPlan.create({ data: { ...b, tier, yearlyPricePaise: b.yearlyPricePaise ?? b.pricePaise * 12 } });
     });
     Object.assign(audit, { objectType: 'plan', objectId: plan.id, after: plan });
     return plan;

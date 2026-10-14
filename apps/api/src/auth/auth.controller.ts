@@ -17,7 +17,7 @@ const MfaVerifyBody = z
   .object({ challengeToken: z.string().min(1), code: z.string().optional(), recoveryCode: z.string().optional() })
   .refine((b) => !!b.code !== !!b.recoveryCode, 'provide exactly one of code or recoveryCode');
 const RefreshBody = z.object({ refreshToken: z.string().min(1) });
-const StepUpBody = z.object({ password: z.string().min(1), code: z.string().regex(/^\d{6}$/) });
+const StepUpBody = z.object({ password: z.string().min(1), code: z.string().regex(/^\d{6}$/).optional() });
 const ConfirmBody = z.object({ code: z.string().regex(/^\d{6}$/) });
 const AcceptInviteBody = z.object({ token: z.string().min(1), password: z.string().min(12).max(256) });
 
@@ -88,7 +88,7 @@ export class AuthController {
   async me(@CurrentActor() a: Actor) {
     const profile = await this.db.platform(async (tx) =>
       a.type === 'admin'
-        ? tx.platformAdmin.findUnique({ where: { id: a.id }, select: { id: true, email: true, name: true, mfa: { select: { enrolledAt: true } } } })
+        ? tx.platformAdmin.findUnique({ where: { id: a.id }, select: { id: true, email: true, name: true, mfaEnabled: true, mfa: { select: { enrolledAt: true } } } })
         : tx.user.findUnique({ where: { id: a.id }, select: { id: true, email: true, name: true, tenantId: true, pinHash: true, webAccess: true, mfa: { select: { enrolledAt: true } }, roles: { select: { customRole: { select: { name: true } } } } } }),
     );
     const hasPin = profile && 'pinHash' in profile ? !!profile.pinHash : undefined;
@@ -125,7 +125,7 @@ export class AuthController {
     const p = { typ: a.type, id: a.id, tid: a.tenantId };
     const { recoveryCodes } = await this.auth.enrollConfirm(p, b.code, meta(req, ip));
     // First-login enrolment finishes the sign-in: hand out real tokens now.
-    const tokens = a.tokenAudience === 'mfa-enroll' ? await this.auth.issueTokens(p, meta(req, ip)) : undefined;
+    const tokens = a.tokenAudience === 'mfa-enroll' ? await this.auth.issueTokens({ ...p, mfaVerified: true }, meta(req, ip)) : undefined;
     if (!recoveryCodes) throw badRequest('mfa_error', 'Enrolment failed');
     return { recoveryCodes, ...(tokens ? { tokens } : {}) };
   }

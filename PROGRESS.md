@@ -233,3 +233,18 @@ Final chair-mode regressions: 2 tests passed (100% and 200% zoom, rotated table)
 API lint/typecheck: passed. Flutter analyze: no issues found.
 Browser: rebuilt employee link shows Email, PIN and Forgot PIN on the local app.
 ```
+
+### Direct platform admin creation — 2026-10-14 follow-up
+- Replaced the web Invite admin flow with Add admin: name, email and password, default Onboarding Admin role,
+  Active immediately, mandatory MFA enrolment on first sign-in. Role edits remain available separately.
+- Added Set password & activate for existing invited accounts, preserving roles and invalidating invitation links.
+  Active/disabled accounts cannot use this as a password-reset route. Concurrent invitation acceptance and direct
+  activation are conditional writes, so only one succeeds and the winning password cannot be overwritten.
+- Added permission checks, Argon2id password storage, duplicate/email validation, audit events, request schemas,
+  and contract-generator examples. Guide: `docs/PLATFORM_ADMINS.md`.
+- The environment now points to Neon; testing used an isolated local `rsaas_dev_test` database and a temporary
+  login role inheriting the restricted `rsaas_app` permissions. The temporary role was removed after testing.
+Verification: API admin-creation + auth **18 passed / 2 suites**; admin web **8 passed**, including creation at
+1600 and 390 px, pending activation, validation and server errors. API lint/typecheck and Flutter analyze passed.
+API and Flutter release web builds passed. Local API restarted with the current configuration; both new routes
+were verified in its live Swagger document and added to the OpenAPI artifact. No schema migration is required.

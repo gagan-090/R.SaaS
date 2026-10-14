@@ -18,6 +18,7 @@ enum AdminStatus {
   invited
   active
   disabled
+  deleted // removed by housekeeping: cannot sign in, email freed, kept for the audit trail
 }
 
 model PlatformAdmin {
@@ -25,6 +26,7 @@ model PlatformAdmin {
   email            String              @unique
   name             String
   passwordHash     String?             @map("password_hash")
+  mfaEnabled       Boolean             @default(true) @map("mfa_enabled")
   status           AdminStatus         @default(invited)
   failedLoginCount Int                 @default(0) @map("failed_login_count")
   lockedUntil      DateTime?           @map("locked_until") @db.Timestamptz(3)
@@ -32,6 +34,7 @@ model PlatformAdmin {
   inviteTokenHash  String?             @unique @map("invite_token_hash")
   inviteExpiresAt  DateTime?           @map("invite_expires_at") @db.Timestamptz(3)
   invitedById      String?             @map("invited_by_id") @db.Uuid
+  deletedAt        DateTime?           @map("deleted_at") @db.Timestamptz(3)
   createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt        DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
   roles            PlatformAdminRole[]
@@ -136,72 +139,79 @@ enum BillingCycle {
 }
 
 model SubscriptionPlan {
-  id           String       @id @default(uuid(7)) @db.Uuid
-  code         String       @unique // standard | professional | premium
-  name         String
-  featureFlags String[]     @map("feature_flags")
-  limits       Json
-  pricePaise   Int          @map("price_paise")
-  billingCycle BillingCycle @default(monthly) @map("billing_cycle")
-  archived     Boolean      @default(false) // hidden from new sales; existing licenses keep working
-  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
-  licenses     License[]
+  id               String       @id @default(uuid(7)) @db.Uuid
+  code             String       @unique // standard | professional | premium
+  name             String
+  featureFlags     String[]     @map("feature_flags")
+  limits           Json
+  pricePaise       Int          @map("price_paise") // monthly price
+  yearlyPricePaise Int          @default(0) @map("yearly_price_paise") // yearly price (customers choose either)
+  tier             Int          @default(100) // display / upgrade order: Standard 1 < Professional 2 < Premium 3
+  billingCycle     BillingCycle @default(monthly) @map("billing_cycle") // default cycle offered first
+  archived         Boolean      @default(false) // hidden from new sales; existing licenses keep working
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  licenses         License[]
 
   @@map("subscription_plans")
 }
 
+/// Lifecycle: pending (created) → active ⇄ suspended ⇄ archived → deleted. "blocked" is a legacy hard stop.
 enum TenantStatus {
   pending
   active
   suspended
   blocked
+  archived
+  deleted
 }
 
 // Registration before the owner's email is verified. Not tenant-scoped (no tenant exists yet).
 model RestaurantRegistration {
-  id             String    @id @default(uuid(7)) @db.Uuid
-  ownerEmail     String    @map("owner_email")
-  ownerName      String    @map("owner_name")
-  restaurantName String    @map("restaurant_name")
+  id             String       @id @default(uuid(7)) @db.Uuid
+  ownerEmail     String       @map("owner_email")
+  billingCycle   BillingCycle @default(monthly) @map("billing_cycle") // what the owner will pay: monthly or yearly
+  ownerName      String       @map("owner_name")
+  restaurantName String       @map("restaurant_name")
   gstin          String?
   address        String?
-  planCode       String    @map("plan_code")
-  tokenHash      String    @unique @map("token_hash")
-  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(3)
-  verifiedAt     DateTime? @map("verified_at") @db.Timestamptz(3)
-  tenantId       String?   @map("tenant_id") @db.Uuid
-  createdById    String    @map("created_by_id") @db.Uuid
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  cancelledAt    DateTime? @map("cancelled_at") @db.Timestamptz(3)
-  cancelReason   String?   @map("cancel_reason")
-  lastSentAt     DateTime? @map("last_sent_at") @db.Timestamptz(3)
-  sendCount      Int       @default(1) @map("send_count")
-  lastEmailError String?   @map("last_email_error")
+  planCode       String       @map("plan_code")
+  tokenHash      String       @unique @map("token_hash")
+  expiresAt      DateTime     @map("expires_at") @db.Timestamptz(3)
+  verifiedAt     DateTime?    @map("verified_at") @db.Timestamptz(3)
+  tenantId       String?      @map("tenant_id") @db.Uuid
+  createdById    String       @map("created_by_id") @db.Uuid
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  cancelledAt    DateTime?    @map("cancelled_at") @db.Timestamptz(3)
+  cancelReason   String?      @map("cancel_reason")
+  lastSentAt     DateTime?    @map("last_sent_at") @db.Timestamptz(3)
+  sendCount      Int          @default(1) @map("send_count")
+  lastEmailError String?      @map("last_email_error")
 
   @@index([ownerEmail])
   @@map("restaurant_registrations")
 }
 
 model RestaurantTenant {
-  id           String       @id @default(uuid(7)) @db.Uuid
-  code         String       @unique // e.g. R000123
-  name         String
-  ownerEmail   String       @unique @map("owner_email")
-  gstin        String?
-  address      String?
-  status       TenantStatus @default(pending)
-  statusReason String?      @map("status_reason")
-  menuVersion  Int          @default(0) @map("menu_version")
-  branding     Json? // plan feature "branding": { color, logoImageId, textSize, headingWeight, headingCase }
-  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
-  franchises   Franchise[]
-  branches     Branch[]
-  licenses     License[]
-  users        User[]
-  media        Media[]
-  customRoles  CustomRole[]
+  id              String       @id @default(uuid(7)) @db.Uuid
+  code            String       @unique // e.g. R000123
+  name            String
+  ownerEmail      String       @unique @map("owner_email")
+  gstin           String?
+  address         String?
+  status          TenantStatus @default(pending)
+  statusReason    String?      @map("status_reason")
+  statusChangedAt DateTime?    @map("status_changed_at") @db.Timestamptz(3)
+  menuVersion     Int          @default(0) @map("menu_version")
+  branding        Json? // plan feature "branding": { color, logoImageId, textSize, headingWeight, headingCase }
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  franchises      Franchise[]
+  branches        Branch[]
+  licenses        License[]
+  users           User[]
+  media           Media[]
+  customRoles     CustomRole[]
 
   @@map("restaurant_tenants")
 }
@@ -244,20 +254,22 @@ enum LicenseStatus {
 }
 
 model License {
-  id          String           @id @default(uuid(7)) @db.Uuid
-  tenantId    String           @map("tenant_id") @db.Uuid
-  planId      String           @map("plan_id") @db.Uuid
-  startsAt    DateTime         @map("starts_at") @db.Timestamptz(3)
-  endsAt      DateTime         @map("ends_at") @db.Timestamptz(3)
-  graceDays   Int              @default(7) @map("grace_days")
-  status      LicenseStatus    @default(active)
-  signedToken String           @map("signed_token")
-  issuedBy    String           @map("issued_by") @db.Uuid
-  reason      String?
-  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
-  tenant      RestaurantTenant @relation(fields: [tenantId], references: [id])
-  plan        SubscriptionPlan @relation(fields: [planId], references: [id])
-  payments    PaymentRecord[]
+  id           String           @id @default(uuid(7)) @db.Uuid
+  tenantId     String           @map("tenant_id") @db.Uuid
+  planId       String           @map("plan_id") @db.Uuid
+  startsAt     DateTime         @map("starts_at") @db.Timestamptz(3)
+  endsAt       DateTime         @map("ends_at") @db.Timestamptz(3)
+  graceDays    Int              @default(7) @map("grace_days")
+  status       LicenseStatus    @default(active)
+  billingCycle BillingCycle     @default(monthly) @map("billing_cycle") // what the customer bought
+  amountPaise  Int              @default(0) @map("amount_paise") // price of that cycle at purchase
+  signedToken  String           @map("signed_token")
+  issuedBy     String           @map("issued_by") @db.Uuid
+  reason       String?
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  tenant       RestaurantTenant @relation(fields: [tenantId], references: [id])
+  plan         SubscriptionPlan @relation(fields: [planId], references: [id])
+  payments     PaymentRecord[]
 
   @@index([tenantId, status])
   @@map("licenses")
@@ -945,4 +957,36 @@ model ImportJob {
 
   @@index([tenantId, createdAt])
   @@map("import_jobs")
+}
+
+/// A verified copy of a restaurant's logs in cold storage, made when it is archived (checked again on restore).
+model RestaurantArchive {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  storage    String // driver: file | s3
+  storageKey String    @map("storage_key")
+  sha256     String
+  sizeBytes  Int       @map("size_bytes")
+  counts     Json
+  createdBy  String    @map("created_by") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  restoredAt DateTime? @map("restored_at") @db.Timestamptz(3)
+  restoredBy String?   @map("restored_by") @db.Uuid
+
+  @@index([tenantId])
+  @@map("restaurant_archives")
+}
+
+/// A verified cold-storage copy of audit events older than the retention period (18 months).
+model AuditArchive {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  before     DateTime @db.Timestamptz(3) // every archived event happened before this
+  storage    String
+  storageKey String   @map("storage_key")
+  sha256     String
+  sizeBytes  Int      @map("size_bytes")
+  count      Int
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("audit_archives")
 }

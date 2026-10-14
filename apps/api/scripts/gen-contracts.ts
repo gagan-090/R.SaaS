@@ -111,6 +111,9 @@ async function main() {
   await call('get', '/platform/permissions', { token: tok, expect: 200 });
   const auditorRole = (roles as { id: string; name: string }[]).find((r) => r.name === 'Platform Auditor')!;
   const onboardingRole = (roles as { id: string; name: string }[]).find((r) => r.name === 'Onboarding Admin')!;
+  await call('post', '/platform/admins/create', { token: tok, expect: 201, body: { email: `${uniq('direct-admin')}@example.test`, name: 'Direct Admin', password: 'Direct-' + uniq() } });
+  const pending = await t.http().post('/api/v1/platform/admins').set(bearer(tok)).send({ email: `${uniq('pending-admin')}@example.test`, name: 'Pending Admin', roleIds: [auditorRole.id] }).expect(201);
+  await call('post', '/platform/admins/:id/activate', { token: tok, params: { id: pending.body.id }, expect: 200, body: { password: 'Activate-' + uniq() } });
   const invEmail = `${uniq('admin')}@example.test`;
   const inv = await call('post', '/platform/admins', { token: tok, expect: 201, body: { email: invEmail, name: 'Neha Support', roleIds: [auditorRole.id] } });
   await call('post', '/auth/accept-invite', { expect: 200, body: { token: t.mailer.lastTokenFor(invEmail), password: 'Invitee-' + uniq() } });

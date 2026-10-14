@@ -16,7 +16,7 @@ Enforcement: every API route declares `@RequirePermissions(...)` (or is explicit
 | `platform.payment.record` | Record a subscription payment | Y | Y | — |
 | `platform.plan.manage` | Create and edit subscription plans | Y | — | — |
 | `platform.admin.read` | List platform admins and roles | Y | — | R |
-| `platform.admin.invite` | Invite platform admins | Y | — | — |
+| `platform.admin.invite` | Create or invite platform admins; activate pending invitations | Y | — | — |
 | `platform.admin.roles` | Assign roles to platform admins / create roles | Y | — | — |
 | `platform.admin.deactivate` | Deactivate a platform admin | Y | — | — |
 | `platform.mfa.reset` | Reset another admin's MFA (requires step-up) | Y | — | — |

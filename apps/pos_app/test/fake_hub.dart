@@ -65,12 +65,12 @@ class FakeHubApi extends HubApi {
     sessionToken = 'sess-$userId';
     // same grants as packages/hub_server/lib/src/permissions.dart
     final perms = switch ((u['roles'] as List).first) {
-      'owner' => ['floor.read', 'menu.read', 'order.read', 'order.write', 'order.transfer', 'order.reverse', 'order.reverse.sent', 'discount.apply',
+      'owner' => ['floor.read', 'floor.manage', 'menu.read', 'menu.publish', 'staff.read', 'staff.manage', 'restaurant.profile.read', 'license.read', 'order.read', 'order.write', 'order.transfer', 'order.reverse', 'order.reverse.sent', 'discount.apply',
           'payment.take', 'bill.adjust', 'kds.read', 'device.manage', 'clock', 'reports.read', 'reports.own'],
       'cashier' => ['floor.read', 'menu.read', 'order.read', 'order.write', 'order.transfer', 'order.reverse', 'payment.take', 'kds.read', 'clock', 'reports.own'],
       'waiter' => ['floor.read', 'menu.read', 'order.read', 'order.write', 'order.transfer', 'order.reverse', 'kds.read', 'clock', 'reports.own'],
       'chef' => ['menu.read', 'kds.read', 'kds.update', 'clock'],
-      'it_admin' => ['floor.read', 'menu.read', 'device.manage', 'clock', 'reports.read'],
+      'it_admin' => ['floor.read', 'menu.read', 'device.manage', 'clock', 'reports.read', 'staff.read', 'restaurant.profile.read'],
       _ => ['floor.read', 'menu.read', 'order.read', 'kds.read', 'reports.read'], // auditor
     };
     _perms = perms.toSet();
@@ -105,7 +105,15 @@ class FakeHubApi extends HubApi {
   Future<Json> menu() async => {'categories': [{'id': 'c1', 'name': 'Mains'}], 'items': items};
 
   @override
-  Future<Json> branch() async => {'tenant': {'name': 'Demo Dhaba', 'branding': ?branding}, 'branch': {'name': 'Demo Dhaba — MG Road', 'code': 'BR01'}};
+  Future<Json> toggleItemAvailability(String itemId) async {
+    final it = items.firstWhere((x) => x['id'] == itemId);
+    final cur = it['available'] == 1 || it['available'] == true;
+    it['available'] = cur ? 0 : 1;
+    return {'id': itemId, 'available': it['available'] == 1, 'name': it['name']};
+  }
+
+  @override
+  Future<Json> branch() async => {'tenant': {'name': 'Demo Dhaba', 'branding': ?branding, 'code': 'R000000', 'gstin': '07AAAAA0000A1Z5', 'address': '12 Connaught Place, New Delhi'}, 'branch': {'name': 'Demo Dhaba — MG Road', 'code': 'BR01'}};
   Json? branding; // plan feature "branding", as pulled from the cloud
 
   final mediaRequests = <String>[];

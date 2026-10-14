@@ -12,7 +12,6 @@ import { AuditService } from '../common/audit.service';
 import { randomToken, sha256 } from '../common/crypto';
 import { Audited, authLimit, Public, RequirePermissions } from '../common/decorators';
 import { badRequest, conflict, notFound } from '../common/errors';
-import { PLAN_DEFAULTS } from '../common/permissions';
 import { apiBody, zbody, ZodPipe } from '../common/validation';
 import { DbService, Tx } from '../db/db.service';
 import { verifyRestaurantEmail } from '../mail/templates';
@@ -28,6 +27,7 @@ const RegisterBody = z.object({
   gstin: z.string().regex(GSTIN, 'invalid GSTIN').optional(),
   address: z.string().max(500).optional(),
   planCode: z.string().regex(/^[a-z][a-z0-9_]{2,30}$/),
+  billingCycle: z.enum(['monthly', 'yearly']).default('monthly'), // the customer pays monthly or yearly
 });
 const RegistrationQuery = z.object({ state: z.enum(['awaiting', 'expired', 'cancelled', 'all']).default('awaiting'), q: z.string().optional() });
 const CancelBody = z.object({ reason: z.string().trim().min(3).max(500) });
@@ -59,6 +59,7 @@ const StatusBody = z.object({
 const LicenseBody = z.object({
   action: z.enum(['issue', 'renew', 'upgrade', 'downgrade', 'revoke']),
   planCode: z.string().optional(),
+  billingCycle: z.enum(['monthly', 'yearly']).optional(), // default: the current license's cycle, else monthly
   endsAt: z.coerce.date().optional(),
   reason: z.string().trim().min(3).max(500),
 });
@@ -87,6 +88,7 @@ const addCycle = (from: Date, cycle: 'monthly' | 'yearly') => {
 
 const licenseView = (l: License & { plan?: { code: string; name: string } }) => ({
   id: l.id, planCode: l.plan?.code, planName: l.plan?.name, startsAt: l.startsAt, endsAt: l.endsAt,
+  billingCycle: l.billingCycle, amountPaise: l.amountPaise,
   graceDays: l.graceDays, status: l.status, reason: l.reason, issuedBy: l.issuedBy, createdAt: l.createdAt,
 });
 
@@ -116,7 +118,7 @@ export class RestaurantsController {
       return tx.restaurantRegistration.create({
         data: {
           ownerEmail, ownerName: b.ownerName, restaurantName: b.restaurantName, gstin: b.gstin, address: b.address,
-          planCode: b.planCode, tokenHash: sha256(token), expiresAt: new Date(Date.now() + 72 * 3600_000), createdById: actor.id,
+          planCode: b.planCode, billingCycle: b.billingCycle, tokenHash: sha256(token), expiresAt: new Date(Date.now() + 72 * 3600_000), createdById: actor.id,
         },
       });
     });
@@ -243,7 +245,7 @@ export class RestaurantsController {
       const seqRow = await tx.$queryRaw<{ n: bigint }[]>`SELECT nextval('tenant_code_seq') AS n`;
       const code = `R${String(seqRow[0].n).padStart(6, '0')}`;
       const tenant = await tx.restaurantTenant.create({
-        data: { code, name: reg.restaurantName, ownerEmail: reg.ownerEmail, gstin: reg.gstin, address: reg.address, status: 'active' },
+        data: { code, name: reg.restaurantName, ownerEmail: reg.ownerEmail, gstin: reg.gstin, address: reg.address, status: 'active', statusChangedAt: new Date() },
       });
       const branch = await tx.branch.create({
         data: { tenantId: tenant.id, code: 'BR01', name: reg.restaurantName, gstin: reg.gstin, address: reg.address },
@@ -254,7 +256,7 @@ export class RestaurantsController {
           roles: { create: { tenantId: tenant.id, role: 'owner', branchIds: [] } },
         },
       });
-      const license = await this.createLicense(tx, tenant.id, plan, new Date(), addCycle(new Date(), plan.billingCycle), reg.createdById, 'initial license at onboarding');
+      const license = await this.createLicense(tx, tenant.id, plan, new Date(), addCycle(new Date(), reg.billingCycle), reg.createdById, 'initial license at onboarding', reg.billingCycle);
       await tx.restaurantRegistration.update({ where: { id: reg.id }, data: { verifiedAt: new Date(), tenantId: tenant.id } });
       await this.audit.record(
         { action: 'restaurant.created', tenantId: tenant.id, objectType: 'restaurant', objectId: tenant.id, after: { code, name: tenant.name, plan: plan.code, licenseId: license.id } },
@@ -264,12 +266,17 @@ export class RestaurantsController {
     });
   }
 
-  private async createLicense(tx: Tx, tenantId: string, plan: Prisma.SubscriptionPlanGetPayload<object>, startsAt: Date, endsAt: Date, issuedBy: string, reason: string) {
+  private async createLicense(tx: Tx, tenantId: string, plan: Prisma.SubscriptionPlanGetPayload<object>, startsAt: Date, endsAt: Date, issuedBy: string, reason: string, cycle: 'monthly' | 'yearly' = 'monthly') {
     const id = uuidv7();
     const draft = { id, tenantId, startsAt, endsAt, graceDays: 7 };
     const signedToken = this.licenses.buildToken(draft, plan);
     await tx.license.updateMany({ where: { tenantId, status: 'active' }, data: { status: 'superseded' } });
-    return tx.license.create({ data: { ...draft, planId: plan.id, status: 'active', signedToken, issuedBy, reason } });
+    return tx.license.create({
+      data: {
+        ...draft, planId: plan.id, status: 'active', signedToken, issuedBy, reason, billingCycle: cycle,
+        amountPaise: cycle === 'yearly' ? plan.yearlyPricePaise : plan.pricePaise,
+      },
+    });
   }
 
   // ------------------------------------------------------------ list / detail
@@ -278,7 +285,7 @@ export class RestaurantsController {
   @Get()
   async list(@Query(new ZodPipe(ListQuery)) q: z.infer<typeof ListQuery>) {
     const where: Prisma.RestaurantTenantWhereInput = {
-      status: q.status,
+      status: q.status ?? { not: 'deleted' }, // deleted restaurants only when asked for
       ownerEmail: q.owner ? { contains: q.owner.toLowerCase() } : undefined,
       OR: q.q ? [{ name: { contains: q.q, mode: 'insensitive' } }, { code: { contains: q.q, mode: 'insensitive' } }] : undefined,
       licenses:
@@ -350,7 +357,7 @@ export class RestaurantsController {
       const t = await tx.restaurantTenant.findUnique({ where: { id } });
       if (!t) throw notFound('Restaurant');
       if (!rule.from.includes(t.status)) throw conflict('invalid_transition', `Cannot ${b.action} a ${t.status} restaurant`);
-      const u = await tx.restaurantTenant.update({ where: { id }, data: { status: rule.to, statusReason: b.reason } });
+      const u = await tx.restaurantTenant.update({ where: { id }, data: { status: rule.to, statusReason: b.reason, statusChangedAt: new Date() } });
       return { before: t, after: u };
     });
     Object.assign(audit, { tenantId: id, objectType: 'restaurant', objectId: id, before: { status: before.status }, after: { status: after.status }, reason: b.reason });
@@ -388,30 +395,25 @@ export class RestaurantsController {
       // renewing an archived plan keeps a restaurant where it is; moving onto one is not allowed
       if (plan.archived && plan.code !== current?.plan.code) throw badRequest('plan_archived', `${plan.name} is archived; choose an active plan`);
       if ((b.action === 'upgrade' || b.action === 'downgrade') && current) {
-        // built-in plans rank by tier; plans the Super Admin adds rank by price
-        const rank = (p: { code: string; pricePaise: number }) => {
-          const i = PLAN_DEFAULTS.findIndex((d) => d.code === p.code);
-          return i >= 0 && p.pricePaise === 0 ? i : p.pricePaise;
-        };
-        const dir = PLAN_DEFAULTS.some((d) => d.code === plan.code) && PLAN_DEFAULTS.some((d) => d.code === current.plan.code)
-          ? PLAN_DEFAULTS.findIndex((d) => d.code === plan.code) - PLAN_DEFAULTS.findIndex((d) => d.code === current.plan.code)
-          : rank(plan) - rank(current.plan);
+        // plans rank by tier (Standard 1 < Professional 2 < Premium 3); equal tiers by monthly price
+        const dir = plan.tier !== current.plan.tier ? plan.tier - current.plan.tier : plan.pricePaise - current.plan.pricePaise;
         if (b.action === 'upgrade' ? dir <= 0 : dir >= 0) throw badRequest('invalid_plan_change', `${plan.code} is not a ${b.action} from ${current.plan.code}`);
       }
       const now = new Date();
+      const cycle = b.billingCycle ?? current?.billingCycle ?? 'monthly';
       let startsAt = now;
       let endsAt: Date;
       if (b.action === 'renew' && current) {
         startsAt = current.startsAt;
-        endsAt = b.endsAt ?? addCycle(current.endsAt > now ? current.endsAt : now, plan.billingCycle);
+        endsAt = b.endsAt ?? addCycle(current.endsAt > now ? current.endsAt : now, cycle);
       } else if (current && b.action !== 'issue') {
         startsAt = current.startsAt;
         endsAt = b.endsAt ?? current.endsAt; // plan change keeps the paid period
       } else {
-        endsAt = b.endsAt ?? addCycle(now, plan.billingCycle);
+        endsAt = b.endsAt ?? addCycle(now, cycle);
       }
       if (endsAt <= startsAt) throw badRequest('invalid_dates', 'endsAt must be after startsAt');
-      const lic = await this.createLicense(tx, id, plan, startsAt, endsAt, actor.id, b.reason);
+      const lic = await this.createLicense(tx, id, plan, startsAt, endsAt, actor.id, b.reason, cycle);
       return { before: current ? licenseView(current) : null, after: licenseView({ ...lic, plan }) };
     });
     Object.assign(audit, { tenantId: id, objectType: 'license', objectId: (result.after as { id: string }).id, before: result.before, after: result.after, reason: b.reason, action: `license.${b.action}` });

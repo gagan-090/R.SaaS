@@ -43,19 +43,25 @@ export class AuthGuard implements CanActivate {
   async loadActor(typ: 'admin' | 'user', id: string, tid?: string, sid?: string, aud: Actor['tokenAudience'] = 'access'): Promise<Actor> {
     if (typ === 'admin') {
       const admin = await this.db.platform((tx) =>
-        tx.platformAdmin.findUnique({ where: { id }, include: { roles: { include: { role: true } } } }),
+        tx.platformAdmin.findUnique({ where: { id }, include: { roles: { include: { role: true } }, mfa: true } }),
       );
       if (!admin || admin.status !== 'active') throw unauthorized('inactive_account', 'Account is not active');
+      if (aud === 'access' && admin.mfaEnabled && !admin.mfa?.enrolledAt) throw unauthorized('mfa_enrollment_required', 'Set up two-step authentication before continuing');
+      if (sid && !await this.db.platform((tx) => tx.refreshToken.findFirst({ where: { subjectType: 'admin', subjectId: id, familyId: sid, revokedAt: null, expiresAt: { gt: new Date() } }, select: { id: true } }))) {
+        throw unauthorized('session_revoked', 'Your session has ended. Sign in again.');
+      }
       const permissions = new Set<string>(admin.roles.flatMap((r) => r.role.permissions));
       return { type: 'admin', id, permissions, roles: admin.roles.map((r) => r.role.name), branchIds: [], sessionId: sid, tokenAudience: aud };
     }
     if (!tid) throw unauthorized('invalid_token');
-    const { user, features } = await this.db.tenant(tid, async (tx) => ({
+    const { user, features, tenantStatus } = await this.db.tenant(tid, async (tx) => ({
       user: await tx.user.findUnique({ where: { id }, include: { roles: { include: { customRole: true } } } }),
       features: (await this.licenses.entitlement(tx, tid)).features,
+      tenantStatus: (await tx.restaurantTenant.findUnique({ where: { id: tid }, select: { status: true } }))?.status,
     }));
     // Deactivated employees lose access on their very next request (permissions are loaded per request).
     if (!user || user.status !== 'active') throw unauthorized('inactive_account', 'Account is not active');
+    if (tenantStatus === 'archived' || tenantStatus === 'deleted') throw unauthorized('restaurant_closed', 'This restaurant is closed');
     const assignments = user.roles.map((r) => ({
       role: r.role as RestaurantRoleName,
       extraPermissions: r.extraPermissions,

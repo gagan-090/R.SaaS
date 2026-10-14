@@ -37,6 +37,8 @@ export class SyncService {
     if (!token) throw unauthorized('missing_device_token', 'X-Device-Token header required');
     const d = await this.db.platform((tx) => tx.device.findUnique({ where: { deviceTokenHash: sha256(token) } }));
     if (!d || d.revokedAt) throw unauthorized('invalid_device_token', 'Unknown or revoked device');
+    const t = await this.db.platform((tx) => tx.restaurantTenant.findUnique({ where: { id: d.tenantId }, select: { status: true } }));
+    if (t?.status === 'archived' || t?.status === 'deleted') throw unauthorized('restaurant_closed', 'This restaurant is closed');
     await this.db.tenant(d.tenantId, (tx) => tx.device.update({ where: { id: d.id }, data: { lastSeenAt: new Date() } }));
     return { deviceId: d.id, tenantId: d.tenantId, branchId: d.branchId };
   }

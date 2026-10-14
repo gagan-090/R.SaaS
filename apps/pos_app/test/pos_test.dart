@@ -555,4 +555,45 @@ void main() {
     await t.pumpAndSettle();
     expect(now(), Brightness.light);
   });
+
+  testWidgets('admin flow: owner can access reports, toggle 86 item availability, view staff and license', (t) async {
+    final hub = await start(t);
+    await signIn(t, 'Owner', '9999');
+    await nav(t, 'More');
+    expect(find.byKey(const Key('more-reports')), findsOneWidget);
+    expect(find.byKey(const Key('more-menu')), findsOneWidget);
+    expect(find.byKey(const Key('more-staff')), findsOneWidget);
+    expect(find.byKey(const Key('more-floors')), findsOneWidget);
+    expect(find.byKey(const Key('more-settings')), findsOneWidget);
+
+    // Open Menu & 86 Management
+    await t.tap(find.byKey(const Key('more-menu')));
+    await t.pumpAndSettle();
+    expect(find.text('Menu & Stock'), findsOneWidget);
+    expect(find.text('Butter Chicken'), findsOneWidget);
+    expect(find.byKey(const Key('toggle-avail-i1')), findsOneWidget);
+
+    // Toggle 86
+    await t.tap(find.byKey(const Key('toggle-avail-i1')));
+    await t.pumpAndSettle();
+    expect(hub.items.firstWhere((x) => x['id'] == 'i1')['available'], 0);
+
+    // Back to More
+    await t.tap(find.byTooltip('Back'));
+    await t.pumpAndSettle();
+
+    // Open Staff
+    await t.tap(find.byKey(const Key('more-staff')));
+    await t.pumpAndSettle();
+    expect(find.text('Staff & Team'), findsOneWidget);
+    expect(find.text('Anita'), findsOneWidget);
+    await t.tap(find.byTooltip('Back'));
+    await t.pumpAndSettle();
+
+    // Open Reports
+    await t.tap(find.byKey(const Key('more-reports')));
+    await t.pumpAndSettle();
+    expect(find.text('Sales & Reports'), findsOneWidget);
+    expect(find.byKey(const Key('kpi-sales')), findsOneWidget);
+  });
 }

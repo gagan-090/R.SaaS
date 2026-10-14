@@ -1,5 +1,7 @@
 # Decisions (one-line ADRs)
 
+- 2026-10-14 · Platform admins can be created directly with name, email and password, defaulting to Onboarding Admin; pending invitations can be activated with a password while retaining their roles and mandatory MFA · user requested creation without email delivery · making every new admin a Super Admin automatically.
+
 Format: date · decision · why · alternative rejected.
 
 - 2026-10-12 · Repo root is this folder (`R.SaaS/`), not a nested `restaurant-saas/` dir · the folder is already the project root holding `docs/` · nesting one level deeper.

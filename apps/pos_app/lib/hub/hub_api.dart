@@ -32,6 +32,7 @@ abstract class HubApi {
   /// Restaurant + branch header ({tenant: {name, gstin, address}, branch: {name, code}}).
   Future<Json> branch();
   Future<Json> menu();
+  Future<Json> toggleItemAvailability(String itemId);
   Future<Json> openOrder({required String type, String? tableId, String? waiterId});
   Future<Json> order(String id);
   Future<Json> addLines(String orderId, List<Json> lines);
@@ -141,6 +142,9 @@ class HttpHubApi extends HubApi {
   Future<Json> branch() async => await _send('GET', '/branch') as Json;
   @override
   Future<Json> menu() async => await _send('GET', '/menu') as Json;
+  @override
+  Future<Json> toggleItemAvailability(String itemId) async =>
+      await _send('POST', '/menu/items/$itemId/toggle-availability') as Json;
   @override
   Future<Json> openOrder({required String type, String? tableId, String? waiterId}) async =>
       await _send('POST', '/orders', body: {'type': type, 'tableId': ?tableId, 'waiterId': ?waiterId}) as Json;

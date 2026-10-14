@@ -5,6 +5,6 @@ import { testDbUrl } from '../test/test-db';
 
 config({ path: path.resolve(__dirname, '../../../.env.local'), quiet: true });
 process.env.DATABASE_URL = testDbUrl(process.env.DATABASE_URL);
-process.env.MIGRATION_DATABASE_URL = testDbUrl(process.env.MIGRATION_DATABASE_URL);
+process.env.MIGRATION_DATABASE_URL = testDbUrl(process.env.MIGRATION_DATABASE_URL, 'owner');
 process.env.AUTH_RATE_LIMIT_PER_MIN ??= '10000';
 process.env.API_RATE_LIMIT_PER_MIN ??= '100000';

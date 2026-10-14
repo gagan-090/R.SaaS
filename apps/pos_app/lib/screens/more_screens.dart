@@ -6,6 +6,7 @@ import '../hub/hub_api.dart';
 import '../state/app_state.dart';
 import '../ui/common.dart';
 import '../ui/shell.dart';
+import 'admin_screens.dart';
 import 'setup_screens.dart';
 
 /// "More" tab: who is signed in, and the extra tools their role may use.
@@ -67,6 +68,30 @@ class MoreScreen extends ConsumerWidget {
                   onTap: () => switchUser(context, ref),
                 ),
               ),
+              if (s.can('reports.read') || s.can('menu.read') || s.can('staff.read') || s.can('floor.read') || s.can('restaurant.profile.read') || s.roles.contains('owner')) ...[
+                const SizedBox(height: HPSpace.lg),
+                Card(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(HPSpace.lg, HPSpace.md, HPSpace.lg, HPSpace.xs),
+                        child: Text('RESTAURANT ADMIN', style: HPType.overline(p.muted)),
+                      ),
+                      if (s.can('reports.read') || s.roles.contains('owner'))
+                        tile('reports', Icons.bar_chart_rounded, 'Sales & Reports', 'Daily sales, bills, payments & KPIs', () => push(const ReportsDashboardScreen())),
+                      if (s.can('menu.read') || s.roles.contains('owner'))
+                        tile('menu', Icons.restaurant_menu_rounded, 'Menu & Stock', 'Dish availability & 86 management', () => push(const MenuManagementScreen())),
+                      if (s.can('staff.read') || s.roles.contains('owner'))
+                        tile('staff', Icons.badge_outlined, 'Staff & Team', 'Team members, roles & PIN status', () => push(const StaffManagementScreen())),
+                      if (s.can('floor.read') || s.roles.contains('owner'))
+                        tile('floors', Icons.table_restaurant_outlined, 'Floors & Capacity', 'Floor layouts & table occupancy', () => push(const FloorsOverviewScreen())),
+                      if (s.can('restaurant.profile.read') || s.can('license.read') || s.roles.contains('owner'))
+                        tile('settings', Icons.tune_rounded, 'Restaurant & License', 'Profile, subscription & sync details', () => push(const RestaurantProfileScreen())),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: HPSpace.lg),
               Card(
                 child: Padding(
@@ -261,6 +286,7 @@ class AdminHomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final api = ref.watch(hubApiProvider)!;
+    final s = ref.watch(sessionProvider);
     ref.watch(hubTickProvider);
     final p = context.hp;
     Widget tile(String title, String sub, IconData icon, Widget Function() page) => Card(
@@ -284,6 +310,26 @@ class AdminHomeScreen extends ConsumerWidget {
               tile('Printers', 'Bill and kitchen printers, test print', Icons.print_rounded, () => const PrintersScreen()),
               const SizedBox(height: HPSpace.md),
               tile('Hub & devices', 'Pairing code for new terminals, sync health', Icons.router_rounded, () => const HubStatusScreen()),
+              if (s != null && (s.can('reports.read') || s.roles.contains('owner'))) ...[
+                const SizedBox(height: HPSpace.md),
+                tile('Sales & Reports', 'Daily sales, bills, payments & KPIs', Icons.bar_chart_rounded, () => const ReportsDashboardScreen()),
+              ],
+              if (s != null && (s.can('menu.read') || s.roles.contains('owner'))) ...[
+                const SizedBox(height: HPSpace.md),
+                tile('Menu & Stock', 'Dish availability & 86 management', Icons.restaurant_menu_rounded, () => const MenuManagementScreen()),
+              ],
+              if (s != null && (s.can('staff.read') || s.roles.contains('owner'))) ...[
+                const SizedBox(height: HPSpace.md),
+                tile('Staff & Team', 'Team members, roles & PIN status', Icons.badge_outlined, () => const StaffManagementScreen()),
+              ],
+              if (s != null && (s.can('floor.read') || s.roles.contains('owner'))) ...[
+                const SizedBox(height: HPSpace.md),
+                tile('Floors & Capacity', 'Floor layouts & table occupancy', Icons.table_restaurant_outlined, () => const FloorsOverviewScreen()),
+              ],
+              if (s != null && (s.can('restaurant.profile.read') || s.can('license.read') || s.roles.contains('owner'))) ...[
+                const SizedBox(height: HPSpace.md),
+                tile('Restaurant & License', 'Profile, subscription & sync details', Icons.tune_rounded, () => const RestaurantProfileScreen()),
+              ],
               const SizedBox(height: HPSpace.lg),
               FutureBuilder<Json>(
                 future: api.syncStatus(),
@@ -296,7 +342,7 @@ class AdminHomeScreen extends ConsumerWidget {
                       ]),
               ),
               const SizedBox(height: HPSpace.lg),
-              Text('Menu, tables and staff are managed in the web console and arrive here within a minute.', style: HPType.body(p.muted)),
+              Text('Menu, tables and staff are managed here and in the web console, syncing continuously.', style: HPType.body(p.muted)),
             ]),
           ),
         ),

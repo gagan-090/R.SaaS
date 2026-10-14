@@ -89,6 +89,10 @@ class HubServer {
       await _actor(q);
       return _json(await hub.menu());
     });
+    r.post('/menu/items/<id>/toggle-availability', (Request q, String id) async {
+      final a = await _staff(q);
+      return _json(await hub.toggleItemAvailability(a, id));
+    });
     r.get('/media/<id>', (Request q, String id) async {
       await _actor(q);
       final m = await hub.media(id);

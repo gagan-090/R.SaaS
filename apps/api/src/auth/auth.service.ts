@@ -25,6 +25,7 @@ export interface Principal {
   typ: 'admin' | 'user';
   id: string;
   tid?: string;
+  mfaVerified?: boolean;
 }
 
 const claimsOf = (p: Principal) => ({ sub: p.id, typ: p.typ, tid: p.tid });
@@ -74,7 +75,9 @@ export class AuthService {
     if (rec.lockedUntil && rec.lockedUntil > new Date()) {
       return fail('account_locked', `Too many failed attempts; try again after ${rec.lockedUntil.toISOString()}`, principal, tenantId);
     }
-    const statusOk = found.kind === 'admin' ? found.admin.status === 'active' : found.user.status === 'active';
+    // archived or deleted restaurants are closed: nobody of theirs signs in until the Super Admin restores them
+    const closed = found.kind === 'user' && ['archived', 'deleted'].includes(found.user.tenant.status);
+    const statusOk = found.kind === 'admin' ? found.admin.status === 'active' : found.user.status === 'active' && !closed;
     const valid = !!rec.passwordHash && (await argon2.verify(rec.passwordHash, password).catch(() => false));
     if (!valid || !statusOk) {
       await this.registerFailure(principal);
@@ -83,11 +86,12 @@ export class AuthService {
     await this.clearFailures(principal);
 
     const mfa = rec.mfa;
-    if (mfa?.enrolledAt) {
+    const mfaEnabled = found.kind !== 'admin' || found.admin.mfaEnabled;
+    if (mfaEnabled && mfa?.enrolledAt) {
       return { status: 'mfa_required', challengeToken: this.tokens.sign(claimsOf(principal), 'mfa-challenge') };
     }
-    if (principal.typ === 'admin') {
-      // MFA is mandatory for every platform administrator.
+    if (principal.typ === 'admin' && mfaEnabled) {
+      // Super Admins choose the MFA policy per account; enabled accounts must enrol before access.
       return { status: 'mfa_enrollment_required', enrollmentToken: this.tokens.sign(claimsOf(principal), 'mfa-enroll') };
     }
     const pair = await this.issueTokens(principal, meta);
@@ -123,13 +127,20 @@ export class AuthService {
   async issueTokens(p: Principal, meta: AuditMeta & { userAgent?: string }, familyId = uuidv7(), tx?: Tx): Promise<TokenPair> {
     const sid = familyId;
     const refreshToken = randomToken(32);
-    const write = (t: Tx) =>
-      t.refreshToken.create({
+    const write = async (t: Tx) => {
+      if (p.typ === 'admin') {
+        await t.$queryRaw`SELECT id FROM platform_admins WHERE id = ${p.id}::uuid FOR UPDATE`;
+        const admin = await t.platformAdmin.findUnique({ where: { id: p.id }, select: { status: true, mfaEnabled: true } });
+        if (!admin || admin.status !== 'active') throw unauthorized('inactive_account');
+        if (admin.mfaEnabled && !p.mfaVerified) throw unauthorized('mfa_required', 'MFA settings changed. Sign in again.');
+      }
+      return t.refreshToken.create({
         data: {
           subjectType: p.typ, subjectId: p.id, familyId, tokenHash: sha256(refreshToken),
           expiresAt: new Date(Date.now() + REFRESH_DAYS * 86400_000), userAgent: meta.userAgent, ip: meta.ip,
         },
       });
+    };
     if (tx) await write(tx);
     else await this.db.platform(write);
     return { accessToken: this.tokens.sign({ sub: p.id, typ: p.typ, tid: p.tid, sid }, 'access'), refreshToken, expiresIn: 900 };
@@ -144,17 +155,18 @@ export class AuthService {
       if (row.expiresAt < new Date()) throw unauthorized('refresh_expired', 'Refresh token expired');
       let tid: string | undefined;
       if (row.subjectType === 'user') {
-        const u = await tx.user.findUnique({ where: { id: row.subjectId } });
-        if (!u || u.status !== 'active') throw unauthorized('inactive_account');
+        const u = await tx.user.findUnique({ where: { id: row.subjectId }, include: { tenant: { select: { status: true } } } });
+        if (!u || u.status !== 'active' || ['archived', 'deleted'].includes(u.tenant.status)) throw unauthorized('inactive_account');
         tid = u.tenantId;
       } else {
+        await tx.$queryRaw`SELECT id FROM platform_admins WHERE id = ${row.subjectId}::uuid FOR UPDATE`;
         const a = await tx.platformAdmin.findUnique({ where: { id: row.subjectId } });
         if (!a || a.status !== 'active') throw unauthorized('inactive_account');
       }
       // Claim the old token first; a concurrent refresh with the same token then sees it revoked.
       const claimed = await tx.refreshToken.updateMany({ where: { id: row.id, revokedAt: null }, data: { revokedAt: new Date() } });
       if (claimed.count === 0) return { reused: row, pair: null };
-      const pair = await this.issueTokens({ typ: row.subjectType, id: row.subjectId, tid }, meta, row.familyId, tx);
+      const pair = await this.issueTokens({ typ: row.subjectType, id: row.subjectId, tid, mfaVerified: row.subjectType === 'admin' }, meta, row.familyId, tx);
       const next = await tx.refreshToken.findUnique({ where: { tokenHash: sha256(pair.refreshToken) } });
       await tx.refreshToken.update({ where: { id: row.id }, data: { replacedBy: next?.id } });
       return { pair, reused: null };
@@ -256,7 +268,7 @@ export class AuthService {
       await this.registerFailure(p);
       throw unauthorized('invalid_code', 'Invalid authenticator or recovery code');
     }
-    const pair = await this.issueTokens(p, meta);
+    const pair = await this.issueTokens({ ...p, mfaVerified: true }, meta);
     await this.audit.record(
       { action: input.recoveryCode ? 'auth.login_recovery_code' : 'auth.login', tenantId: p.tid, objectType: p.typ, objectId: p.id },
       { type: p.typ, id: p.id }, meta,
@@ -265,17 +277,21 @@ export class AuthService {
   }
 
   /** Step-up: re-verify password + current TOTP; returns a 5-minute step-up token bound to the principal. */
-  async stepUp(actor: Actor, password: string, code: string, meta: AuditMeta) {
+  async stepUp(actor: Actor, password: string, code: string | undefined, meta: AuditMeta) {
     const p: Principal = { typ: actor.type, id: actor.id, tid: actor.tenantId };
     const ok = await this.db.platform(async (tx) => {
       const rec = p.typ === 'admin'
         ? await tx.platformAdmin.findUnique({ where: { id: p.id } })
         : await tx.user.findUnique({ where: { id: p.id } });
-      if (!rec?.passwordHash || !(await argon2.verify(rec.passwordHash, password).catch(() => false))) return false;
+      if (!rec?.passwordHash || rec.status !== 'active' || (rec.lockedUntil && rec.lockedUntil > new Date()) || !(await argon2.verify(rec.passwordHash, password).catch(() => false))) return false;
+      if (p.typ === 'admin' && 'mfaEnabled' in rec && !rec.mfaEnabled) return true;
       return this.verifySecondFactor(tx, p, { code });
     });
     await this.audit.record({ action: ok ? 'auth.step_up' : 'auth.step_up_failed', tenantId: p.tid, objectType: p.typ, objectId: p.id }, actor, meta);
-    if (!ok) throw unauthorized('step_up_failed', 'Step-up verification failed');
+    if (!ok) {
+      await this.registerFailure(p);
+      throw unauthorized('step_up_failed', 'Step-up verification failed');
+    }
     return { stepUpToken: this.tokens.sign({ sub: p.id, typ: p.typ, tid: p.tid }, 'step-up'), expiresIn: 300 };
   }
 
@@ -297,10 +313,11 @@ export class AuthService {
       if (!a || a.status !== 'invited' || !a.inviteExpiresAt || a.inviteExpiresAt < new Date()) {
         throw badRequest('invalid_invite', 'Invite is invalid or expired');
       }
-      await tx.platformAdmin.update({
-        where: { id: a.id },
+      const activated = await tx.platformAdmin.updateMany({
+        where: { id: a.id, status: 'invited', inviteTokenHash: sha256(token), inviteExpiresAt: { gt: new Date() } },
         data: { passwordHash: await hashPassword(password), status: 'active', inviteTokenHash: null, inviteExpiresAt: null },
       });
+      if (activated.count !== 1) throw badRequest('invalid_invite', 'Invite is invalid, expired or already completed');
       await this.audit.record({ action: 'platform.admin.invite_accepted', objectType: 'admin', objectId: a.id }, { type: 'admin', id: a.id }, meta, tx);
       return { email: a.email };
     });

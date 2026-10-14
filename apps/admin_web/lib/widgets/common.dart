@@ -147,7 +147,7 @@ class SectionCard extends StatelessWidget {
 }
 
 /// P10 step-up prompt: password + the admin's own current TOTP code. Returns (password, code) or null.
-Future<(String, String)?> askStepUp(BuildContext context) {
+Future<(String, String)?> askStepUp(BuildContext context, {bool mfaRequired = true}) {
   final pw = TextEditingController(), code = TextEditingController();
   return showDialog<(String, String)>(
     context: context,
@@ -158,11 +158,13 @@ Future<(String, String)?> askStepUp(BuildContext context) {
         PrimaryButton(label: 'Verify', height: 56, onPressed: () => Navigator.pop(c, (pw.text, code.text.trim()))),
       ],
       child: Column(children: [
-        const Text('This action needs fresh verification: enter your password and the current code from your authenticator app.'),
+        Text(mfaRequired ? 'This action needs fresh verification: enter your password and the current code from your authenticator app.' : 'Confirm this action with your current password.'),
         const SizedBox(height: HPSpace.lg),
         TextField(key: const Key('stepup-password'), controller: pw, obscureText: true, decoration: const InputDecoration(labelText: 'Password')),
-        const SizedBox(height: HPSpace.md),
-        TextField(key: const Key('stepup-code'), controller: code, keyboardType: TextInputType.number, maxLength: 6, decoration: const InputDecoration(labelText: '6-digit code')),
+        if (mfaRequired) ...[
+          const SizedBox(height: HPSpace.md),
+          TextField(key: const Key('stepup-code'), controller: code, keyboardType: TextInputType.number, maxLength: 6, decoration: const InputDecoration(labelText: '6-digit code')),
+        ],
       ]),
     ),
   );
