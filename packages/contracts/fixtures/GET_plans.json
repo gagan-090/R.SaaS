@@ -7,31 +7,297 @@
   "status": 200,
   "response": [
     {
-      "id": "01a1312f-28d8-73a2-89a8-01eef358bd7e",
-      "code": "standard",
-      "name": "Standard",
+      "id": "01a13920-4652-7982-b266-241c126d76c4",
+      "code": "brand_mv7ql2kc",
+      "name": "Basic",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-14T06:36:18.899Z",
+      "updatedAt": "2026-10-14T06:36:19.940Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a13922-9123-7b53-b664-c7be43cc8e27",
+      "code": "brand_mv7qoagh",
+      "name": "Basic",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-14T06:38:49.123Z",
+      "updatedAt": "2026-10-14T06:38:50.201Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a134bc-e387-7663-b766-5b81657b7f47",
+      "code": "brand_mv6ir3au",
+      "name": "Basic",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-13T10:09:16.680Z",
+      "updatedAt": "2026-10-13T10:09:16.991Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a13923-dd06-77c1-89eb-ac20bbde705b",
+      "code": "brand_mv7qq40d",
+      "name": "Basic",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-14T06:40:14.086Z",
+      "updatedAt": "2026-10-14T06:40:14.846Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a138ec-9f22-7531-bee4-c52e11bebf26",
+      "code": "brand_mv7okiko",
+      "name": "Basic",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-14T05:39:53.763Z",
+      "updatedAt": "2026-10-14T05:39:54.532Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a13938-c960-7e83-a3c6-e68c57b8e9a6",
+      "code": "brand_mv7rjhyk",
+      "name": "Basic",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-14T07:03:05.313Z",
+      "updatedAt": "2026-10-14T07:03:07.068Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a134bd-cfbc-7dd0-afdb-4c1c78960aee",
+      "code": "brand_mv6isdy8",
+      "name": "Basic",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-13T10:10:17.148Z",
+      "updatedAt": "2026-10-13T10:10:17.677Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a1393b-3236-7842-83ab-705c997d9958",
+      "code": "brand_mv7rmvxk",
+      "name": "Basic",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-14T07:05:43.223Z",
+      "updatedAt": "2026-10-14T07:05:43.905Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a13931-671b-7793-94dc-a37dbb9b0a36",
+      "code": "brand_mv7r94pb",
+      "name": "Basic",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-14T06:55:01.403Z",
+      "updatedAt": "2026-10-14T06:55:02.459Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a13906-cff7-7ab2-af0b-ac98102adae2",
+      "code": "brand_mv7plazt",
+      "name": "Basic",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-14T06:08:30.199Z",
+      "updatedAt": "2026-10-14T06:08:31.222Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a138eb-aed0-7840-ac22-518b23fe8a24",
+      "code": "brand_mv7oj741",
+      "name": "Basic",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-14T05:38:52.241Z",
+      "updatedAt": "2026-10-14T05:38:52.926Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a138fb-9672-7dc3-aeaf-350bce60d3e1",
+      "code": "brand_mv7p5jd7",
+      "name": "Basic",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-14T05:56:14.578Z",
+      "updatedAt": "2026-10-14T05:56:15.117Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a1393a-460b-7c20-ae0c-7ef49a03a48c",
+      "code": "brand_mv7rll9s",
+      "name": "Basic",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-14T07:04:42.764Z",
+      "updatedAt": "2026-10-14T07:04:43.459Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a1344d-48c3-7b63-b8fe-37a50a130178",
+      "code": "premium",
+      "name": "Premium",
       "featureFlags": [
         "tables",
         "orders.dinein",
         "orders.takeaway",
         "menu",
         "billing",
-        "offline.single"
+        "offline.single",
+        "floors",
+        "multi_cashier",
+        "waiter_app",
+        "lan_hub",
+        "franchise",
+        "roles.extended",
+        "kds",
+        "recipes",
+        "menu.approval",
+        "inventory",
+        "shifts",
+        "branding",
+        "staff_portal",
+        "roles.custom",
+        "floor.editor",
+        "import.excel",
+        "expenses"
       ],
       "limits": {
-        "branches": 1,
+        "branches": null,
         "staffPerBranch": null,
-        "floorsPerBranch": 1,
-        "devicesPerBranch": 1,
-        "concurrentCashiers": 1
+        "floorsPerBranch": null,
+        "devicesPerBranch": null,
+        "concurrentCashiers": null
       },
       "pricePaise": 0,
       "billingCycle": "monthly",
-      "createdAt": "2026-10-12T17:35:36.664Z",
-      "updatedAt": "2026-10-12T17:35:36.664Z"
+      "archived": false,
+      "createdAt": "2026-10-13T08:07:22.563Z",
+      "updatedAt": "2026-10-14T07:05:07.481Z",
+      "activeLicenses": 180
     },
     {
-      "id": "01a1312f-28e0-7d51-9f03-ed6608376c45",
+      "id": "01a1344d-48c1-7403-86cd-f7aa79192062",
       "code": "professional",
       "name": "Professional",
       "featureFlags": [
@@ -55,47 +321,300 @@
       },
       "pricePaise": 0,
       "billingCycle": "monthly",
-      "createdAt": "2026-10-12T17:35:36.673Z",
-      "updatedAt": "2026-10-12T17:35:36.673Z"
+      "archived": false,
+      "createdAt": "2026-10-13T08:07:22.561Z",
+      "updatedAt": "2026-10-14T07:05:07.478Z",
+      "activeLicenses": 50
     },
     {
-      "id": "01a1312f-28e3-7421-a559-a78f5fd3df43",
-      "code": "premium",
-      "name": "Premium",
+      "id": "01a1344d-48be-78c3-8113-ad323985fef4",
+      "code": "standard",
+      "name": "Standard",
       "featureFlags": [
         "tables",
         "orders.dinein",
         "orders.takeaway",
         "menu",
         "billing",
-        "offline.single",
-        "floors",
-        "multi_cashier",
-        "waiter_app",
-        "lan_hub",
-        "franchise",
-        "roles.extended",
-        "kds",
-        "recipes",
-        "menu.approval",
-        "inventory",
-        "shifts"
+        "offline.single"
       ],
       "limits": {
-        "branches": null,
+        "branches": 1,
         "staffPerBranch": null,
-        "floorsPerBranch": null,
-        "devicesPerBranch": null,
-        "concurrentCashiers": null
+        "floorsPerBranch": 1,
+        "devicesPerBranch": 1,
+        "concurrentCashiers": 1
       },
       "pricePaise": 0,
       "billingCycle": "monthly",
-      "createdAt": "2026-10-12T17:35:36.675Z",
-      "updatedAt": "2026-10-12T17:35:36.675Z"
+      "archived": false,
+      "createdAt": "2026-10-13T08:07:22.558Z",
+      "updatedAt": "2026-10-14T07:05:07.474Z",
+      "activeLicenses": 263
     },
     {
-      "id": "01a1313d-326e-7672-9f4d-4f9230d1e9ee",
-      "code": "trial_mv5jsy1m",
+      "id": "01a13920-4b72-77e0-9ccc-0f61cd90a5fd",
+      "code": "lim_mv7ql3kn",
+      "name": "Tiny",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1,
+        "staffPerBranch": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-14T06:36:20.210Z",
+      "updatedAt": "2026-10-14T06:36:20.210Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a138eb-ae1a-7852-99c9-95554133f6b2",
+      "code": "lim_mv7oj6w3",
+      "name": "Tiny",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1,
+        "staffPerBranch": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-14T05:38:52.058Z",
+      "updatedAt": "2026-10-14T05:38:52.058Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a138eb-0132-7ab0-a868-ba4ba99c73dc",
+      "code": "lim_mv7oi8tn",
+      "name": "Tiny",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1,
+        "staffPerBranch": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-14T05:38:07.795Z",
+      "updatedAt": "2026-10-14T05:38:07.795Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a138fb-9e92-7743-bd88-4a90bdf69748",
+      "code": "lim_mv7p5kzb",
+      "name": "Tiny",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1,
+        "staffPerBranch": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-14T05:56:16.659Z",
+      "updatedAt": "2026-10-14T05:56:16.659Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a138ec-a47f-7d81-b4e3-6a6568219d63",
+      "code": "lim_mv7okjmf",
+      "name": "Tiny",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1,
+        "staffPerBranch": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-14T05:39:55.136Z",
+      "updatedAt": "2026-10-14T05:39:55.136Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a13906-de1d-7ca2-ad20-c3632bc002f5",
+      "code": "lim_mv7plds3",
+      "name": "Tiny",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1,
+        "staffPerBranch": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-14T06:08:33.822Z",
+      "updatedAt": "2026-10-14T06:08:33.822Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a138ea-5d1b-7612-b8cb-226a2dd88df1",
+      "code": "lim_mv7ohceq",
+      "name": "Tiny",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1,
+        "staffPerBranch": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-14T05:37:25.787Z",
+      "updatedAt": "2026-10-14T05:37:25.787Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a13922-8b9f-7d90-8c09-f60df8a5e9ba",
+      "code": "lim_mv7qo9dp",
+      "name": "Tiny",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1,
+        "staffPerBranch": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-14T06:38:47.711Z",
+      "updatedAt": "2026-10-14T06:38:47.711Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a13923-dfb3-7313-a61e-fc72e4cd06e7",
+      "code": "lim_mv7qq4io",
+      "name": "Tiny",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1,
+        "staffPerBranch": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-14T06:40:14.771Z",
+      "updatedAt": "2026-10-14T06:40:14.771Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a1393b-33d8-73f1-8e40-25dbebd8fb9b",
+      "code": "lim_mv7rmw92",
+      "name": "Tiny",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1,
+        "staffPerBranch": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-14T07:05:43.641Z",
+      "updatedAt": "2026-10-14T07:05:43.641Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a13938-d3ba-7030-bf91-c93cd8940285",
+      "code": "lim_mv7rjk4m",
+      "name": "Tiny",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1,
+        "staffPerBranch": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-14T07:03:07.962Z",
+      "updatedAt": "2026-10-14T07:03:07.962Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a13931-7150-77a2-bf59-e86a649c8f19",
+      "code": "lim_mv7r96ps",
+      "name": "Tiny",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1,
+        "staffPerBranch": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-14T06:55:04.016Z",
+      "updatedAt": "2026-10-14T06:55:04.016Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a1393a-48a1-7503-a5dc-537cdd2456fc",
+      "code": "lim_mv7rllsi",
+      "name": "Tiny",
+      "featureFlags": [
+        "tables",
+        "menu",
+        "billing"
+      ],
+      "limits": {
+        "branches": 1,
+        "staffPerBranch": 1
+      },
+      "pricePaise": 0,
+      "billingCycle": "monthly",
+      "archived": false,
+      "createdAt": "2026-10-14T07:04:43.425Z",
+      "updatedAt": "2026-10-14T07:04:43.425Z",
+      "activeLicenses": 1
+    },
+    {
+      "id": "01a13941-d33c-7341-93ab-6bebbb37c999",
+      "code": "trial_mv7rw759",
       "name": "Trial",
       "featureFlags": [
         "tables",
@@ -107,12 +626,14 @@
       },
       "pricePaise": 49900,
       "billingCycle": "monthly",
-      "createdAt": "2026-10-12T17:50:56.622Z",
-      "updatedAt": "2026-10-12T17:50:56.650Z"
+      "archived": false,
+      "createdAt": "2026-10-14T07:12:57.660Z",
+      "updatedAt": "2026-10-14T07:12:57.684Z",
+      "activeLicenses": 0
     },
     {
-      "id": "01a1313d-89a3-75d0-b056-96fef7a0a8d2",
-      "code": "trial_mv5jtf9z",
+      "id": "01a13941-96d4-7c60-adb4-d16c9d6f5e33",
+      "code": "trial_mv7rvv7k",
       "name": "Trial",
       "featureFlags": [
         "tables",
@@ -124,8 +645,10 @@
       },
       "pricePaise": 49900,
       "billingCycle": "monthly",
-      "createdAt": "2026-10-12T17:51:18.947Z",
-      "updatedAt": "2026-10-12T17:51:18.979Z"
+      "archived": false,
+      "createdAt": "2026-10-14T07:12:42.196Z",
+      "updatedAt": "2026-10-14T07:12:42.226Z",
+      "activeLicenses": 0
     }
   ]
 }

@@ -22,6 +22,13 @@ const featureGroups = <(String, List<(String, String)>)>[
     ('recipes', 'Recipes'), ('menu.approval', 'Chef approval of menu changes'), ('inventory', 'Inventory'), ('shifts', 'Shifts & attendance'),
     ('branding', 'Custom branding (logo, colour, text style)'),
   ]),
+  ('Web portal & management', [
+    ('staff_portal', 'Staff web portal (email + PIN)'),
+    ('roles.custom', 'Custom employee roles'),
+    ('floor.editor', 'Visual floor editor (drag tables & chairs)'),
+    ('import.excel', 'Excel import (menu & inventory)'),
+    ('expenses', 'Expenses & expense logs'),
+  ]),
 ];
 
 const limitKeys = <(String, String)>[
@@ -290,6 +297,8 @@ class _PlanEditorState extends State<PlanEditor> {
           onSelectionChanged: (v) => setState(() => _cycle = v.first),
         ),
         const SizedBox(height: HPSpace.lg),
+        Text('Feature changes apply to restaurants already on this plan. Restaurant users should sign in again to refresh their available actions.', style: HPType.body(p.muted)),
+        const SizedBox(height: HPSpace.md),
         for (final (group, items) in featureGroups) ...[
           Text(group.toUpperCase(), style: HPType.overline(p.muted)),
           const SizedBox(height: HPSpace.xs),

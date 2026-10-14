@@ -117,3 +117,30 @@ on your Windows PC; pick "This device is the hub" on first start. Tests: `pnpm -
    the portal shell against `STYLE.md`, using the contract fixtures. Then wire the C8 reprint/PDF buttons and the C9 adjustment dialog to the existing hub routes.
 3. **Both:** write the hub OpenAPI (v1) from `server.dart`, then run the Windows POS build plus one real thermal printer test print
    (T3 route `POST /printers/bill/test`) on the restaurant LAN.
+
+
+## Open items from the 14 Oct staff-portal work (honest list)
+
+1. **Plan editor repaired on 14 Oct:** Super Admin → Plans → Edit now exposes Staff web portal, Custom roles,
+   Visual floor editor, Excel import and Expenses under "Web portal & management". The local `rsaas_dev` Premium plan
+   has Staff web portal, Visual floor editor and Excel import enabled; its four active licenses were re-signed with
+   unchanged dates, prices and limits, and the repair was audited. Refresh the rebuilt web page and sign in again.
+   Other environments still require their Super Admin to enable the desired features. Custom roles and Expenses
+   remain controlled by their own existing plan selections.
+2. **Web order entry and billing are not built.** Cashier and waiter portals show live tables, open orders, today's bills
+   and payments, but orders, KOTs, bills and payments are taken on the POS app (the offline-first single writer).
+3. **Batch / expiry balances are approximate.** Kitchen use and sales do not say which batch they used (no FIFO), so a
+   batch's remaining quantity only falls when a movement names that batch; expiry alerts can list batches already used.
+4. **Stock moves when the paid bill reaches the cloud**, not on the hub; while the hub is offline the cloud stock lags.
+   Inventory is restaurant-wide (not per branch).
+5. **One email = one restaurant**: no multi-restaurant memberships, so no restaurant picker.
+6. **Shift / break tracking does not exist** in the app, so it is not in the audit view.
+7. **Employee invite emails**: the Resend sandbox only delivers to the account's own address until a domain is
+   verified; for other employees the owner sees the one-time link to pass on.
+8. **Intermittent API test failure**: twice in ~6 *parallel* runs (`npx jest`, not the official serial `pnpm test`) one
+   test failed in a different suite each time (restaurants.spec, console.spec); never reproduced alone or serially.
+   Likely suites sharing the one test database in parallel; not yet diagnosed.
+9. **Not on the phone yet**: `release/HousePlatingPOS-0.6.0-release.apk` is built; the phone was not connected.
+10. The handwritten notes mentioned in the request were not attached, so only the written requirements were used.
+11. Floor editor has no undo (Cancel reverts to the last save). Import error report is CSV, not .xlsx. Imports are
+    capped at 5 MB / 20,000 rows per sheet.

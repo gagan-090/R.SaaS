@@ -21,7 +21,7 @@ const StepUpBody = z.object({ password: z.string().min(1), code: z.string().rege
 const ConfirmBody = z.object({ code: z.string().regex(/^\d{6}$/) });
 const AcceptInviteBody = z.object({ token: z.string().min(1), password: z.string().min(12).max(256) });
 
-const meta = (req: AppRequest, ip: string, ua?: string) => ({ ip, userAgent: ua, sessionId: req.actor?.sessionId });
+const meta = (req: AppRequest, ip: string, ua?: string) => ({ ip, userAgent: ua, sessionId: req.actor?.sessionId, requestId: req.requestId });
 
 @ApiTags('auth')
 @Controller()
@@ -89,11 +89,12 @@ export class AuthController {
     const profile = await this.db.platform(async (tx) =>
       a.type === 'admin'
         ? tx.platformAdmin.findUnique({ where: { id: a.id }, select: { id: true, email: true, name: true, mfa: { select: { enrolledAt: true } } } })
-        : tx.user.findUnique({ where: { id: a.id }, select: { id: true, email: true, name: true, tenantId: true, pinHash: true, mfa: { select: { enrolledAt: true } } } }),
+        : tx.user.findUnique({ where: { id: a.id }, select: { id: true, email: true, name: true, tenantId: true, pinHash: true, webAccess: true, mfa: { select: { enrolledAt: true } }, roles: { select: { customRole: { select: { name: true } } } } } }),
     );
     const hasPin = profile && 'pinHash' in profile ? !!profile.pinHash : undefined;
     return {
       type: a.type, ...profile, mfaEnrolled: !!profile?.mfa?.enrolledAt, mfa: undefined, pinHash: undefined, ...(hasPin === undefined ? {} : { hasPin }),
+      ...(profile && 'roles' in profile ? { roles: undefined, customRoleName: profile.roles.find((r) => r.customRole)?.customRole?.name ?? null } : {}),
       roles: a.roles, permissions: [...a.permissions].sort(), branchIds: a.branchIds,
     };
   }

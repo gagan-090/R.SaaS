@@ -11,4 +11,12 @@ void main() {
     expect(ids.first[14], '7');
     expect('89ab'.contains(ids.first[19]), isTrue);
   });
+
+  test('custom role: permissions come from the cloud, limited to what the hub enforces', () {
+    final p = permissionsFor([
+      {'role': 'custom', 'extraPermissions': <String>[], 'permissions': ['order.write', 'payment.take', 'inventory.manage', 'launch.rockets']},
+    ]);
+    expect(p, {'order.write', 'payment.take'});
+    expect(permissionsFor([{'role': 'custom', 'extraPermissions': <String>[]}]), isEmpty, reason: 'no permissions sent = none granted');
+  });
 }

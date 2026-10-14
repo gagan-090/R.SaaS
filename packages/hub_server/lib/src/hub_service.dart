@@ -251,22 +251,36 @@ class HubService {
     await db.transaction(() async {
       if (token != null) await db.setMeta('license_token', token);
       for (final r in rows('floors')) {
-        await db.execute('INSERT OR REPLACE INTO floors(id, name, sort_order, deleted) VALUES (?,?,?,?)', [r['id'], r['name'], r['sortOrder'], b(r['deleted'])]);
+        await db.execute('INSERT OR REPLACE INTO floors(id, name, sort_order, deleted, width, height) VALUES (?,?,?,?,?,?)',
+            [r['id'], r['name'], r['sortOrder'], b(r['deleted']), r['width'] ?? 1200, r['height'] ?? 800]);
       }
       for (final r in rows('tables')) {
-        await db.execute('INSERT OR REPLACE INTO tables(id, floor_id, name, seats, layout_x, layout_y, deleted) VALUES (?,?,?,?,?,?,?)',
-            [r['id'], r['floorId'], r['name'], r['seats'], r['layoutX'], r['layoutY'], b(r['deleted'])]);
+        await db.execute(
+            'INSERT OR REPLACE INTO tables(id, floor_id, name, seats, layout_x, layout_y, deleted, shape, pos_x, pos_y, width, height, rotation, chairs, manual_status) '
+            'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            [r['id'], r['floorId'], r['name'], r['seats'], r['layoutX'], r['layoutY'], b(r['deleted']), r['shape'] ?? 'square',
+              r['posX'] ?? 120 + ((r['layoutX'] as int?) ?? 0) * 75, r['posY'] ?? 120 + ((r['layoutY'] as int?) ?? 0) * 75,
+              r['width'] ?? 80, r['height'] ?? 80, r['rotation'] ?? 0, r['chairs'] == null ? null : jsonEncode(r['chairs']), r['status'] ?? 'available']);
       }
       for (final r in rows('taxRules')) {
         await db.execute('INSERT OR REPLACE INTO tax_rules(id, name, rate_bp, deleted) VALUES (?,?,?,?)', [r['id'], r['name'], r['rateBp'], b(r['deleted'])]);
       }
       for (final r in rows('categories')) {
-        await db.execute('INSERT OR REPLACE INTO categories(id, name, sort_order, deleted) VALUES (?,?,?,?)', [r['id'], r['name'], r['sortOrder'], b(r['deleted'])]);
+        await db.execute('INSERT OR REPLACE INTO categories(id, name, sort_order, deleted, active) VALUES (?,?,?,?,?)',
+            [r['id'], r['name'], r['sortOrder'], b(r['deleted']), r['active'] == false ? 0 : 1]);
       }
       for (final r in rows('items')) {
         await db.execute(
-          'INSERT OR REPLACE INTO items(id, category_id, name, price_paise, tax_rule_id, available, is_veg, plate_colors, deleted, image_id) VALUES (?,?,?,?,?,?,?,?,?,?)',
-          [r['id'], r['categoryId'], r['name'], r['pricePaise'], r['taxRuleId'], b(r['available']), b(r['isVeg']), r['plateColors'] == null ? null : jsonEncode(r['plateColors']), b(r['deleted']), r['imageId']],
+          'INSERT OR REPLACE INTO items(id, category_id, name, price_paise, tax_rule_id, available, is_veg, plate_colors, deleted, image_id, active, code) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+          [r['id'], r['categoryId'], r['name'], r['pricePaise'], r['taxRuleId'], b(r['available']), b(r['isVeg']), r['plateColors'] == null ? null : jsonEncode(r['plateColors']), b(r['deleted']), r['imageId'],
+            r['active'] == false ? 0 : 1, r['code']],
+        );
+      }
+      for (final r in rows('variants')) {
+        await db.execute(
+          'INSERT OR REPLACE INTO variants(id, item_id, code, name, portion_label, serving_quantity, serving_unit, price_paise, tax_rule_id, available, is_default, sort_order, deleted) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+          [r['id'], r['itemId'], r['code'], r['name'], r['portionLabel'], (r['servingQuantity'] as num?)?.toDouble(), r['servingUnit'], r['pricePaise'], r['taxRuleId'],
+            b(r['available']), b(r['isDefault']), r['sortOrder'] ?? 0, b(r['deleted'])],
         );
       }
       for (final r in rows('users')) {
@@ -319,15 +333,31 @@ class HubService {
   }
 
   /// Menu for order screens: categories + available items with their current tax rate.
-  Future<Map<String, Object?>> menu() async => {
-        'menuVersion': await db.getMeta('menu_version'),
-        'categories': await db.query('SELECT id, name, sort_order FROM categories WHERE deleted = 0 ORDER BY sort_order, name'),
-        'items': [
-          for (final i in await db.query(
-              'SELECT i.id, i.category_id, i.name, i.price_paise, i.available, i.is_veg, i.plate_colors, i.image_id, t.rate_bp FROM items i JOIN tax_rules t ON t.id = i.tax_rule_id WHERE i.deleted = 0 ORDER BY i.name'))
-            {...i, 'plate_colors': i['plate_colors'] == null ? null : jsonDecode(i['plate_colors']! as String)},
-        ],
-      };
+  /// Menu for the POS: active categories and items, each item with its sizes / portions (variants) and their prices.
+  Future<Map<String, Object?>> menu() async {
+    final variants = <String, List<Map<String, Object?>>>{};
+    for (final v in await db.query(
+        'SELECT v.id, v.item_id, v.code, v.name, v.portion_label, v.serving_quantity, v.serving_unit, v.price_paise, v.available, v.is_default, '
+        'coalesce(vt.rate_bp, t.rate_bp) AS rate_bp FROM variants v JOIN items i ON i.id = v.item_id JOIN tax_rules t ON t.id = i.tax_rule_id '
+        'LEFT JOIN tax_rules vt ON vt.id = v.tax_rule_id WHERE v.deleted = 0 ORDER BY v.sort_order, v.price_paise')) {
+      variants.putIfAbsent(v['item_id']! as String, () => []).add(v);
+    }
+    return {
+      'menuVersion': await db.getMeta('menu_version'),
+      'categories': await db.query('SELECT id, name, sort_order FROM categories WHERE deleted = 0 AND active = 1 ORDER BY sort_order, name'),
+      'items': [
+        for (final i in await db.query(
+            'SELECT i.id, i.category_id, i.code, i.name, i.price_paise, i.available, i.is_veg, i.plate_colors, i.image_id, t.rate_bp FROM items i '
+            'JOIN tax_rules t ON t.id = i.tax_rule_id JOIN categories c ON c.id = i.category_id '
+            'WHERE i.deleted = 0 AND i.active = 1 AND c.active = 1 ORDER BY i.name'))
+          {
+            ...i,
+            'plate_colors': i['plate_colors'] == null ? null : jsonDecode(i['plate_colors']! as String),
+            'variants': variants[i['id']] ?? const [],
+          },
+      ],
+    };
+  }
 
   /// Staff tiles for the PIN login screen — names, roles and whether a PIN is set; never PIN hashes.
   Future<List<Map<String, Object?>>> staff() async => [
@@ -400,7 +430,11 @@ class HubService {
         for (final t in tables)
           {
             ...t,
-            'status': byTable[t['id']] == null ? 'free' : (byTable[t['id']]!['status'] == 'billed' ? 'bill_printed' : 'occupied'),
+            'chairs': t['chairs'] == null ? null : jsonDecode(t['chairs']! as String),
+            // orders decide occupied / bill printed; otherwise the staff-set reserved / unavailable, else free
+            'status': byTable[t['id']] != null
+                ? (byTable[t['id']]!['status'] == 'billed' ? 'bill_printed' : 'occupied')
+                : (t['manual_status'] == 'reserved' || t['manual_status'] == 'unavailable' ? t['manual_status'] : 'free'),
             'orderId': byTable[t['id']]?['id'],
             'totalPaise': byTable[t['id']]?['total_paise'],
             'openedAt': byTable[t['id']]?['opened_at'],
@@ -453,7 +487,11 @@ class HubService {
     if (type == 'dine_in' && tableId == null) throw badRequest('table_required', 'Dine-in orders need a table');
     if (type == 'takeaway' && tableId != null) throw badRequest('no_table_for_takeaway', 'Takeaway orders have no table');
     return _tx(() async {
-      if (tableId != null && await db.selectOne('SELECT id FROM tables WHERE id = ? AND deleted = 0', [tableId]) == null) throw notFound('Table');
+      if (tableId != null) {
+        final table = await db.selectOne('SELECT id, name, manual_status FROM tables WHERE id = ? AND deleted = 0', [tableId]);
+        if (table == null) throw notFound('Table');
+        if (table['manual_status'] == 'unavailable') throw conflict('table_unavailable', 'Table ${table['name']} is marked out of use');
+      }
       final id = uuidv7();
       final at = nowIso(clock());
       try {
@@ -484,12 +522,24 @@ class HubService {
         final item = await db.selectOne(
             'SELECT i.*, t.rate_bp FROM items i JOIN tax_rules t ON t.id = i.tax_rule_id WHERE i.id = ? AND i.deleted = 0', [l['menuItemId']]);
         if (item == null) throw notFound('Menu item');
-        if (item['available'] != 1) throw conflict('item_unavailable', '${item['name']} is not available');
+        if (item['available'] != 1 || item['active'] == 0) throw conflict('item_unavailable', '${item['name']} is not available');
+        // the size / portion ordered: the one chosen, else the item's default (older POS builds send no variant)
+        final variants = await db.query(
+            'SELECT v.*, vt.rate_bp AS v_rate FROM variants v LEFT JOIN tax_rules vt ON vt.id = v.tax_rule_id WHERE v.item_id = ? AND v.deleted = 0 ORDER BY v.is_default DESC, v.sort_order',
+            [item['id']]);
+        final variantId = l['variantId'] as String?;
+        final variant = variantId != null ? variants.where((v) => v['id'] == variantId).firstOrNull : variants.firstOrNull;
+        if (variantId != null && variant == null) throw notFound('Size or portion');
+        if (variant != null && variant['available'] != 1) throw conflict('item_unavailable', '${item['name']} (${variant['name']}) is not available');
+        // a dish with one "Regular" size keeps its plain name; otherwise the size is part of the name on KOTs and bills
+        final label = variant == null || (variants.length == 1 && variant['name'] == 'Regular') ? item['name']! as String : '${item['name']} · ${variant['name']}';
         final id = uuidv7();
-        // price + tax snapshots: later menu changes never alter this line
+        // price + tax + variant snapshots: later menu changes never alter this line
         await db.execute(
-          'INSERT INTO order_lines(id, order_id, menu_item_id, name_snapshot, price_snapshot_paise, tax_rate_snapshot_bp, qty, notes, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
-          [id, orderId, item['id'], item['name'], item['price_paise'], item['rate_bp'], qty, l['notes'], 'pending', nowIso(clock())],
+          'INSERT INTO order_lines(id, order_id, menu_item_id, name_snapshot, price_snapshot_paise, tax_rate_snapshot_bp, qty, notes, status, created_at, '
+          'variant_id, variant_code_snapshot, variant_name_snapshot) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+          [id, orderId, item['id'], label, variant?['price_paise'] ?? item['price_paise'], variant?['v_rate'] ?? item['rate_bp'], qty, l['notes'], 'pending', nowIso(clock()),
+            variant?['id'], variant?['code'], variant?['name']],
         );
         await _outbox('order_line', id, 'create', (await db.selectOne('SELECT * FROM order_lines WHERE id = ?', [id]))!);
       }
@@ -600,6 +650,7 @@ class HubService {
       if (o['table_id'] == toTableId) throw conflict('same_table', 'Order is already at that table');
       final target = await db.selectOne('SELECT * FROM tables WHERE id = ? AND deleted = 0', [toTableId]);
       if (target == null) throw notFound('Table');
+      if (target['manual_status'] == 'unavailable') throw conflict('table_unavailable', 'Table ${target['name']} is marked out of use');
       final from = o['table_id']! as String;
       try {
         final n = await db.execute('UPDATE orders SET table_id = ?, version = version + 1, updated_at = ? WHERE id = ? AND version = ?',

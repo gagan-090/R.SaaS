@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -50,6 +51,25 @@ class ApiClient {
     return decoded;
   }
 
+  /// A file from the API (templates, reports), with the same sign-in and refresh as JSON calls.
+  Future<Uint8List> getBytes(String path, {bool retry = true}) async {
+    final req = http.Request('GET', Uri.parse('$_base$path'));
+    if (accessToken != null) req.headers['authorization'] = 'Bearer $accessToken';
+    final res = await http.Response.fromStream(await _http.send(req));
+    if (res.statusCode == 401 && retry && refreshToken != null && await _refresh()) return getBytes(path, retry: false);
+    if (res.statusCode >= 400) {
+      final m = (() {
+        try {
+          return jsonDecode(utf8.decode(res.bodyBytes)) as Map;
+        } catch (_) {
+          return const {};
+        }
+      })();
+      throw ApiException(res.statusCode, '${m['code'] ?? 'http_${res.statusCode}'}', '${m['message'] ?? 'Download failed (${res.statusCode})'}');
+    }
+    return res.bodyBytes;
+  }
+
   Future<bool> _refresh() async {
     try {
       final r = await _send('POST', '/auth/refresh', body: {'refreshToken': refreshToken}, retry: false) as Json;
@@ -73,6 +93,17 @@ class ApiClient {
     if (r['status'] == 'ok') _setTokens(r);
     return r;
   }
+
+  /// Employee web portal: email + PIN (plan feature "staff_portal").
+  Future<Json> pinLogin(String email, String pin) async {
+    final r = await _send('POST', '/auth/pin-login', body: {'email': email, 'pin': pin}) as Json;
+    if (r['status'] == 'ok') _setTokens(r);
+    return r;
+  }
+
+  Future<Json> pinResetRequest(String email) async => await _send('POST', '/auth/pin-reset-request', body: {'email': email}) as Json;
+  Future<Json> pinLinkCheck(String token) async => await _send('POST', '/auth/pin-link/check', body: {'token': token}) as Json;
+  Future<Json> pinLinkComplete(String token, String pin) async => await _send('POST', '/auth/pin-link/complete', body: {'token': token, 'pin': pin}) as Json;
 
   Future<void> verifyMfa(String challengeToken, {String? code, String? recoveryCode}) async =>
       _setTokens(await _send('POST', '/auth/mfa/verify', body: {'challengeToken': challengeToken, 'code': ?code, 'recoveryCode': ?recoveryCode}) as Json);
@@ -158,6 +189,8 @@ class ApiClient {
   Future<List<dynamic>> items() async => await _send('GET', '/menu/items') as List<dynamic>;
   Future<Json> createItem(Json body) async => await _send('POST', '/menu/items', body: body) as Json;
   Future<Json> updateItem(String id, Json body) async => await _send('PATCH', '/menu/items/$id', body: body) as Json;
+  Future<Json> setVariants(String id, List<Json> variants) async => await _send('PUT', '/menu/items/$id/variants', body: {'variants': variants}) as Json;
+  Future<void> orderCategories(List<String> ids) async => _send('PUT', '/menu/categories/order', body: {'ids': ids});
   Future<void> deleteItem(String id) async => _send('DELETE', '/menu/items/$id');
   Future<Json> setItemImage(String id, String contentType, String dataBase64) async =>
       await _send('PUT', '/menu/items/$id/image', body: {'contentType': contentType, 'dataBase64': dataBase64}) as Json;
@@ -165,6 +198,48 @@ class ApiClient {
 
   /// Public URL of a menu photo (no auth needed; ids are unguessable).
   String mediaUrl(String id) => '$_base/media/$id';
+
+  // ---- inventory (plan feature "inventory")
+  Future<List<dynamic>> invProducts({bool includeInactive = false}) async =>
+      await _send('GET', '/inventory/products', query: {if (includeInactive) 'includeInactive': 'true'}) as List<dynamic>;
+  Future<Json> createInvProduct(Json body) async => await _send('POST', '/inventory/products', body: body) as Json;
+  Future<Json> updateInvProduct(String id, Json body) async => await _send('PATCH', '/inventory/products/$id', body: body) as Json;
+  Future<List<dynamic>> invLocations() async => await _send('GET', '/inventory/locations') as List<dynamic>;
+  Future<Json> createLocation(String name) async => await _send('POST', '/inventory/locations', body: {'name': name}) as Json;
+  Future<List<dynamic>> invSuppliers() async => await _send('GET', '/inventory/suppliers') as List<dynamic>;
+  Future<Json> createSupplier(Json body) async => await _send('POST', '/inventory/suppliers', body: body) as Json;
+  Future<Json> invMove(Json body) async => await _send('POST', '/inventory/movements', body: body) as Json;
+  Future<List<dynamic>> invMovements({String? type, String? productId}) async =>
+      await _send('GET', '/inventory/movements', query: {'type': ?type, 'productId': ?productId}) as List<dynamic>;
+  Future<Json> invAlerts() async => await _send('GET', '/inventory/alerts') as Json;
+  Future<Json> invValuation() async => await _send('GET', '/inventory/valuation') as Json;
+  Future<List<dynamic>> invRequests() async => await _send('GET', '/inventory/requests') as List<dynamic>;
+  Future<Json> invRequest(Json body) async => await _send('POST', '/inventory/requests', body: body) as Json;
+  Future<Json> invUpdateRequest(String id, String status) async => await _send('PATCH', '/inventory/requests/$id', body: {'status': status}) as Json;
+  Future<Json> recipe(String variantId) async => await _send('GET', '/menu/variants/$variantId/recipe') as Json;
+  Future<Json> setRecipe(String variantId, List<Json> lines) async => await _send('PUT', '/menu/variants/$variantId/recipe', body: {'lines': lines}) as Json;
+
+  // ---- Excel import (plan feature "import.excel")
+  Future<Uint8List> importTemplate(String kind) => getBytes('/imports/templates/$kind');
+  Future<Json> validateImport(String kind, String fileName, String dataBase64, String mode) async =>
+      await _send('POST', '/imports/$kind/validate', body: {'fileName': fileName, 'dataBase64': dataBase64, 'mode': mode}) as Json;
+  Future<Json> commitImport(String id, {bool partial = false}) async => await _send('POST', '/imports/$id/commit', body: {'partial': partial}) as Json;
+  Future<List<dynamic>> imports() async => await _send('GET', '/imports') as List<dynamic>;
+  Future<Uint8List> importErrorReport(String id) => getBytes('/imports/$id/errors.csv');
+
+  // ---- audit & records (read-only)
+  Future<List<dynamic>> auditEvents(Map<String, String> q) async => await _send('GET', '/audit/events', query: q) as List<dynamic>;
+  Future<Uint8List> auditCsv(Map<String, String> q) => getBytes('/audit/events.csv${q.isEmpty ? '' : '?${Uri(queryParameters: q).query}'}');
+  Future<Json> auditFacets() async => await _send('GET', '/audit/facets') as Json;
+  Future<List<dynamic>> auditImports() async => await _send('GET', '/audit/imports') as List<dynamic>;
+  Future<Json> salesRecords(Map<String, String> q) async => await _send('GET', '/records/sales', query: q) as Json;
+  Future<Uint8List> salesCsv(Map<String, String> q) => getBytes('/records/sales.csv?${Uri(queryParameters: q).query}');
+  Future<List<dynamic>> liveOrders() async => await _send('GET', '/records/live-orders') as List<dynamic>;
+
+  // ---- expenses (plan feature "expenses")
+  Future<Json> expenses({bool includeVoided = false}) async => await _send('GET', '/expenses', query: {if (includeVoided) 'includeVoided': 'true'}) as Json;
+  Future<Json> createExpense(Json body) async => await _send('POST', '/expenses', body: body) as Json;
+  Future<Json> voidExpense(String id, String reason) async => await _send('POST', '/expenses/$id/void', body: {'reason': reason}) as Json;
 
   // ---- branding (plan feature "branding")
   Future<Json> branding() async => await _send('GET', '/tenant/branding') as Json;
@@ -174,6 +249,9 @@ class ApiClient {
   Future<void> removeLogo() async => _send('DELETE', '/tenant/branding/logo');
 
   Future<List<dynamic>> floors() async => await _send('GET', '/floors') as List<dynamic>;
+  Future<Json> floorLayout(String floorId) async => await _send('GET', '/floors/$floorId/layout') as Json;
+  Future<Json> saveFloorLayout(String floorId, Json body) async => await _send('PUT', '/floors/$floorId/layout', body: body) as Json;
+  Future<Json> setTableStatus(String tableId, String status) async => await _send('POST', '/tables/$tableId/status', body: {'status': status}) as Json;
   Future<Json> createFloor(String branchId, String name, {int sortOrder = 0}) async =>
       await _send('POST', '/floors', body: {'branchId': branchId, 'name': name, 'sortOrder': sortOrder}) as Json;
   Future<Json> updateFloor(String id, Json body) async => await _send('PATCH', '/floors/$id', body: body) as Json;
@@ -185,6 +263,13 @@ class ApiClient {
   Future<List<dynamic>> staff() async => await _send('GET', '/staff') as List<dynamic>;
   Future<Json> createStaff(Json body) async => await _send('POST', '/staff', body: body) as Json;
   Future<Json> updateStaff(String id, Json body) async => await _send('PATCH', '/staff/$id', body: body) as Json;
+  Future<Json> staffLimits() async => await _send('GET', '/staff/limits') as Json;
+  Future<Json> staffPinLink(String id) async => await _send('POST', '/staff/$id/pin-link') as Json;
+  Future<Json> staffUnlock(String id) async => await _send('POST', '/staff/$id/unlock') as Json;
+  Future<Json> restaurantRoles() async => await _send('GET', '/roles') as Json;
+  Future<Json> createRole(Json body) async => await _send('POST', '/roles', body: body) as Json;
+  Future<Json> updateRole(String id, Json body) async => await _send('PATCH', '/roles/$id', body: body) as Json;
+  Future<void> deleteRole(String id) async => _send('DELETE', '/roles/$id');
   Future<void> setMyPin(String pin) async => _send('PUT', '/me/pin', body: {'pin': pin});
 
   Future<List<dynamic>> devices() async => await _send('GET', '/devices') as List<dynamic>;

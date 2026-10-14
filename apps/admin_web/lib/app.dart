@@ -6,9 +6,13 @@ import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 import 'screens/admins_screen.dart';
 import 'screens/auth_screens.dart';
 import 'screens/plans_screen.dart';
-import 'screens/console/dashboard_screen.dart';
 import 'screens/console/devices_screen.dart';
+import 'screens/console/audit_screen.dart';
+import 'screens/console/expenses_screen.dart';
+import 'screens/console/home_screen.dart';
+import 'screens/console/inventory_screen.dart';
 import 'screens/console/menu_screen.dart';
+import 'screens/console/roles_screen.dart';
 import 'screens/console/settings_screen.dart';
 import 'screens/console/staff_screen.dart';
 import 'screens/console/tables_screen.dart';
@@ -36,7 +40,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final s = ref.read(authProvider);
       final loc = state.matchedLocation;
-      if (loc == '/verify-email') return null; // the emailed link works whether or not someone is signed in
+      if (loc == '/verify-email' || loc == '/set-pin') return null; // emailed links work whether or not someone is signed in
       return switch (s) {
         SignedOut() => loc == '/login' ? null : '/login',
         MfaChallenge() || MfaEnrollment() => loc == '/mfa' ? null : '/mfa',
@@ -45,9 +49,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       };
     },
     routes: [
-      GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
+      GoRoute(path: '/login', builder: (_, s) => LoginScreen(employee: s.uri.queryParameters['mode'] == 'employee')),
       GoRoute(path: '/mfa', builder: (_, _) => const MfaScreen()),
       GoRoute(path: '/verify-email', builder: (_, s) => VerifyEmailScreen(token: s.uri.queryParameters['token'])),
+      GoRoute(path: '/set-pin', builder: (_, s) => SetPinScreen(token: s.uri.queryParameters['token'])),
       ShellRoute(
         builder: (c, s, child) => ConsoleShell(location: s.matchedLocation, nav: platformNav, brand: 'Platform', child: child),
         routes: [
@@ -62,10 +67,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       ShellRoute(
         builder: (c, s, child) => ConsoleShell(location: s.matchedLocation, nav: restaurantNav, brand: 'Restaurant', child: child),
         routes: [
-          GoRoute(path: '/console', pageBuilder: (_, s) => _fade(s, const RestaurantDashboardScreen())),
+          GoRoute(path: '/console', pageBuilder: (_, s) => _fade(s, const ConsoleHome())),
           GoRoute(path: '/console/menu', pageBuilder: (_, s) => _fade(s, const MenuScreen())),
           GoRoute(path: '/console/tables', pageBuilder: (_, s) => _fade(s, const TablesScreen())),
           GoRoute(path: '/console/staff', pageBuilder: (_, s) => _fade(s, const StaffScreen())),
+          GoRoute(path: '/console/roles', pageBuilder: (_, s) => _fade(s, const RolesScreen())),
+          GoRoute(path: '/console/inventory', pageBuilder: (_, s) => _fade(s, const InventoryScreen())),
+          GoRoute(path: '/console/expenses', pageBuilder: (_, s) => _fade(s, const ExpensesScreen())),
+          GoRoute(path: '/console/audit', pageBuilder: (_, s) => _fade(s, const RestaurantAuditScreen())),
           GoRoute(path: '/console/devices', pageBuilder: (_, s) => _fade(s, const DevicesScreen())),
           GoRoute(path: '/console/settings', pageBuilder: (_, s) => _fade(s, const SettingsScreen())),
         ],
@@ -109,7 +118,11 @@ const restaurantNav = <NavItem>[
   ('/console', 'Dashboard', Icons.space_dashboard_outlined, null),
   ('/console/menu', 'Menu', Icons.restaurant_menu_rounded, 'menu.read'),
   ('/console/tables', 'Floors & tables', Icons.table_restaurant_outlined, 'floor.read'),
+  ('/console/inventory', 'Inventory', Icons.inventory_2_outlined, 'inventory.read'),
+  ('/console/expenses', 'Expenses', Icons.receipt_long_outlined, 'expense.read'),
+  ('/console/audit', 'Audit & records', Icons.fact_check_outlined, 'audit.read'),
   ('/console/staff', 'Staff', Icons.badge_outlined, 'staff.read'),
+  ('/console/roles', 'Roles', Icons.admin_panel_settings_outlined, 'staff.read'),
   ('/console/devices', 'Hubs & devices', Icons.router_outlined, 'device.manage'),
   ('/console/settings', 'Settings', Icons.tune_rounded, 'restaurant.profile.read'),
 ];

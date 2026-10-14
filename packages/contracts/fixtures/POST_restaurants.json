@@ -5,7 +5,7 @@
   "auth": "bearer",
   "request": {
     "body": {
-      "ownerEmail": "owner-mv5zsfok-dfbfb6@example.test",
+      "ownerEmail": "owner-mv7rwo5q-a28de4@example.test",
       "ownerName": "Asha Rao",
       "restaurantName": "Spice Route",
       "gstin": "27AAAPA1234A1Z5",
@@ -15,8 +15,9 @@
   },
   "status": 201,
   "response": {
-    "registrationId": "01a132d6-e571-7253-bd7a-761db676b7eb",
+    "registrationId": "01a13942-2975-7002-b2fe-e6fc765a42e6",
     "status": "pending_verification",
-    "ownerEmail": "owner-mv5zsfok-dfbfb6@example.test"
+    "ownerEmail": "owner-mv7rwo5q-a28de4@example.test",
+    "emailSent": true
   }
 }

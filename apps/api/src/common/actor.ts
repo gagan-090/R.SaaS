@@ -6,6 +6,8 @@ export interface Actor {
   id: string;
   tenantId?: string; // users only
   permissions: Set<string>;
+  /** Permissions the roles grant but the plan does not include (so a refusal can say "not in your plan"). */
+  planBlocked?: Set<string>;
   roles: string[];
   branchIds: string[]; // users only; empty = all branches
   sessionId?: string;
@@ -23,7 +25,7 @@ export interface AuditDetails {
   reason?: string;
 }
 
-export type AppRequest = Request & { actor?: Actor; audit?: AuditDetails; deviceId?: string };
+export type AppRequest = Request & { actor?: Actor; audit?: AuditDetails; deviceId?: string; requestId?: string };
 
 export const CurrentActor = createParamDecorator((_: unknown, ctx: ExecutionContext): Actor => {
   const req = ctx.switchToHttp().getRequest<AppRequest>();

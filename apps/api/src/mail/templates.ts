@@ -28,3 +28,23 @@ export function verifyRestaurantEmail(o: { ownerName: string; restaurantName: st
   );
   return { subject, text, html };
 }
+
+export function staffPinEmail(o: { name: string; restaurantName: string; url: string; purpose: 'invite' | 'reset' }) {
+  const invite = o.purpose === 'invite';
+  const subject = invite ? `You're invited to ${o.restaurantName} on House Plating` : `Reset your House Plating PIN for ${o.restaurantName}`;
+  const text =
+    `Hello ${o.name},\n\n` +
+    (invite
+      ? `${o.restaurantName} added you to House Plating. Choose your own PIN (6 to 8 digits) to sign in to the POS and the web portal:`
+      : `A PIN reset was requested for your account at ${o.restaurantName}. Choose a new PIN (6 to 8 digits):`) +
+    `\n\n${o.url}\n\nThe link works once and expires in 72 hours. Nobody from the restaurant will ever ask for your PIN.`;
+  const html = layout(
+    invite ? `Welcome, ${esc(o.name)}` : 'Choose a new PIN',
+    invite
+      ? `<strong>${esc(o.restaurantName)}</strong> added you to House Plating. Choose your own PIN — you use it with your email to sign in.`
+      : `Someone asked to reset your PIN at <strong>${esc(o.restaurantName)}</strong>. If it was not you, ignore this email; your current PIN keeps working.`,
+    { label: invite ? 'Choose my PIN' : 'Choose a new PIN', url: o.url },
+    'This link works once and expires in 72 hours. Nobody from the restaurant will ever ask for your PIN.',
+  );
+  return { subject, text, html };
+}

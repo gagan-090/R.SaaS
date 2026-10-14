@@ -6,56 +6,57 @@
   "request": {},
   "status": 200,
   "response": {
-    "id": "01a132d6-e5a0-75c2-8856-77db77821521",
-    "code": "R000120",
+    "id": "01a13942-29f3-78a1-af36-76851e22aaa1",
+    "code": "R000537",
     "name": "Spice Route",
-    "ownerEmail": "owner-mv5zsfok-dfbfb6@example.test",
+    "ownerEmail": "owner-mv7rwo5q-a28de4@example.test",
     "gstin": "27AAAPA1234A1Z5",
     "address": "FC Road, Pune",
     "status": "active",
     "statusReason": null,
     "menuVersion": 0,
-    "createdAt": "2026-10-13T01:18:26.720Z",
-    "updatedAt": "2026-10-13T01:18:26.720Z",
+    "branding": null,
+    "createdAt": "2026-10-14T07:13:19.859Z",
+    "updatedAt": "2026-10-14T07:13:19.859Z",
     "branches": [
       {
-        "id": "01a132d6-e5a1-7912-818c-45417aae865a",
-        "tenantId": "01a132d6-e5a0-75c2-8856-77db77821521",
+        "id": "01a13942-29f9-7722-a29b-1ad4d133d291",
+        "tenantId": "01a13942-29f3-78a1-af36-76851e22aaa1",
         "franchiseId": null,
         "code": "BR01",
         "name": "Spice Route",
         "address": "FC Road, Pune",
         "gstin": "27AAAPA1234A1Z5",
         "settings": {},
-        "seq": "663",
-        "createdAt": "2026-10-13T01:18:26.722Z"
+        "seq": "5741",
+        "createdAt": "2026-10-14T07:13:19.865Z"
       }
     ],
     "licenses": [
       {
-        "id": "01a132d6-e5df-7a5f-8e32-7322b3b782b8",
+        "id": "01a13942-2a09-75c4-995f-d5a9a0c68729",
         "planCode": "premium",
         "planName": "Premium",
-        "startsAt": "2026-10-13T01:18:26.783Z",
-        "endsAt": "2026-11-13T01:18:26.783Z",
+        "startsAt": "2026-10-14T07:13:19.881Z",
+        "endsAt": "2026-11-14T07:13:19.881Z",
         "graceDays": 7,
         "status": "active",
         "reason": "initial license at onboarding",
-        "issuedBy": "01a132d6-e3ea-7893-8fe4-08d5e2914fef",
-        "createdAt": "2026-10-13T01:18:26.796Z"
+        "issuedBy": "01a13942-2619-7592-aa94-e78a14215590",
+        "createdAt": "2026-10-14T07:13:19.889Z"
       }
     ],
     "currentLicense": {
-      "id": "01a132d6-e5df-7a5f-8e32-7322b3b782b8",
+      "id": "01a13942-2a09-75c4-995f-d5a9a0c68729",
       "planCode": "premium",
       "planName": "Premium",
-      "startsAt": "2026-10-13T01:18:26.783Z",
-      "endsAt": "2026-11-13T01:18:26.783Z",
+      "startsAt": "2026-10-14T07:13:19.881Z",
+      "endsAt": "2026-11-14T07:13:19.881Z",
       "graceDays": 7,
       "status": "active",
       "reason": "initial license at onboarding",
-      "issuedBy": "01a132d6-e3ea-7893-8fe4-08d5e2914fef",
-      "createdAt": "2026-10-13T01:18:26.796Z"
+      "issuedBy": "01a13942-2619-7592-aa94-e78a14215590",
+      "createdAt": "2026-10-14T07:13:19.889Z"
     },
     "entitlement": {
       "state": "active",
@@ -77,7 +78,13 @@
         "recipes",
         "menu.approval",
         "inventory",
-        "shifts"
+        "shifts",
+        "branding",
+        "staff_portal",
+        "roles.custom",
+        "floor.editor",
+        "import.excel",
+        "expenses"
       ]
     },
     "devices": [],

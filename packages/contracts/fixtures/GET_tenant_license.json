@@ -25,7 +25,13 @@
       "recipes",
       "menu.approval",
       "inventory",
-      "shifts"
+      "shifts",
+      "branding",
+      "staff_portal",
+      "roles.custom",
+      "floor.editor",
+      "import.excel",
+      "expenses"
     ],
     "limits": {
       "branches": null,
@@ -35,6 +41,6 @@
       "concurrentCashiers": null
     },
     "token": "<token>",
-    "endsAt": "2026-12-13T01:18:26.783Z"
+    "endsAt": "2026-12-14T07:13:19.881Z"
   }
 }

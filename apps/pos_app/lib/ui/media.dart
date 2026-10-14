@@ -56,7 +56,7 @@ class MenuDishCard extends ConsumerWidget {
     final api = ref.watch(hubApiProvider);
     Widget card(ImageProvider? img) => DishCard(
           name: '${item['name']}',
-          price: formatPaise(item['price_paise'] as int).replaceAll('.00', ''),
+          price: priceLabel(item),
           isVeg: item['is_veg'] == 1 || item['is_veg'] == true,
           base: hexColor(pc?['base'], HPColors.saffron),
           sauce: hexColor(pc?['sauce'], HPColors.ghee),
@@ -93,4 +93,16 @@ class BrandLogo extends ConsumerWidget {
             ),
     );
   }
+}
+
+/// Card price: the one price, or "from ₹30" when the dish comes in sizes with different prices.
+String priceLabel(Json item) {
+  final prices = [
+    for (final v in ((item['variants'] as List?) ?? const []).cast<Map>())
+      if (v['available'] == 1 || v['available'] == true) v['price_paise'] as int,
+  ];
+  if (prices.length <= 1) return formatPaise(prices.firstOrNull ?? item['price_paise'] as int).replaceAll('.00', '');
+  prices.sort();
+  final low = formatPaise(prices.first).replaceAll('.00', '');
+  return prices.first == prices.last ? low : 'from $low';
 }

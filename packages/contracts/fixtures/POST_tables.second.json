@@ -5,22 +5,30 @@
   "auth": "bearer",
   "request": {
     "body": {
-      "floorId": "01a132d6-e78e-7b23-a8d9-26f7667d39f5",
+      "floorId": "01a13942-2f12-7150-ab2f-d047ec1120ab",
       "name": "13",
       "seats": 2
     }
   },
   "status": 201,
   "response": {
-    "id": "01a132d6-e7b4-7940-bcc6-f4060b411f7d",
-    "tenantId": "01a132d6-e5a0-75c2-8856-77db77821521",
-    "branchId": "01a132d6-e5a1-7912-818c-45417aae865a",
-    "floorId": "01a132d6-e78e-7b23-a8d9-26f7667d39f5",
+    "id": "01a13942-2fa0-7bd3-b5d6-e2875ed6560c",
+    "tenantId": "01a13942-29f3-78a1-af36-76851e22aaa1",
+    "branchId": "01a13942-29f9-7722-a29b-1ad4d133d291",
+    "floorId": "01a13942-2f12-7150-ab2f-d047ec1120ab",
     "name": "13",
     "seats": 2,
     "layoutX": 0,
     "layoutY": 0,
-    "seq": "670",
+    "shape": "round",
+    "posX": 280,
+    "posY": 120,
+    "width": 80,
+    "height": 80,
+    "rotation": 0,
+    "chairs": null,
+    "status": "available",
+    "seq": "5748",
     "deleted": false
   }
 }

@@ -5,10 +5,10 @@ import { DbService } from '../db/db.service';
 import { LicenseService } from '../licensing/license.service';
 import type { Actor, AppRequest } from './actor';
 import {
-  ALLOW_ENROLL_TOKEN, AUTHENTICATED_ONLY, FEATURE, IS_PUBLIC, PERMISSIONS,
+  ALLOW_ENROLL_TOKEN, ANY_PERMISSION, AUTHENTICATED_ONLY, FEATURE, IS_PUBLIC, PERMISSIONS,
 } from './decorators';
 import { forbidden, unauthorized } from './errors';
-import { permissionsForRoles, RestaurantRoleName } from './permissions';
+import { limitToPlan, permissionsForRoles, RestaurantRoleName } from './permissions';
 
 const meta = <T>(r: Reflector, key: string, ctx: ExecutionContext) =>
   r.getAllAndOverride<T>(key, [ctx.getHandler(), ctx.getClass()]);
@@ -18,7 +18,7 @@ export const isWrite = (method: string) => !['GET', 'HEAD', 'OPTIONS'].includes(
 /** Resolves the bearer token into req.actor. Permissions are loaded fresh from the DB on every request. */
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(private reflector: Reflector, private tokens: TokensService, private db: DbService) {}
+  constructor(private reflector: Reflector, private tokens: TokensService, private db: DbService, private licenses: LicenseService) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     if (meta<boolean>(this.reflector, IS_PUBLIC, ctx)) return true;
@@ -50,12 +50,22 @@ export class AuthGuard implements CanActivate {
       return { type: 'admin', id, permissions, roles: admin.roles.map((r) => r.role.name), branchIds: [], sessionId: sid, tokenAudience: aud };
     }
     if (!tid) throw unauthorized('invalid_token');
-    const user = await this.db.tenant(tid, (tx) => tx.user.findUnique({ where: { id }, include: { roles: true } }));
+    const { user, features } = await this.db.tenant(tid, async (tx) => ({
+      user: await tx.user.findUnique({ where: { id }, include: { roles: { include: { customRole: true } } } }),
+      features: (await this.licenses.entitlement(tx, tid)).features,
+    }));
+    // Deactivated employees lose access on their very next request (permissions are loaded per request).
     if (!user || user.status !== 'active') throw unauthorized('inactive_account', 'Account is not active');
-    const assignments = user.roles.map((r) => ({ role: r.role as RestaurantRoleName, extraPermissions: r.extraPermissions }));
+    const assignments = user.roles.map((r) => ({
+      role: r.role as RestaurantRoleName,
+      extraPermissions: r.extraPermissions,
+      customPermissions: r.customRole && !r.customRole.deleted && features.includes('roles.custom') ? r.customRole.permissions : [],
+    }));
     const branchIds = user.roles.some((r) => r.branchIds.length === 0) ? [] : [...new Set(user.roles.flatMap((r) => r.branchIds))];
+    const granted = permissionsForRoles(assignments);
+    const permissions = limitToPlan(granted, features);
     return {
-      type: 'user', id, tenantId: tid, permissions: permissionsForRoles(assignments),
+      type: 'user', id, tenantId: tid, permissions, planBlocked: new Set([...granted].filter((p) => !permissions.has(p))),
       roles: assignments.map((a) => a.role), branchIds, sessionId: sid, tokenAudience: aud,
     };
   }
@@ -77,7 +87,15 @@ export class PermissionGuard implements CanActivate {
     const required = meta<string[]>(this.reflector, PERMISSIONS, ctx);
     if (!required || required.length === 0) throw forbidden('no_permission_declared', 'Route has no permission declaration');
     const missing = required.filter((p) => !actor.permissions.has(p));
+    if (missing.length && missing.every((p) => actor.planBlocked?.has(p))) {
+      throw forbidden('feature_not_in_plan', `Your plan does not include this (${missing.join(', ')}). Ask House Plating to upgrade your plan.`);
+    }
     if (missing.length) throw forbidden('missing_permission', `Missing permission: ${missing.join(', ')}`);
+    const any = meta<string[]>(this.reflector, ANY_PERMISSION, ctx);
+    if (any?.length && !any.some((p) => actor.permissions.has(p))) {
+      if (any.every((p) => actor.planBlocked?.has(p))) throw forbidden('feature_not_in_plan', 'Your plan does not include this. Ask House Plating to upgrade your plan.');
+      throw forbidden('missing_permission', `Needs one of: ${any.join(', ')}`);
+    }
     return true;
   }
 }

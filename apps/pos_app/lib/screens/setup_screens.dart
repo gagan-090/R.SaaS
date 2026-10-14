@@ -319,6 +319,29 @@ class HubStatusScreen extends ConsumerStatefulWidget {
 }
 
 class _HubStatusScreenState extends ConsumerState<HubStatusScreen> {
+  Future<void> _changeServer(BuildContext context) async {
+    final ctl = TextEditingController(text: ref.read(setupProvider).valueOrNull?.hubConfig?.cloudUrl ?? '');
+    final url = await showDialog<String>(
+      context: context,
+      builder: (c) => HPDialog(
+        title: 'Change server address',
+        actions: [SecondaryButton(label: 'Cancel', onPressed: () => Navigator.pop(c)), PrimaryButton(key: const Key('save-server'), label: 'Save', height: 56, onPressed: () => Navigator.pop(c, ctl.text))],
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text('Use this when the server moved, for example its Wi-Fi IP changed. Staff stay signed in.', style: HPType.body(c.hp.muted)),
+          const SizedBox(height: HPSpace.md),
+          TextField(key: const Key('server-url'), controller: ctl, autofocus: true, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'Server address', hintText: 'http://10.0.0.5:3000/api/v1')),
+        ]),
+      ),
+    );
+    if (url == null || !context.mounted) return;
+    try {
+      await ref.read(setupProvider.notifier).changeServer(url);
+      if (context.mounted) toast(context, 'Server address saved — syncing with it now');
+    } catch (e) {
+      if (context.mounted) toast(context, e is FormatException ? e.message : '$e', error: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final host = ref.read(hubHostProvider);
@@ -396,6 +419,19 @@ class _HubStatusScreenState extends ConsumerState<HubStatusScreen> {
                           )
                         : const SkeletonBox(height: 80),
                   ),
+                if ((ref.watch(sessionProvider)?.can('device.manage') ?? false) && ref.watch(setupProvider).valueOrNull?.hubConfig != null) ...[
+                  const SizedBox(height: HPSpace.lg),
+                  Card(
+                    child: ListTile(
+                      key: const Key('server-address'),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: HPSpace.lg, vertical: HPSpace.xs),
+                      leading: const Icon(Icons.cloud_outlined),
+                      title: Text('Server address', style: HPType.label(p.text)),
+                      subtitle: Text(ref.watch(setupProvider).valueOrNull!.hubConfig!.cloudUrl, style: HPType.mono(p.muted)),
+                      trailing: TextButton(onPressed: () => _changeServer(context), child: const Text('Change')),
+                    ),
+                  ),
+                ],
                 if (ref.watch(sessionProvider)?.can('device.manage') ?? false) ...[
                   const SizedBox(height: HPSpace.x2),
                   DangerButton(

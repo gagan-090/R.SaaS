@@ -4,8 +4,9 @@ import { z } from 'zod';
 import type { Actor, AuditDetails } from '../common/actor';
 import { AuditCtx, CurrentActor } from '../common/actor';
 import { Audited, RequirePermissions, RequiresFeature } from '../common/decorators';
-import { forbidden, notFound } from '../common/errors';
+import { conflict, forbidden, notFound } from '../common/errors';
 import { apiBody, zbody } from '../common/validation';
+import { liveTableStates } from '../floors/layout.controller';
 import { DbService, Tx } from '../db/db.service';
 import { LicenseService } from '../licensing/license.service';
 
@@ -27,19 +28,6 @@ const TableBody = z.object({
 const TablePatch = TableBody.omit({ floorId: true }).partial();
 const TaxBody = z.object({ name: z.string().min(1).max(40), rateBp: z.number().int().refine((v) => [0, 500, 1200, 1800, 2800].includes(v), 'GST rate must be 0, 5, 12, 18 or 28%') });
 const CategoryBody = z.object({ name: z.string().trim().min(1).max(60), sortOrder: z.number().int().default(0), branchId: z.string().uuid().nullable().optional() });
-const ItemBody = z.object({
-  categoryId: z.string().uuid(),
-  name: z.string().trim().min(1).max(120),
-  description: z.string().max(500).optional(),
-  unit: z.string().max(20).default('plate'),
-  quantity: z.number().int().positive().default(1),
-  pricePaise: z.number().int().nonnegative(),
-  taxRuleId: z.string().uuid(),
-  available: z.boolean().default(true),
-  isVeg: z.boolean().default(true),
-  plateColors: z.object({ base: z.string(), sauce: z.string(), garnish: z.string() }).optional(),
-});
-const ItemPatch = ItemBody.partial();
 
 /** Branch-scoped roles only see/touch their branches (empty list = all branches). */
 function assertBranch(actor: Actor, branchId: string) {
@@ -160,7 +148,18 @@ export class TenantController {
       const floor = await tx.floor.findUnique({ where: { id: b.floorId } });
       if (!floor || floor.deleted) throw notFound('Floor');
       assertBranch(a, floor.branchId);
-      return tx.table.create({ data: { ...b, tenantId: a.tenantId!, branchId: floor.branchId } });
+      if (await tx.table.findFirst({ where: { branchId: floor.branchId, name: b.name, deleted: false } })) throw conflict('duplicate_table_name', `Table "${b.name}" already exists`);
+      const retired = await tx.table.findFirst({ where: { branchId: floor.branchId, name: b.name, deleted: true } });
+      if (retired) await tx.table.update({ where: { id: retired.id }, data: { name: `${retired.name} (removed ${retired.id.slice(-6)})` } });
+      // next free spot on the floor plan (6 per row), shaped by seats; the layout editor can move it
+      const n = await tx.table.count({ where: { floorId: b.floorId, deleted: false } });
+      const shape = b.seats >= 6 ? 'rect' : b.seats <= 2 ? 'round' : 'square';
+      return tx.table.create({
+        data: {
+          ...b, tenantId: a.tenantId!, branchId: floor.branchId, shape, width: shape === 'rect' ? 140 : 80, height: 80,
+          posX: 120 + (n % 6) * 160, posY: 120 + Math.floor(n / 6) * 160,
+        },
+      });
     });
     Object.assign(audit, { branchId: t.branchId, objectType: 'table', objectId: t.id, after: t });
     return t;
@@ -192,7 +191,9 @@ export class TenantController {
       const before = await tx.table.findUnique({ where: { id } });
       if (!before || before.deleted) throw notFound('Table');
       assertBranch(a, before.branchId);
-      await tx.table.update({ where: { id }, data: { deleted: true } }); // soft delete so hubs pull the tombstone
+      if ((await liveTableStates(tx)).has(id)) throw conflict('table_has_open_order', `Table ${before.name} has an open order; close it first`);
+      // soft delete so hubs pull the tombstone and past orders keep the table; the name is freed for a new table
+      await tx.table.update({ where: { id }, data: { deleted: true, name: `${before.name} (removed ${id.slice(-6)})` } });
       return before;
     });
     Object.assign(audit, { branchId: before.branchId, objectType: 'table', objectId: id, before });
@@ -235,56 +236,6 @@ export class TenantController {
     const c = await this.t(a, (tx) => tx.menuCategory.create({ data: { ...b, tenantId: a.tenantId! } }));
     Object.assign(audit, { objectType: 'menu_category', objectId: c.id, after: c });
     return c;
-  }
-
-  @RequirePermissions('menu.read')
-  @RequiresFeature('menu')
-  @Get('menu/items')
-  items(@CurrentActor() a: Actor) {
-    return this.t(a, (tx) => tx.menuItem.findMany({ where: { deleted: false }, orderBy: { name: 'asc' } }));
-  }
-
-  @RequirePermissions('menu.read')
-  @RequiresFeature('menu')
-  @Get('menu/items/:id')
-  async item(@CurrentActor() a: Actor, @Param('id', ParseUUIDPipe) id: string) {
-    const it = await this.t(a, (tx) => tx.menuItem.findUnique({ where: { id } }));
-    if (!it || it.deleted) throw notFound('Menu item');
-    return it;
-  }
-
-  @RequirePermissions('menu.publish')
-  @RequiresFeature('menu')
-  @Audited('menu.item_created')
-  @Post('menu/items')
-  @ApiBody(apiBody(ItemBody))
-  async createItem(@CurrentActor() a: Actor, @Body(zbody(ItemBody)) b: z.infer<typeof ItemBody>, @AuditCtx() audit: AuditDetails) {
-    const it = await this.t(a, async (tx) => {
-      if (!(await tx.menuCategory.findUnique({ where: { id: b.categoryId } }))) throw notFound('Category');
-      if (!(await tx.taxRule.findUnique({ where: { id: b.taxRuleId } }))) throw notFound('Tax rule');
-      const created = await tx.menuItem.create({ data: { ...b, tenantId: a.tenantId! } });
-      await tx.restaurantTenant.update({ where: { id: a.tenantId }, data: { menuVersion: { increment: 1 } } });
-      return created;
-    });
-    Object.assign(audit, { objectType: 'menu_item', objectId: it.id, after: it });
-    return it;
-  }
-
-  @RequirePermissions('menu.publish')
-  @RequiresFeature('menu')
-  @Audited('menu.item_updated')
-  @Patch('menu/items/:id')
-  @ApiBody(apiBody(ItemPatch))
-  async updateItem(@CurrentActor() a: Actor, @Param('id', ParseUUIDPipe) id: string, @Body(zbody(ItemPatch)) b: z.infer<typeof ItemPatch>, @AuditCtx() audit: AuditDetails) {
-    const r = await this.t(a, async (tx) => {
-      const before = await tx.menuItem.findUnique({ where: { id } });
-      if (!before || before.deleted) throw notFound('Menu item');
-      const after = await tx.menuItem.update({ where: { id }, data: b });
-      await tx.restaurantTenant.update({ where: { id: a.tenantId }, data: { menuVersion: { increment: 1 } } });
-      return { before, after };
-    });
-    Object.assign(audit, { objectType: 'menu_item', objectId: id, before: r.before, after: r.after });
-    return r.after;
   }
 
   // ---------------- staff (read) & audit

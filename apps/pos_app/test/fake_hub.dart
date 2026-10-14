@@ -21,12 +21,20 @@ class FakeHubApi extends HubApi {
     {'id': 'u-aud', 'name': 'Asha', 'roles': ['auditor'], 'pin': '2222'},
   ];
   final tables = [
-    {'id': 't1', 'floor_id': 'f1', 'name': '1', 'seats': 4},
-    {'id': 't2', 'floor_id': 'f1', 'name': '2', 'seats': 2},
+    {'id': 't1', 'floor_id': 'f1', 'name': '1', 'seats': 4, 'shape': 'square', 'pos_x': 150, 'pos_y': 150, 'width': 80, 'height': 80, 'rotation': 0, 'manual_status': 'available'},
+    {'id': 't2', 'floor_id': 'f1', 'name': '2', 'seats': 2, 'shape': 'round', 'pos_x': 400, 'pos_y': 150, 'width': 80, 'height': 80, 'rotation': 0, 'manual_status': 'available'},
   ];
   final items = [
     {'id': 'i1', 'category_id': 'c1', 'name': 'Butter Chicken', 'price_paise': 34000, 'rate_bp': 500, 'available': 1, 'is_veg': 0, 'image_id': 'img-bc', 'plate_colors': {'base': '#D9622B', 'sauce': '#F2C27B', 'garnish': '#4F8A3B'}},
     {'id': 'i2', 'category_id': 'c1', 'name': 'Garlic Naan', 'price_paise': 6000, 'rate_bp': 500, 'available': 1, 'is_veg': 1, 'plate_colors': null},
+    {
+      'id': 'i3', 'category_id': 'c1', 'name': 'Cola', 'price_paise': 5000, 'rate_bp': 1800, 'available': 1, 'is_veg': 1, 'plate_colors': null,
+      'variants': [
+        {'id': 'v250', 'code': 'COLA-250', 'name': '250 ml', 'serving_quantity': 250, 'serving_unit': 'ml', 'price_paise': 3000, 'rate_bp': 1800, 'available': 1, 'is_default': 0},
+        {'id': 'v500', 'code': 'COLA-500', 'name': '500 ml', 'serving_quantity': 500, 'serving_unit': 'ml', 'price_paise': 5000, 'rate_bp': 1800, 'available': 1, 'is_default': 1},
+        {'id': 'v1l', 'code': 'COLA-1L', 'name': '1 litre', 'serving_quantity': 1, 'serving_unit': 'l', 'price_paise': 9000, 'rate_bp': 1800, 'available': 0, 'is_default': 0},
+      ],
+    },
   ];
   final orders = <String, Json>{};
   final bills$ = <String, Json>{};
@@ -73,14 +81,14 @@ class FakeHubApi extends HubApi {
   Future<Json> state() async {
     final live = orders.values.where((o) => o['status'] == 'open' || o['status'] == 'billed').toList();
     return {
-      'floors': [{'id': 'f1', 'name': 'Ground'}],
+      'floors': [{'id': 'f1', 'name': 'Ground', 'width': 900, 'height': 500}],
       'tables': [
         for (final t in tables)
           () {
             final o = live.where((o) => o['table_id'] == t['id']).firstOrNull;
             return {
               ...t,
-              'status': o == null ? 'free' : (o['status'] == 'billed' ? 'bill_printed' : 'occupied'),
+              'status': o != null ? (o['status'] == 'billed' ? 'bill_printed' : 'occupied') : (t['manual_status'] == 'available' ? 'free' : t['manual_status']),
               'orderId': o?['id'],
               'totalPaise': o == null ? null : (_orderView(o['id'] as String)['totals'] as Json)['totalPaise'],
               'openedAt': o?['opened_at'],
@@ -125,9 +133,11 @@ class FakeHubApi extends HubApi {
   Future<Json> addLines(String orderId, List<Json> lines) async {
     for (final l in lines) {
       final it = items.firstWhere((i) => i['id'] == l['menuItemId']);
+      // same rules as the hub: the chosen size's price and name, else the item's
+      final v = ((it['variants'] as List?) ?? const []).cast<Json>().where((x) => x['id'] == l['variantId']).firstOrNull;
       (orders[orderId]!['lines'] as List).add({
-        'id': _id('l'), 'menu_item_id': it['id'], 'name_snapshot': it['name'], 'price_snapshot_paise': it['price_paise'],
-        'tax_rate_snapshot_bp': it['rate_bp'], 'qty': l['qty'], 'status': 'pending', 'notes': null,
+        'id': _id('l'), 'menu_item_id': it['id'], 'variant_id': v?['id'], 'name_snapshot': v == null ? it['name'] : '${it['name']} · ${v['name']}',
+        'price_snapshot_paise': v?['price_paise'] ?? it['price_paise'], 'tax_rate_snapshot_bp': v?['rate_bp'] ?? it['rate_bp'], 'qty': l['qty'], 'status': 'pending', 'notes': null,
       });
     }
     return _orderView(orderId);

@@ -25,18 +25,35 @@ export interface AuditMeta {
   ip?: string;
   sessionId?: string;
   deviceId?: string;
+  requestId?: string;
 }
 
 @Injectable()
 export class AuditService {
   constructor(private readonly db: DbService) {}
 
-  async record(d: AuditDetails & { action: string }, actor: Pick<Actor, 'type' | 'id'> | null, meta: AuditMeta = {}, tx?: Tx) {
+  /** Who the actor is right now (name, role, restaurant), stored with the event so history never changes. */
+  private async who(actor: Pick<Actor, 'type' | 'id'> & { roles?: string[] }, tx?: Tx) {
+    const run = <T>(f: (t: Tx) => Promise<T>) => (tx ? f(tx) : this.db.platform(f));
+    if (actor.type === 'admin') {
+      const a = await run((t) => t.platformAdmin.findUnique({ where: { id: actor.id }, select: { name: true } }));
+      return { name: a?.name ?? null, role: actor.roles?.join(',') ?? 'platform admin', tenantId: null };
+    }
+    const u = await run((t) => t.user.findUnique({ where: { id: actor.id }, select: { name: true, tenantId: true, roles: { select: { role: true, customRole: { select: { name: true } } } } } }));
+    const roles = u?.roles.map((r) => (r.role === 'custom' ? `custom:${r.customRole?.name ?? ''}` : r.role)) ?? actor.roles ?? [];
+    return { name: u?.name ?? null, role: roles.join(',') || null, tenantId: u?.tenantId ?? null };
+  }
+
+  async record(d: AuditDetails & { action: string }, actor: (Pick<Actor, 'type' | 'id'> & { roles?: string[] }) | null, meta: AuditMeta = {}, tx?: Tx) {
+    const who = actor && (actor.type === 'user' || actor.type === 'admin') ? await this.who(actor, tx).catch(() => null) : null;
     const data: Prisma.AuditEventUncheckedCreateInput = {
-      tenantId: d.tenantId ?? null,
+      tenantId: d.tenantId ?? who?.tenantId ?? null,
       branchId: d.branchId ?? null,
       actorId: actor?.id ?? null,
       actorType: actor?.type ?? 'system',
+      actorRole: who?.role ?? null,
+      actorName: who?.name ?? null,
+      requestId: meta.requestId ?? null,
       action: d.action,
       objectType: d.objectType ?? null,
       objectId: d.objectId ?? null,

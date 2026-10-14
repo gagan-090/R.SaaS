@@ -5,6 +5,7 @@ import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 import '../../api/api_client.dart';
 import '../../state/providers.dart';
 import '../../widgets/common.dart';
+import 'floor_editor.dart';
 
 /// T2 Floors & tables: floors as tabs, tables as tiles exactly like the POS table map draws them.
 class TablesScreen extends ConsumerStatefulWidget {
@@ -15,6 +16,8 @@ class TablesScreen extends ConsumerStatefulWidget {
 
 class _TablesScreenState extends ConsumerState<TablesScreen> {
   List<Json>? _floors;
+  List<String> _features = const [];
+  bool _plan = true; // floor plan view (else the simple list)
   String? _branchId;
   String? _floor;
   Object? _error;
@@ -38,6 +41,7 @@ class _TablesScreenState extends ConsumerState<TablesScreen> {
       setState(() {
         _floors = (r[0] as List).cast<Json>();
         _branchId = (((r[1] as Json)['branches'] as List).cast<Json>().firstOrNull)?['id'] as String?;
+        _features = (((r[1] as Json)['license'] as Json)['features'] as List).cast<String>();
         if (_floor == null || !_floors!.any((f) => f['id'] == _floor)) _floor = _floors!.firstOrNull?['id'] as String?;
         _error = null;
       });
@@ -161,8 +165,15 @@ class _TablesScreenState extends ConsumerState<TablesScreen> {
                   child: Padding(
                     padding: const EdgeInsets.all(HPSpace.lg),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                      Row(children: [
-                        Expanded(child: Text('${floor['name']}', style: HPType.titleCard(context.hp.text))),
+                      Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, crossAxisAlignment: WrapCrossAlignment.center, alignment: WrapAlignment.spaceBetween, children: [
+                        Text('${floor['name']}', style: HPType.titleCard(context.hp.text)),
+                        SegmentedButton<bool>(
+                          key: const Key('floor-view'),
+                          showSelectedIcon: false,
+                          segments: const [ButtonSegment(value: true, label: Text('Floor plan'), icon: Icon(Icons.map_outlined)), ButtonSegment(value: false, label: Text('List'), icon: Icon(Icons.grid_view_rounded))],
+                          selected: {_plan},
+                          onSelectionChanged: (v) => setState(() => _plan = v.first),
+                        ),
                         if (edit) ...[
                           IconButton(tooltip: 'Rename floor', icon: const Icon(Icons.edit_outlined), onPressed: () async {
                             final n = await _ask('Rename floor', 'Name', initial: '${floor['name']}');
@@ -176,6 +187,16 @@ class _TablesScreenState extends ConsumerState<TablesScreen> {
                         ],
                       ]),
                       const SizedBox(height: HPSpace.lg),
+                      if (_plan)
+                        FloorEditor(
+                          key: ValueKey('plan-${floor['id']}'),
+                          api: _api,
+                          floorId: floor['id'] as String,
+                          canEdit: edit,
+                          canSetStatus: ref.read(authProvider) is SignedIn && (ref.read(authProvider) as SignedIn).can('order.write'),
+                          editorInPlan: _features.contains('floor.editor'),
+                        )
+                      else
                       LayoutBuilder(builder: (c, box) {
                         final cols = (box.maxWidth / 130).floor().clamp(2, 10);
                         const gap = HPSpace.md;

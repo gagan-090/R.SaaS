@@ -5,7 +5,7 @@
   "auth": "bearer",
   "request": {
     "body": {
-      "name": "Support t-mv5zsfya-8d5338",
+      "name": "Support t-mv7rwovb-f3ee9a",
       "description": "Reads restaurants",
       "permissions": [
         "platform.restaurant.read"
@@ -14,13 +14,13 @@
   },
   "status": 201,
   "response": {
-    "id": "01a132d6-e6c7-7fa0-92c6-ccb48e290054",
-    "name": "Support t-mv5zsfya-8d5338",
+    "id": "01a13942-2cf7-7673-a0b4-b7b7af07b695",
+    "name": "Support t-mv7rwovb-f3ee9a",
     "description": "Reads restaurants",
     "permissions": [
       "platform.restaurant.read"
     ],
     "isSystem": false,
-    "createdAt": "2026-10-13T01:18:27.015Z"
+    "createdAt": "2026-10-14T07:13:20.631Z"
   }
 }

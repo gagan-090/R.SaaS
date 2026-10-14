@@ -7,7 +7,7 @@
   "status": 200,
   "response": [
     {
-      "id": "01a1312f-28d5-7a02-8354-baacc55f2420",
+      "id": "01a1344d-48b9-74a1-a209-ca4b012e3284",
       "name": "Onboarding Admin",
       "description": "Registers restaurants and manages licenses",
       "permissions": [
@@ -19,10 +19,10 @@
         "platform.payment.record"
       ],
       "isSystem": true,
-      "createdAt": "2026-10-12T17:35:36.661Z"
+      "createdAt": "2026-10-13T08:07:22.553Z"
     },
     {
-      "id": "01a1312f-28d6-73a3-bc48-433e2853727a",
+      "id": "01a1344d-48bb-7f63-9f43-9754c7ba2f5b",
       "name": "Platform Auditor",
       "description": "Read-only access to restaurants, admins and the platform audit log",
       "permissions": [
@@ -31,109 +31,208 @@
         "platform.audit.read"
       ],
       "isSystem": true,
-      "createdAt": "2026-10-12T17:35:36.662Z"
+      "createdAt": "2026-10-13T08:07:22.556Z"
     },
     {
-      "id": "01a13135-4252-7470-9958-dc59d99d5f74",
-      "name": "RoleAdmin-mv5jhsnm-e48e93",
+      "id": "01a13452-2b32-7fd1-b50a-a3ffbf5366f1",
+      "name": "RoleAdmin-mv6el6pe-800d24",
       "description": null,
       "permissions": [
         "platform.admin.roles",
         "platform.admin.read"
       ],
       "isSystem": false,
-      "createdAt": "2026-10-12T17:42:16.403Z"
+      "createdAt": "2026-10-13T08:12:42.675Z"
     },
     {
-      "id": "01a13136-e4a2-71e3-bbd1-458adb92a84f",
-      "name": "RoleAdmin-mv5jk3aa-7490dc",
+      "id": "01a13485-572e-7363-bb03-fe527e913ca9",
+      "name": "RoleAdmin-mv6gl2ct-2a47be",
       "description": null,
       "permissions": [
         "platform.admin.roles",
         "platform.admin.read"
       ],
       "isSystem": false,
-      "createdAt": "2026-10-12T17:44:03.491Z"
+      "createdAt": "2026-10-13T09:08:36.270Z"
     },
     {
-      "id": "01a13137-5135-76e0-968f-20ab1b032ddd",
-      "name": "RoleAdmin-mv5jkoqc-52f807",
+      "id": "01a13490-e766-7332-9f3b-993655de8e9b",
+      "name": "RoleAdmin-mv6h1b38-22f81f",
       "description": null,
       "permissions": [
         "platform.admin.roles",
         "platform.admin.read"
       ],
       "isSystem": false,
-      "createdAt": "2026-10-12T17:44:31.285Z"
+      "createdAt": "2026-10-13T09:21:14.086Z"
     },
     {
-      "id": "01a13139-cacd-7d33-9df3-1933e5f0cab9",
-      "name": "RoleAdmin-mv5jo5vx-919d7c",
+      "id": "01a1349f-7ae3-78e0-84c9-e4d5b26de185",
+      "name": "RoleAdmin-mv6hls6a-78861b",
       "description": null,
       "permissions": [
         "platform.admin.roles",
         "platform.admin.read"
       ],
       "isSystem": false,
-      "createdAt": "2026-10-12T17:47:13.486Z"
+      "createdAt": "2026-10-13T09:37:09.347Z"
     },
     {
-      "id": "01a1313a-a83b-7ff1-bde0-9e88a2d36391",
-      "name": "RoleAdmin-mv5jpdmi-060b61",
+      "id": "01a134bd-da8e-7a72-b99f-dcb73c27e13e",
+      "name": "RoleAdmin-mv6isg3x-872b32",
       "description": null,
       "permissions": [
         "platform.admin.roles",
         "platform.admin.read"
       ],
       "isSystem": false,
-      "createdAt": "2026-10-12T17:48:10.171Z"
+      "createdAt": "2026-10-13T10:10:19.918Z"
     },
     {
-      "id": "01a1313b-4a55-78c1-8cdb-357e8740256b",
-      "name": "RoleAdmin-mv5jq9n9-248801",
+      "id": "01a138eb-b329-7781-bca3-a1d7fc73732d",
+      "name": "RoleAdmin-mv7oj7zb-d48420",
       "description": null,
       "permissions": [
         "platform.admin.roles",
         "platform.admin.read"
       ],
       "isSystem": false,
-      "createdAt": "2026-10-12T17:48:51.669Z"
+      "createdAt": "2026-10-14T05:38:53.353Z"
     },
     {
-      "id": "01a1313e-378e-7bd1-860c-c4ecb303cffb",
-      "name": "RoleAdmin-mv5judn2-c13f75",
+      "id": "01a138ec-a9bf-7b92-90f8-ef5d9ce724c2",
+      "name": "RoleAdmin-mv7okkou-c1b420",
       "description": null,
       "permissions": [
         "platform.admin.roles",
         "platform.admin.read"
       ],
       "isSystem": false,
-      "createdAt": "2026-10-12T17:52:03.471Z"
+      "createdAt": "2026-10-14T05:39:56.479Z"
     },
     {
-      "id": "01a13143-1cdb-7601-b602-41bcf85219a4",
-      "name": "RoleAdmin-mv5k197f-7d7877",
+      "id": "01a138fb-a114-7591-8fff-ced06313dd29",
+      "name": "RoleAdmin-mv7p5lhv-fdf423",
       "description": null,
       "permissions": [
         "platform.admin.roles",
         "platform.admin.read"
       ],
       "isSystem": false,
-      "createdAt": "2026-10-12T17:57:24.316Z"
+      "createdAt": "2026-10-14T05:56:17.300Z"
     },
     {
-      "id": "01a1314e-9778-7930-bf71-2397f46bbe21",
-      "name": "RoleAdmin-mv5khdo8-a71d50",
+      "id": "01a13906-ea8a-76f2-8529-7b9a58582890",
+      "name": "RoleAdmin-mv7plg95-6ee374",
       "description": null,
       "permissions": [
         "platform.admin.roles",
         "platform.admin.read"
       ],
       "isSystem": false,
-      "createdAt": "2026-10-12T18:09:56.600Z"
+      "createdAt": "2026-10-14T06:08:37.002Z"
     },
     {
-      "id": "01a1312f-28d0-7e80-885a-09e7a863ddd1",
+      "id": "01a13920-54f4-76f0-aa23-053e4ca8b1b3",
+      "name": "RoleAdmin-mv7ql5h0-e74a21",
+      "description": null,
+      "permissions": [
+        "platform.admin.roles",
+        "platform.admin.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-14T06:36:22.645Z"
+    },
+    {
+      "id": "01a13920-dac5-7be0-bf15-7c8694ad86bf",
+      "name": "RoleAdmin-mv7qlvwl-4c0c95",
+      "description": null,
+      "permissions": [
+        "platform.admin.roles",
+        "platform.admin.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-14T06:36:56.902Z"
+    },
+    {
+      "id": "01a13921-15d4-7a20-8aab-7223774198fd",
+      "name": "RoleAdmin-mv7qm7kk-361b71",
+      "description": null,
+      "permissions": [
+        "platform.admin.roles",
+        "platform.admin.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-14T06:37:12.020Z"
+    },
+    {
+      "id": "01a13922-9f40-77e3-9b72-f4cba9781bd8",
+      "name": "RoleAdmin-mv7qoda7-1e57aa",
+      "description": null,
+      "permissions": [
+        "platform.admin.roles",
+        "platform.admin.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-14T06:38:52.736Z"
+    },
+    {
+      "id": "01a13923-e560-72e3-aa46-d5f344697a09",
+      "name": "RoleAdmin-mv7qq5pc-383104",
+      "description": null,
+      "permissions": [
+        "platform.admin.roles",
+        "platform.admin.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-14T06:40:16.225Z"
+    },
+    {
+      "id": "01a13931-7b0f-7702-8c2a-6e8f59f5e9ab",
+      "name": "RoleAdmin-mv7r98nj-947768",
+      "description": null,
+      "permissions": [
+        "platform.admin.roles",
+        "platform.admin.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-14T06:55:06.512Z"
+    },
+    {
+      "id": "01a13938-d5c8-74a0-a3f1-ef71d0f14a18",
+      "name": "RoleAdmin-mv7rjkjr-f9038c",
+      "description": null,
+      "permissions": [
+        "platform.admin.roles",
+        "platform.admin.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-14T07:03:08.488Z"
+    },
+    {
+      "id": "01a1393a-527a-7422-93ef-d7c99f2896c2",
+      "name": "RoleAdmin-mv7rlnqy-e4bf11",
+      "description": null,
+      "permissions": [
+        "platform.admin.roles",
+        "platform.admin.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-14T07:04:45.946Z"
+    },
+    {
+      "id": "01a1393b-3c0a-7422-b42c-75448bc0115a",
+      "name": "RoleAdmin-mv7rmxvu-0eea02",
+      "description": null,
+      "permissions": [
+        "platform.admin.roles",
+        "platform.admin.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-14T07:05:45.739Z"
+    },
+    {
+      "id": "01a1344d-48b3-7881-9ac1-5e3a807db3bc",
       "name": "Super Admin",
       "description": "All platform permissions",
       "permissions": [
@@ -152,117 +251,207 @@
         "platform.audit.read"
       ],
       "isSystem": true,
-      "createdAt": "2026-10-12T17:35:36.656Z"
+      "createdAt": "2026-10-13T08:07:22.547Z"
     },
     {
-      "id": "01a1313d-3506-7502-84af-496e9a22057b",
-      "name": "Support t-mv5jsykc-a9dbee",
+      "id": "01a13941-9ac1-78d1-be61-6a19dece35ac",
+      "name": "Support t-mv7rvvzj-85c04c",
       "description": "Reads restaurants",
       "permissions": [
         "platform.restaurant.read"
       ],
       "isSystem": false,
-      "createdAt": "2026-10-12T17:50:57.286Z"
+      "createdAt": "2026-10-14T07:12:43.201Z"
     },
     {
-      "id": "01a1313d-8c19-7562-b7da-5de7168bcb39",
-      "name": "Support t-mv5jtfr8-e69066",
+      "id": "01a13941-d658-7472-a225-435c7ee6e731",
+      "name": "Support t-mv7rw7rc-b86ea7",
       "description": "Reads restaurants",
       "permissions": [
         "platform.restaurant.read"
       ],
       "isSystem": false,
-      "createdAt": "2026-10-12T17:51:19.578Z"
+      "createdAt": "2026-10-14T07:12:58.456Z"
     },
     {
-      "id": "01a13135-4361-7690-8983-9ddc48a904e3",
-      "name": "r-mv5jhsuw-1c0bd3",
+      "id": "01a13452-2c22-7ae2-9e02-2a0e4110644e",
+      "name": "r-mv6el6vp-4aeef7",
       "description": null,
       "permissions": [
         "platform.restaurant.read"
       ],
       "isSystem": false,
-      "createdAt": "2026-10-12T17:42:16.674Z"
+      "createdAt": "2026-10-13T08:12:42.914Z"
     },
     {
-      "id": "01a13136-e5f8-7593-aeb0-46dcc7d72d2e",
-      "name": "r-mv5jk3jd-ac203a",
+      "id": "01a13485-5838-7570-8cab-a6b5af8dd271",
+      "name": "r-mv6gl2ju-8af975",
       "description": null,
       "permissions": [
         "platform.restaurant.read"
       ],
       "isSystem": false,
-      "createdAt": "2026-10-12T17:44:03.833Z"
+      "createdAt": "2026-10-13T09:08:36.537Z"
     },
     {
-      "id": "01a13137-527a-7fe3-8a36-70f59607021f",
-      "name": "r-mv5jkoyz-4a39fe",
+      "id": "01a13490-e926-7d42-921d-275741d89afd",
+      "name": "r-mv6h1bf7-c2b87a",
       "description": null,
       "permissions": [
         "platform.restaurant.read"
       ],
       "isSystem": false,
-      "createdAt": "2026-10-12T17:44:31.610Z"
+      "createdAt": "2026-10-13T09:21:14.535Z"
     },
     {
-      "id": "01a13139-cbe4-7d41-802e-e42077a4defd",
-      "name": "r-mv5jo639-9ac936",
+      "id": "01a1349f-7c6c-79f1-a1c1-1a93ee684c36",
+      "name": "r-mv6hlsgt-132aac",
       "description": null,
       "permissions": [
         "platform.restaurant.read"
       ],
       "isSystem": false,
-      "createdAt": "2026-10-12T17:47:13.765Z"
+      "createdAt": "2026-10-13T09:37:09.741Z"
     },
     {
-      "id": "01a1313a-a9d3-7bb1-aec6-a8871059ac4a",
-      "name": "r-mv5jpduh-fe3c83",
+      "id": "01a134bd-dbee-7491-b822-4cb56b389830",
+      "name": "r-mv6isgdc-57e359",
       "description": null,
       "permissions": [
         "platform.restaurant.read"
       ],
       "isSystem": false,
-      "createdAt": "2026-10-12T17:48:10.579Z"
+      "createdAt": "2026-10-13T10:10:20.270Z"
     },
     {
-      "id": "01a1313b-4b72-7d11-84b8-a893d84f24d5",
-      "name": "r-mv5jq9uv-02374b",
+      "id": "01a138eb-b4cd-7ee2-90a8-ade7729fab1a",
+      "name": "r-mv7oj8af-605b6b",
       "description": null,
       "permissions": [
         "platform.restaurant.read"
       ],
       "isSystem": false,
-      "createdAt": "2026-10-12T17:48:51.955Z"
+      "createdAt": "2026-10-14T05:38:53.774Z"
     },
     {
-      "id": "01a1313e-3869-7b33-865b-f57540561f61",
-      "name": "r-mv5judsy-078616",
+      "id": "01a138ec-ab8a-7383-9f79-0f72f077a1ec",
+      "name": "r-mv7okkzl-92ff1f",
       "description": null,
       "permissions": [
         "platform.restaurant.read"
       ],
       "isSystem": false,
-      "createdAt": "2026-10-12T17:52:03.689Z"
+      "createdAt": "2026-10-14T05:39:56.939Z"
     },
     {
-      "id": "01a13143-1da4-7991-8856-56cab60bb721",
-      "name": "r-mv5k19cv-49035f",
+      "id": "01a138fb-a243-7203-bbd2-2fa7ade33cbc",
+      "name": "r-mv7p5lq0-41712e",
       "description": null,
       "permissions": [
         "platform.restaurant.read"
       ],
       "isSystem": false,
-      "createdAt": "2026-10-12T17:57:24.517Z"
+      "createdAt": "2026-10-14T05:56:17.604Z"
     },
     {
-      "id": "01a1314e-9816-7263-ab9e-00d10a3c1cc5",
-      "name": "r-mv5khdsg-50e8c2",
+      "id": "01a13906-ebd0-7333-8ba3-328ac8d00233",
+      "name": "r-mv7plghv-3bf9eb",
       "description": null,
       "permissions": [
         "platform.restaurant.read"
       ],
       "isSystem": false,
-      "createdAt": "2026-10-12T18:09:56.758Z"
+      "createdAt": "2026-10-14T06:08:37.328Z"
+    },
+    {
+      "id": "01a13920-5657-7623-8620-4b5b991ac3d0",
+      "name": "r-mv7ql5qg-74c587",
+      "description": null,
+      "permissions": [
+        "platform.restaurant.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-14T06:36:23.000Z"
+    },
+    {
+      "id": "01a13920-db97-7ec2-a0ab-cffa1670a446",
+      "name": "r-mv7qlw26-881ab2",
+      "description": null,
+      "permissions": [
+        "platform.restaurant.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-14T06:36:57.111Z"
+    },
+    {
+      "id": "01a13921-1690-7c30-90a9-f6f3c366cba4",
+      "name": "r-mv7qm7pk-2871e3",
+      "description": null,
+      "permissions": [
+        "platform.restaurant.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-14T06:37:12.208Z"
+    },
+    {
+      "id": "01a13922-a0a4-7352-b917-57d6668c70a1",
+      "name": "r-mv7qodjm-a3065a",
+      "description": null,
+      "permissions": [
+        "platform.restaurant.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-14T06:38:53.092Z"
+    },
+    {
+      "id": "01a13923-e6a7-7693-8407-0f31c6044aa5",
+      "name": "r-mv7qq5xx-41a45f",
+      "description": null,
+      "permissions": [
+        "platform.restaurant.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-14T06:40:16.552Z"
+    },
+    {
+      "id": "01a13931-7c45-7851-8ab5-09992c98e764",
+      "name": "r-mv7r98vw-10cd74",
+      "description": null,
+      "permissions": [
+        "platform.restaurant.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-14T06:55:06.821Z"
+    },
+    {
+      "id": "01a13938-d729-7780-8d67-990aace987ee",
+      "name": "r-mv7rjksm-265850",
+      "description": null,
+      "permissions": [
+        "platform.restaurant.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-14T07:03:08.841Z"
+    },
+    {
+      "id": "01a1393a-537e-71d2-a8cd-1666814fc394",
+      "name": "r-mv7rlnxv-7f6769",
+      "description": null,
+      "permissions": [
+        "platform.restaurant.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-14T07:04:46.206Z"
+    },
+    {
+      "id": "01a1393b-3d59-7570-af16-30ea0562580f",
+      "name": "r-mv7rmy4h-39e507",
+      "description": null,
+      "permissions": [
+        "platform.restaurant.read"
+      ],
+      "isSystem": false,
+      "createdAt": "2026-10-14T07:05:46.074Z"
     }
   ]
 }

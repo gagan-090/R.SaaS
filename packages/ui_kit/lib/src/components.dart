@@ -497,7 +497,7 @@ class CategoryChip extends StatelessWidget {
 
 // ------------------------------------------------------------------ restaurant floor
 
-enum TableState { free, ordering, served, billPrinted, reserved }
+enum TableState { free, ordering, served, billPrinted, reserved, unavailable }
 
 /// Table on the map: dashed outline when free; filled by state when occupied (always with words, not colour alone).
 /// With [expand] it fills its grid cell, so a floor of tables lines up evenly on any screen.
@@ -520,6 +520,7 @@ class TableTile extends StatelessWidget {
         TableState.served => (p.success, p.isDark ? HPColors.onCardamom : HPColors.paperCard, 'Served'),
         TableState.billPrinted => (p.danger, HPColors.onChili, 'Bill printed'),
         TableState.reserved => (p.pending, p.isDark ? HPColors.onJamun : HPColors.paperCard, 'Reserved'),
+        TableState.unavailable => (p.raised, p.faint, 'Out of use'),
       };
 
   @override

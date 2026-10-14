@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http/http.dart' as http;
 import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -92,6 +93,30 @@ class SetupNotifier extends AsyncNotifier<DeviceSetup?> {
     state = AsyncData(s);
   }
 
+  /// Main device only: point the hub's cloud sync at a new server address (e.g. the server's Wi-Fi IP changed).
+  /// The address is checked first; staff stay signed in and the LAN pairing is unchanged.
+  Future<void> changeServer(String url) async {
+    final s = state.valueOrNull;
+    if (s == null || !s.isHub) throw StateError('Only the main device (hub) syncs with the server');
+    final base = url.trim().replaceAll(RegExp(r'/+$'), '');
+    final uri = Uri.tryParse(base);
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) throw const FormatException('Enter an address like http://10.0.0.5:3000/api/v1');
+    try {
+      await http.get(Uri.parse('$base/me')).timeout(const Duration(seconds: 8)); // any answer (401) means the API is there
+    } catch (_) {
+      throw FormatException('Cannot reach $base. Check the address and that this device is on the same Wi-Fi.');
+    }
+    final c = s.hubConfig!;
+    final next = DeviceSetup(
+      hubBaseUrl: s.hubBaseUrl, deviceToken: s.deviceToken, fingerprint: s.fingerprint,
+      hubConfig: HubHostConfig(cloudUrl: base, cloudDeviceToken: c.cloudDeviceToken, branchId: c.branchId, branchCode: c.branchCode, licensePublicKey: c.licensePublicKey),
+    );
+    final host = ref.read(hubHostProvider);
+    await host.stop();
+    await host.start(next.hubConfig!);
+    await save(next);
+  }
+
   Future<void> reset() async {
     await ref.read(hubHostProvider).stop();
     await ref.read(deviceStoreProvider).write(null);
@@ -102,7 +127,9 @@ class SetupNotifier extends AsyncNotifier<DeviceSetup?> {
 final setupProvider = AsyncNotifierProvider<SetupNotifier, DeviceSetup?>(SetupNotifier.new);
 
 final hubApiProvider = Provider<HubApi?>((ref) {
-  final s = ref.watch(setupProvider).valueOrNull;
+  // only the LAN connection matters here: changing the cloud server address must not sign staff out
+  ref.watch(setupProvider.select((a) => (a.valueOrNull?.hubBaseUrl, a.valueOrNull?.deviceToken, a.valueOrNull?.fingerprint)));
+  final s = ref.read(setupProvider).valueOrNull;
   return s == null ? null : ref.watch(hubApiFactoryProvider)(s);
 });
 

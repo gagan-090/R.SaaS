@@ -95,7 +95,7 @@ export class AuthService {
     return { status: 'ok', ...pair };
   }
 
-  private async registerFailure(p: Principal) {
+  async registerFailure(p: Principal) {
     await this.db.platform(async (tx) => {
       const model = (p.typ === 'admin' ? tx.platformAdmin : tx.user) as unknown as {
         update(args: object): Promise<{ failedLoginCount: number }>;
@@ -110,7 +110,7 @@ export class AuthService {
     });
   }
 
-  private async clearFailures(p: Principal) {
+  async clearFailures(p: Principal) {
     await this.db.platform(async (tx) => {
       const data = { failedLoginCount: 0, lockedUntil: null };
       if (p.typ === 'admin') await tx.platformAdmin.update({ where: { id: p.id }, data: { ...data, lastLoginAt: new Date() } });

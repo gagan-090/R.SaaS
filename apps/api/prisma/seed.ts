@@ -30,6 +30,25 @@ const ROLES = [
   },
 ];
 
+/** Sample sizes and portions (amounts in paise). */
+type Size = { name: string; price: number; qty: number; unit: string; ratio: number; portion?: string; defaultIndex?: number };
+const VARIANTS: Record<string, Size[]> = {
+  Cola: [
+    { name: '250 ml', price: 3000, qty: 250, unit: 'ml', ratio: 0.25 },
+    { name: '500 ml', price: 5000, qty: 500, unit: 'ml', ratio: 0.5 },
+    { name: '1 litre', price: 9000, qty: 1, unit: 'l', ratio: 1 },
+  ],
+  Biryani: [
+    { name: 'Quarter plate', price: 12000, qty: 1, unit: 'plate', ratio: 0.3, portion: 'quarter' },
+    { name: 'Half plate', price: 22000, qty: 1, unit: 'plate', ratio: 0.55, portion: 'half' },
+    { name: 'Full plate', price: 40000, qty: 1, unit: 'plate', ratio: 1, portion: 'full' },
+  ],
+  'Mineral Water': [
+    { name: '500 ml bottle', price: 2000, qty: 500, unit: 'ml', ratio: 0.5 },
+    { name: '1 litre bottle', price: 3500, qty: 1, unit: 'l', ratio: 1 },
+  ],
+};
+
 const DISHES = [
   { name: 'Butter Chicken', cat: 'Mains', price: 34000, tax: 500, veg: false, c: ['#D9622B', '#F2C27B', '#4F8A3B'] },
   { name: 'Paneer Tikka', cat: 'Starters', price: 26000, tax: 500, veg: true, c: ['#8A3B1F', '#F5E3C3', '#6FA14A'] },
@@ -39,6 +58,8 @@ const DISHES = [
   { name: 'Mango Lassi', cat: 'Drinks', price: 12000, tax: 1200, veg: true, c: ['#F2B33D', '#F7D27A', '#E07A2E'] },
   { name: 'Masala Chaas', cat: 'Drinks', price: 8000, tax: 1200, veg: true, c: ['#EFE8D6', '#CFE3C2', '#6E9B4E'] },
   { name: 'Gulab Jamun', cat: 'Desserts', price: 9000, tax: 1800, veg: true, c: ['#6E2A12', '#9C4520', '#E9C46A'] },
+  { name: 'Cola', cat: 'Soft Drinks', price: 3000, tax: 1800, veg: true, c: ['#3B1F14', '#6E3B23', '#C9A27A'] },
+  { name: 'Mineral Water', cat: 'Soft Drinks', price: 2000, tax: 1800, veg: true, c: ['#CFE6F2', '#E8F4FA', '#7FB3D5'] },
 ];
 
 async function main() {
@@ -107,14 +128,28 @@ async function main() {
     }
     const cats: Record<string, string> = {};
     let order = 0;
+    let n = 0;
     for (const d of DISHES) {
       cats[d.cat] ??= (await prisma.menuCategory.create({ data: { tenantId: tenant.id, name: d.cat, sortOrder: order++ } })).id;
-      await prisma.menuItem.create({
+      const code = `ITEM-${String(++n).padStart(4, '0')}`;
+      const item = await prisma.menuItem.create({
         data: {
-          tenantId: tenant.id, categoryId: cats[d.cat], name: d.name, pricePaise: d.price, taxRuleId: taxes[d.tax], isVeg: d.veg,
+          tenantId: tenant.id, categoryId: cats[d.cat], code, name: d.name, pricePaise: d.price, taxRuleId: taxes[d.tax], isVeg: d.veg,
           plateColors: { base: d.c[0], sauce: d.c[1], garnish: d.c[2] },
         },
       });
+      // sizes / portions: each variant has its own price (a half is not assumed to cost half)
+      const sizes = VARIANTS[d.name] ?? [{ name: 'Regular', price: d.price, qty: 1, unit: 'plate', ratio: 1 }];
+      for (const [i, v] of sizes.entries()) {
+        await prisma.menuVariant.create({
+          data: {
+            tenantId: tenant.id, itemId: item.id, code: `${code}-${v.name.toUpperCase().replace(/[^A-Z0-9]+/g, '')}`, name: v.name,
+            portionLabel: v.portion ?? null, servingQuantity: v.qty, servingUnit: v.unit, portionRatio: v.ratio, pricePaise: v.price,
+            isDefault: i === (v.defaultIndex ?? 0), sortOrder: i,
+          },
+        });
+      }
+      await prisma.menuItem.update({ where: { id: item.id }, data: { pricePaise: sizes[0].price } });
     }
     const plan = await prisma.subscriptionPlan.findUniqueOrThrow({ where: { code: DEMO_PLAN } });
     const id = uuidv7();

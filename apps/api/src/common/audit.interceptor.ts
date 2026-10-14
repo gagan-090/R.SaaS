@@ -26,7 +26,7 @@ export class AuditInterceptor implements NestInterceptor {
         await this.audit.record(
           { ...d, action: d.action ?? action, tenantId: d.tenantId ?? req.actor?.tenantId ?? null },
           req.actor ?? null,
-          { ip: req.ip, sessionId: req.actor?.sessionId, deviceId: req.headers['x-device-id'] as string | undefined },
+          { ip: req.ip, sessionId: req.actor?.sessionId, deviceId: req.headers['x-device-id'] as string | undefined, requestId: req.requestId },
         );
         return result;
       }),

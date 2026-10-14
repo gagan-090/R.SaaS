@@ -7,6 +7,7 @@ import '../../state/providers.dart';
 import '../../util/image_prep.dart';
 import '../../widgets/common.dart';
 import 'dashboard_screen.dart' show rupees;
+import 'import_dialog.dart';
 
 Color hexColor(Object? v, Color fallback) {
   final s = '${v ?? ''}'.replaceAll('#', '');
@@ -33,6 +34,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   String _q = '';
 
   ApiClient get _api => ref.read(apiProvider);
+  bool get _isOwner => (ref.read(authProvider) as SignedIn).roles.contains('owner');
   bool get _canEdit {
     final a = ref.read(authProvider);
     return a is SignedIn && a.can('menu.publish');
@@ -42,6 +44,11 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  bool _can(String perm) {
+    final a = ref.read(authProvider);
+    return a is SignedIn && a.can(perm);
   }
 
   Future<void> _load() async {
@@ -92,6 +99,17 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     );
   }
 
+  /// Moves a category one place up or down; the POS shows categories in this order.
+  Future<void> _moveCategory(Json c, int by) async {
+    final ids = _cats!.map((x) => x['id'] as String).toList();
+    final i = ids.indexOf(c['id'] as String), j = i + by;
+    if (j < 0 || j >= ids.length) return;
+    ids
+      ..removeAt(i)
+      ..insert(j, c['id'] as String);
+    await _run(() => _api.orderCategories(ids), 'Order saved');
+  }
+
   Future<void> _deleteCategory(Json c) async {
     if (!await confirm(context, title: 'Delete ${c['name']}?', message: 'Only empty categories can be deleted. Terminals remove it on their next sync.')) return;
     await _run(() => _api.deleteCategory(c['id'] as String), 'Category deleted');
@@ -119,7 +137,10 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     if (!mounted) return;
     final saved = await showDialog<bool>(
       context: context,
-      builder: (_) => _ItemEditor(api: _api, item: item, categories: _cats!, taxes: _taxes!, defaultCategory: _cat ?? _cats!.first['id'] as String, paletteIndex: _items!.length),
+      builder: (_) => _ItemEditor(
+        api: _api, item: item, categories: _cats!, taxes: _taxes!, defaultCategory: _cat ?? _cats!.first['id'] as String, paletteIndex: _items!.length,
+        canMapRecipes: ref.read(authProvider) is SignedIn && (ref.read(authProvider) as SignedIn).can('inventory.manage'),
+      ),
     );
     if (saved == true) {
       await _load();
@@ -151,6 +172,9 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       onAdd: _editCategory,
       onRename: _editCategory,
       onDelete: _deleteCategory,
+      onMove: _moveCategory,
+      onToggle: (c) => _run(() => _api.updateCategory(c['id'] as String, {'active': c['active'] == false}),
+          c['active'] == false ? '${c['name']} is back on the POS' : '${c['name']} hidden from the POS'),
     );
 
     final grid = visible.isEmpty
@@ -191,6 +215,15 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       subtitle: '${_items!.length} dishes · ${_cats!.length} categories · changes reach your terminals within a minute',
       actions: [
         SizedBox(width: narrow ? double.infinity : 260, child: HPSearchField(hint: 'Search dishes', onChanged: (v) => setState(() => _q = v))),
+        if (edit && (_can('import.run') || _isOwner))
+          SecondaryButton(key: const Key('import-menu'), label: 'Import Excel', icon: _can('import.run') ? Icons.upload_file_rounded : Icons.lock_outline_rounded, onPressed: () async {
+            if (!_can('import.run')) {
+              showError(context, 'Excel import is not in your plan. Ask the Super Admin to enable "Excel import (menu & inventory)" in Plans, then sign in again.');
+              return;
+            }
+            final done = await showDialog<bool>(context: context, builder: (_) => ImportDialog(api: _api, kind: 'menu'));
+            if (done == true) await _load();
+          }),
         if (edit) PrimaryButton(key: const Key('add-dish'), label: 'Add dish', icon: Icons.add_rounded, height: 48, onPressed: () => _editItem()),
       ],
       child: narrow
@@ -215,13 +248,16 @@ class _CategoryList extends StatelessWidget {
     required this.onAdd,
     required this.onRename,
     required this.onDelete,
+    required this.onMove,
+    required this.onToggle,
   });
   final List<Json> cats, items;
   final String? selected;
   final bool canEdit, horizontal;
   final ValueChanged<String?> onSelect;
   final VoidCallback onAdd;
-  final ValueChanged<Json> onRename, onDelete;
+  final ValueChanged<Json> onRename, onDelete, onToggle;
+  final void Function(Json c, int by) onMove;
 
   int _count(String? id) => items.where((i) => id == null || i['categoryId'] == id).length;
 
@@ -247,6 +283,8 @@ class _CategoryList extends StatelessWidget {
     }
     Widget row(String? id, String name) {
       final sel = selected == id;
+      final cat = id == null ? null : cats.firstWhere((c) => c['id'] == id);
+      final hidden = cat?['active'] == false;
       return Padding(
         padding: const EdgeInsets.only(bottom: 2),
         child: Material(
@@ -256,15 +294,27 @@ class _CategoryList extends StatelessWidget {
             key: Key('category-$name'),
             dense: true,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            title: Text(name, style: HPType.label(sel ? p.text : p.muted)),
+            title: Text(hidden ? '$name · hidden' : name, style: HPType.label(hidden ? p.faint : (sel ? p.text : p.muted))),
             trailing: Row(mainAxisSize: MainAxisSize.min, children: [
               Text('${_count(id)}', style: HPType.body(p.faint)),
               if (canEdit && id != null)
                 PopupMenuButton<String>(
                   tooltip: 'Category actions',
                   icon: Icon(Icons.more_vert_rounded, size: 18, color: p.muted),
-                  onSelected: (v) => v == 'rename' ? onRename(cats.firstWhere((c) => c['id'] == id)) : onDelete(cats.firstWhere((c) => c['id'] == id)),
-                  itemBuilder: (_) => const [PopupMenuItem(value: 'rename', child: Text('Rename')), PopupMenuItem(value: 'delete', child: Text('Delete'))],
+                  onSelected: (v) => switch (v) {
+                    'rename' => onRename(cat!),
+                    'up' => onMove(cat!, -1),
+                    'down' => onMove(cat!, 1),
+                    'toggle' => onToggle(cat!),
+                    _ => onDelete(cat!),
+                  },
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(value: 'rename', child: Text('Rename')),
+                    const PopupMenuItem(value: 'up', child: Text('Move up')),
+                    const PopupMenuItem(value: 'down', child: Text('Move down')),
+                    PopupMenuItem(value: 'toggle', child: Text(hidden ? 'Show on the POS' : 'Hide from the POS')),
+                    const PopupMenuItem(value: 'delete', child: Text('Delete')),
+                  ],
                 ),
             ]),
             onTap: () => onSelect(id),
@@ -332,7 +382,7 @@ class _ItemTile extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(category, style: HPType.body(p.muted).copyWith(fontSize: 12), overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 4),
-                Text(rupees(item['pricePaise'] as int), style: HPType.label(p.text)),
+                Text(_tilePrice(item), style: HPType.label(p.text)),
               ]),
             ),
             Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -357,8 +407,9 @@ class _ItemTile extends StatelessWidget {
 
 /// Add / edit a dish, with photo upload (cropped and compressed in the browser) or the illustrated plate.
 class _ItemEditor extends StatefulWidget {
-  const _ItemEditor({required this.api, required this.item, required this.categories, required this.taxes, required this.defaultCategory, required this.paletteIndex});
+  const _ItemEditor({required this.api, required this.item, required this.categories, required this.taxes, required this.defaultCategory, required this.paletteIndex, this.canMapRecipes = false});
   final ApiClient api;
+  final bool canMapRecipes;
   final Json? item;
   final List<Json> categories, taxes;
   final String defaultCategory;
@@ -369,7 +420,10 @@ class _ItemEditor extends StatefulWidget {
 
 class _ItemEditorState extends State<_ItemEditor> {
   late final _name = TextEditingController(text: widget.item?['name'] as String? ?? '');
-  late final _price = TextEditingController(text: widget.item == null ? '' : _plain(widget.item!['pricePaise'] as int));
+  late final List<_SizeDraft> _sizes = [
+    for (final v in ((widget.item?['variants'] as List?) ?? const []).cast<Json>()) _SizeDraft.from(v),
+    if (((widget.item?['variants'] as List?) ?? const []).isEmpty) _SizeDraft.blank(isDefault: true),
+  ];
   late final _desc = TextEditingController(text: widget.item?['description'] as String? ?? '');
   late String _category = widget.item?['categoryId'] as String? ?? widget.defaultCategory;
   late String _tax = widget.item?['taxRuleId'] as String? ?? (widget.taxes.firstWhere((t) => t['rateBp'] == 500, orElse: () => widget.taxes.first)['id'] as String);
@@ -380,12 +434,6 @@ class _ItemEditorState extends State<_ItemEditor> {
   bool _removePhoto = false, _busy = false;
   String? _error;
 
-  static String _plain(int paise) => paise % 100 == 0 ? '${paise ~/ 100}' : (paise / 100).toStringAsFixed(2);
-
-  int? get _paise {
-    final v = double.tryParse(_price.text.trim().replaceAll(',', ''));
-    return v == null || v < 0 ? null : (v * 100).round();
-  }
 
   Future<void> _pick() async {
     try {
@@ -403,21 +451,29 @@ class _ItemEditorState extends State<_ItemEditor> {
   }
 
   Future<void> _save() async {
-    final paise = _paise;
     if (_name.text.trim().isEmpty) return setState(() => _error = 'Give the dish a name');
-    if (paise == null) return setState(() => _error = 'Enter a price in rupees, e.g. 249');
+    final problem = _sizes.map((s) => s.problem).whereType<String>().firstOrNull;
+    if (problem != null) return setState(() => _error = problem);
+    final codes = _sizes.map((s) => s.code.text.trim().toUpperCase()).where((c) => c.isNotEmpty).toList();
+    if (codes.toSet().length != codes.length) return setState(() => _error = 'Two sizes have the same code');
+    if (!_sizes.any((s) => s.isDefault)) _sizes.first.isDefault = true;
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
+      final variants = [for (final s in _sizes) s.toJson()];
       final body = {
-        'name': _name.text.trim(), 'categoryId': _category, 'pricePaise': paise, 'taxRuleId': _tax, 'isVeg': _veg, 'available': _available,
+        'name': _name.text.trim(), 'categoryId': _category, 'taxRuleId': _tax, 'isVeg': _veg, 'available': _available,
         if (_desc.text.trim().isNotEmpty) 'description': _desc.text.trim(),
       };
-      final saved = widget.item == null
-          ? await widget.api.createItem({...body, 'plateColors': _plate()})
-          : await widget.api.updateItem(widget.item!['id'] as String, body);
+      final Json saved;
+      if (widget.item == null) {
+        saved = await widget.api.createItem({...body, 'plateColors': _plate(), 'variants': variants});
+      } else {
+        await widget.api.updateItem(widget.item!['id'] as String, body);
+        saved = await widget.api.setVariants(widget.item!['id'] as String, variants);
+      }
       final id = saved['id'] as String;
       if (_newPhoto != null) {
         await widget.api.setItemImage(id, _newPhoto!.contentType, _newPhoto!.base64);
@@ -478,15 +534,6 @@ class _ItemEditorState extends State<_ItemEditor> {
           crossAxisAlignment: MediaQuery.sizeOf(context).width < 600 ? CrossAxisAlignment.stretch : CrossAxisAlignment.start,
           children: [
           _flexible(
-            TextField(
-              key: const Key('dish-price'),
-              controller: _price,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Price', prefixText: '₹ ', helperText: 'Before GST'),
-            ),
-          ),
-          const SizedBox(width: HPSpace.md, height: HPSpace.md),
-          _flexible(
             DropdownButtonFormField<String>(
               initialValue: _tax,
               isExpanded: true,
@@ -504,6 +551,35 @@ class _ItemEditorState extends State<_ItemEditor> {
           items: [for (final c in widget.categories) DropdownMenuItem(value: c['id'] as String, child: Text('${c['name']}'))],
           onChanged: (v) => setState(() => _category = v!),
         ),
+        const SizedBox(height: HPSpace.lg),
+        Row(children: [
+          Expanded(child: Text('SIZES & PORTIONS', style: HPType.overline(p.muted))),
+          TextButton.icon(key: const Key('add-size'), onPressed: _sizes.length >= 20 ? null : () => setState(() => _sizes.add(_SizeDraft.blank())), icon: const Icon(Icons.add_rounded, size: 18), label: const Text('Add size')),
+        ]),
+        Text('Each size has its own price (before GST). A half plate does not have to cost half.', style: HPType.body(p.muted).copyWith(fontSize: 12)),
+        const SizedBox(height: HPSpace.sm),
+        for (final (i, s) in _sizes.indexed)
+          _SizeRow(
+            key: ObjectKey(s),
+            index: i,
+            size: s,
+            canRemove: _sizes.length > 1,
+            onDefault: () => setState(() {
+              for (final x in _sizes) {
+                x.isDefault = identical(x, s);
+              }
+            }),
+            onRemove: () => setState(() {
+              _sizes.remove(s);
+              if (!_sizes.any((x) => x.isDefault)) _sizes.first.isDefault = true;
+            }),
+            onChanged: () => setState(() {}),
+            onRecipe: widget.canMapRecipes && s.id != null
+                ? () => showDialog<void>(context: context, builder: (_) => RecipeDialog(api: widget.api, variantId: s.id!, title: '${_name.text.trim()} · ${s.name.text.trim()}'))
+                : null,
+          ),
+        if (widget.canMapRecipes && _sizes.any((s) => s.id == null))
+          Text('Save the dish first, then map each size to its ingredients with "Recipe".', style: HPType.body(p.muted).copyWith(fontSize: 12)),
         const SizedBox(height: HPSpace.md),
         TextField(controller: _desc, maxLines: 2, decoration: const InputDecoration(labelText: 'Description (optional)')),
         const SizedBox(height: HPSpace.sm),
@@ -511,6 +587,273 @@ class _ItemEditorState extends State<_ItemEditor> {
         SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Available now'), subtitle: const Text('Turn off when it is sold out'), value: _available, onChanged: (v) => setState(() => _available = v)),
         if (_error != null) Padding(padding: const EdgeInsets.only(top: HPSpace.sm), child: Text(_error!, key: const Key('dish-error'), style: HPType.body(p.danger))),
       ]),
+    );
+  }
+}
+
+const servingUnits = ['ml', 'l', 'g', 'kg', 'piece', 'plate', 'bowl', 'glass', 'cup', 'portion', 'bottle', 'can', 'packet'];
+const portionLabels = ['quarter', 'half', 'full', 'custom'];
+
+/// One size / portion being edited. Prices are typed in rupees and sent as integer paise.
+class _SizeDraft {
+  _SizeDraft({this.id, String code = '', String name = '', String price = '', String qty = '', this.unit, this.portion, String ratio = '', this.available = true, this.isDefault = false})
+      : code = TextEditingController(text: code),
+        name = TextEditingController(text: name),
+        price = TextEditingController(text: price),
+        qty = TextEditingController(text: qty),
+        ratio = TextEditingController(text: ratio);
+  factory _SizeDraft.blank({bool isDefault = false}) => _SizeDraft(name: 'Regular', isDefault: isDefault);
+  factory _SizeDraft.from(Json v) {
+    String n(Object? x) => x == null ? '' : ((x as num) % 1 == 0 ? '${x.toInt()}' : '$x');
+    final paise = v['pricePaise'] as int;
+    return _SizeDraft(
+      id: v['id'] as String?, code: '${v['code'] ?? ''}', name: '${v['name']}', price: paise % 100 == 0 ? '${paise ~/ 100}' : (paise / 100).toStringAsFixed(2),
+      qty: n(v['servingQuantity']), unit: v['servingUnit'] as String?, portion: v['portionLabel'] as String?, ratio: n(v['portionRatio']),
+      available: v['available'] != false, isDefault: v['isDefault'] == true,
+    );
+  }
+  final String? id;
+  final TextEditingController code, name, price, qty, ratio;
+  String? unit, portion;
+  bool available, isDefault;
+
+  int? get paise {
+    final v = double.tryParse(price.text.trim().replaceAll(',', ''));
+    return v == null || v < 0 ? null : (v * 100).round();
+  }
+
+  String? get problem {
+    if (name.text.trim().isEmpty) return 'Every size needs a name, e.g. "500 ml" or "Half plate"';
+    if (paise == null) return 'Enter a price in rupees for ${name.text.trim()}, e.g. 249';
+    final q = qty.text.trim();
+    if (q.isNotEmpty && (double.tryParse(q) == null || double.parse(q) <= 0)) return 'Serving quantity for ${name.text.trim()} must be a number above 0';
+    if ((q.isEmpty) != (unit == null)) return 'Give ${name.text.trim()} both a serving quantity and a unit, or neither';
+    final r = ratio.text.trim();
+    if (r.isNotEmpty && (double.tryParse(r) == null || double.parse(r) <= 0)) return 'Portion ratio for ${name.text.trim()} must be above 0 (1 = full portion)';
+    return null;
+  }
+
+  Json toJson() => {
+        if (id != null) 'id': id,
+        if (code.text.trim().isNotEmpty) 'code': code.text.trim().toUpperCase(),
+        'name': name.text.trim(),
+        'pricePaise': paise,
+        'portionLabel': portion,
+        'servingQuantity': qty.text.trim().isEmpty ? null : double.parse(qty.text.trim()),
+        'servingUnit': unit,
+        'portionRatio': ratio.text.trim().isEmpty ? null : double.parse(ratio.text.trim()),
+        'available': available,
+        'isDefault': isDefault,
+      };
+}
+
+class _SizeRow extends StatelessWidget {
+  const _SizeRow({super.key, required this.index, required this.size, required this.canRemove, required this.onDefault, required this.onRemove, required this.onChanged, this.onRecipe});
+  final int index;
+  final _SizeDraft size;
+  final bool canRemove;
+  final VoidCallback onDefault, onRemove, onChanged;
+  final VoidCallback? onRecipe;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.hp;
+    Widget box(double w, Widget child) => SizedBox(width: w, child: child);
+    return Card(
+      margin: const EdgeInsets.only(bottom: HPSpace.sm),
+      color: p.raised,
+      child: Padding(
+        padding: const EdgeInsets.all(HPSpace.md),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            box(170, TextField(key: Key('size-name-$index'), controller: size.name, decoration: const InputDecoration(labelText: 'Size / portion', hintText: '500 ml'), onChanged: (_) => onChanged())),
+            box(120, TextField(key: Key('size-price-$index'), controller: size.price, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Price', prefixText: '₹ '))),
+            box(100, TextField(key: Key('size-qty-$index'), controller: size.qty, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Serves'))),
+            box(110, DropdownButtonFormField<String?>(
+              key: Key('size-unit-$index'),
+              initialValue: size.unit,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Unit'),
+              items: [const DropdownMenuItem<String?>(value: null, child: Text('—')), for (final u in servingUnits) DropdownMenuItem<String?>(value: u, child: Text(u))],
+              onChanged: (v) {
+                size.unit = v;
+                onChanged();
+              },
+            )),
+            box(120, DropdownButtonFormField<String?>(
+              initialValue: size.portion,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Portion'),
+              items: [const DropdownMenuItem<String?>(value: null, child: Text('—')), for (final l in portionLabels) DropdownMenuItem<String?>(value: l, child: Text(l))],
+              onChanged: (v) {
+                size.portion = v;
+                onChanged();
+              },
+            )),
+            box(100, Tooltip(
+              message: 'Default recipe scale vs the full portion (1 = full). Prices are never derived from it.',
+              child: TextField(controller: size.ratio, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Ratio')),
+            )),
+            box(150, TextField(controller: size.code, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(labelText: 'Code (optional)', hintText: 'COLA-500'))),
+          ]),
+          Wrap(spacing: HPSpace.md, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              Radio<bool>(key: Key('size-default-$index'), value: true, groupValue: size.isDefault, onChanged: (_) => onDefault()), // ignore: deprecated_member_use
+              Text('Default', style: HPType.body(p.text)),
+            ]),
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              Switch(value: size.available, onChanged: (v) {
+                size.available = v;
+                onChanged();
+              }),
+              Text(size.available ? 'Available' : 'Sold out', style: HPType.body(p.text)),
+            ]),
+            if (onRecipe != null) TextButton.icon(key: Key('size-recipe-$index'), onPressed: onRecipe, icon: const Icon(Icons.blender_outlined, size: 18), label: const Text('Recipe')),
+            if (canRemove) TextButton.icon(key: Key('size-remove-$index'), onPressed: onRemove, icon: const Icon(Icons.delete_outline_rounded, size: 18), label: const Text('Remove')),
+          ]),
+        ]),
+      ),
+    );
+  }
+}
+
+/// "₹340" for one size; "₹30 – ₹90 · 3 sizes" when the dish comes in several.
+String _tilePrice(Json item) {
+  final vs = ((item['variants'] as List?) ?? const []).cast<Json>();
+  if (vs.length <= 1) return rupees((vs.firstOrNull?['pricePaise'] ?? item['pricePaise']) as int);
+  final prices = vs.map((v) => v['pricePaise'] as int).toList()..sort();
+  return '${rupees(prices.first)} – ${rupees(prices.last)} · ${vs.length} sizes';
+}
+
+/// What one sold unit of a size uses from stock. Without its own recipe a size uses the full portion's recipe scaled
+/// by its portion ratio; saving here gives it its own. Shows the cost of one serving next to its selling price.
+class RecipeDialog extends StatefulWidget {
+  const RecipeDialog({super.key, required this.api, required this.variantId, required this.title});
+  final ApiClient api;
+  final String variantId, title;
+  @override
+  State<RecipeDialog> createState() => _RecipeDialogState();
+}
+
+class _RecipeDialogState extends State<RecipeDialog> {
+  Json? _recipe;
+  List<Json>? _products;
+  final _lines = <({String? productId, TextEditingController qty, String unit})>[];
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final r = await Future.wait([widget.api.recipe(widget.variantId), widget.api.invProducts()]);
+      if (!mounted) return;
+      setState(() {
+        _recipe = r[0] as Json;
+        _products = (r[1] as List).cast<Json>();
+        _lines
+          ..clear()
+          ..addAll([
+            for (final l in ((_recipe!['lines'] as List).cast<Json>()))
+              (productId: l['productId'] as String?, qty: TextEditingController(text: '${l['quantity']}'), unit: '${l['unit']}'),
+          ]);
+      });
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    }
+  }
+
+  Future<void> _save() async {
+    final out = <Json>[];
+    for (final l in _lines) {
+      final q = double.tryParse(l.qty.text.trim());
+      if (l.productId == null || q == null || q <= 0) return setState(() => _error = 'Every ingredient needs a product and a quantity above 0');
+      out.add({'productId': l.productId, 'quantity': q, 'unit': l.unit});
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final r = await widget.api.setRecipe(widget.variantId, out);
+      if (mounted) {
+        setState(() => _recipe = r);
+        Navigator.pop(context);
+      }
+    } on ApiException catch (e) {
+      setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.hp;
+    return HPDialog(
+      title: 'Recipe · ${widget.title}',
+      actions: [
+        SecondaryButton(label: 'Cancel', onPressed: _busy ? null : () => Navigator.pop(context)),
+        PrimaryButton(key: const Key('save-recipe'), label: 'Save recipe', busy: _busy, height: 56, onPressed: _products == null ? null : _save),
+      ],
+      child: _recipe == null
+          ? (_error == null ? const LinearProgressIndicator() : Text(_error!, style: HPType.body(p.danger)))
+          : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Text(
+                _recipe!['own'] == true
+                    ? 'One sold serving uses:'
+                    : (_lines.isEmpty ? 'No recipe yet: selling it takes nothing from stock.' : 'Using the full portion × this size\'s ratio. Save to give this size its own amounts.'),
+                style: HPType.body(p.muted),
+              ),
+              const SizedBox(height: HPSpace.sm),
+              for (final (i, l) in _lines.indexed)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: HPSpace.sm),
+                  child: Row(children: [
+                    Expanded(
+                      flex: 3,
+                      child: DropdownButtonFormField<String>(
+                        key: Key('recipe-product-$i'),
+                        initialValue: l.productId,
+                        isExpanded: true,
+                        decoration: const InputDecoration(labelText: 'Ingredient'),
+                        items: [for (final x in _products!) DropdownMenuItem(value: x['id'] as String, child: Text('${x['name']} (${x['sku']})', overflow: TextOverflow.ellipsis))],
+                        onChanged: (v) => setState(() => _lines[i] = (productId: v, qty: l.qty, unit: '${_products!.firstWhere((x) => x['id'] == v)['baseUnit']}')),
+                      ),
+                    ),
+                    const SizedBox(width: HPSpace.sm),
+                    SizedBox(width: 90, child: TextField(key: Key('recipe-qty-$i'), controller: l.qty, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Qty'))),
+                    const SizedBox(width: HPSpace.sm),
+                    SizedBox(
+                      width: 96,
+                      child: DropdownButtonFormField<String>(
+                        initialValue: l.unit,
+                        isExpanded: true,
+                        decoration: const InputDecoration(labelText: 'Unit'),
+                        items: [for (final u in {l.unit, 'g', 'kg', 'ml', 'l', 'piece', 'bottle', 'can', 'packet'}) DropdownMenuItem(value: u, child: Text(u))],
+                        onChanged: (v) => setState(() => _lines[i] = (productId: l.productId, qty: l.qty, unit: v!)),
+                      ),
+                    ),
+                    IconButton(tooltip: 'Remove', icon: const Icon(Icons.close_rounded), onPressed: () => setState(() => _lines.removeAt(i))),
+                  ]),
+                ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const Key('add-ingredient'),
+                  onPressed: (_products ?? const []).isEmpty ? null : () => setState(() => _lines.add((productId: null, qty: TextEditingController(), unit: 'g'))),
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: Text((_products ?? const []).isEmpty ? 'Add products in Inventory first' : 'Add ingredient'),
+                ),
+              ),
+              const Divider(),
+              Text('Cost of one serving ${rupees(_recipe!['costPaise'] as int)} · sells for ${rupees(_recipe!['pricePaise'] as int)}', key: const Key('recipe-cost'), style: HPType.label(p.text)),
+              if (_error != null) Padding(padding: const EdgeInsets.only(top: HPSpace.sm), child: Text(_error!, style: HPType.body(p.danger))),
+            ]),
     );
   }
 }

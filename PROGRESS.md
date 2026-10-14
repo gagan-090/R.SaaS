@@ -190,3 +190,46 @@ Test: API **84 passed** (+11 console) · hub **40 passed** (+photo cache) · ui_
 printers/reprint/adjust at 1280×800 dark, 360×740 light, 411×891 dark; retry, reversal + PIN, notes). Bugs found by these tests
 and fixed: sort on a const list (empty floors), toast covering Bill & pay on tablets, stale Bills tab, overflows on 360 px
 (receipt header/total, printer titles, dish editor), keypads clipped in dialogs on 800-px screens, lazy animation in dispose.
+
+### Owner dashboard & staff web portals — DONE with listed limits (2026-10-14)
+Spec: the 14 Oct request (employees + email/PIN web sign-in, plan-controlled features, menu variants, floor editor,
+inventory, Excel import, auditor portal, role dashboards). Guide: `docs/STAFF_PORTALS.md`. ADRs in `DECISIONS.md`.
+- Migrations (all additive, applied to `rsaas_dev` after a pg_dump backup in `.localdb/backups/`):
+  `20261014090000_staff_portal`, `20261014100000_menu_variants` (backfills one "Regular" variant per item),
+  `20261014110000_floor_layout`, `20261014120000_inventory`, `20261014130000_imports`, `20261014140000_audit_context`.
+  `prisma migrate diff` against the migrated databases: **No difference detected**.
+- API: staff + custom roles + PIN links (`src/staff/`), email+PIN sign-in, plan-gated permissions with
+  `feature_not_in_plan`, menu variants (`src/menu/`), floor layout (`src/floors/`), inventory ledger + recipes +
+  sale deduction on paid-bill sync + expenses (`src/inventory/`), Excel import (`src/imports/`, exceljs),
+  restaurant audit/records (`src/audit/`), request ids, 8 MB JSON limit.
+- Hub: schema v4 (variants, order-line variant snapshots), v5 (table layout + manual status); custom-role permissions.
+- Web: PIN sign-in, set-PIN page, employee form, Roles, floor editor, Inventory, Expenses, recipe dialog, import
+  dialog, Audit & records, role homes. POS: size picker, floor-plan view, out-of-use tables.
+- Sample workbooks: `docs/templates/house-plating-menu-import-template.xlsx`,
+  `docs/templates/house-plating-inventory-import-template.xlsx`.
+Tests run this session: API `pnpm test` (serial) **139 passed / 16 suites** · hub **46 passed** (1 skipped, as before) ·
+core **49 passed** · ui_kit **12 passed** · admin_web **59 passed** · pos_app **24 passed**. `flutter analyze` / `dart analyze`
+/ API lint: clean. Secret scan: no leaks. Live smoke test on `rsaas_dev` (menu variants, layout, limits, audit, sales): OK.
+
+### Plan controls, employee sign-in links, Excel visibility and table dragging — 2026-10-14 follow-up
+- Added the five missing plan switches (staff portal, custom roles, visual floor editor, Excel import, expenses),
+  plus a regression check that every backend feature can be selected in the plan editor.
+- Repaired the local `rsaas_dev` Premium plan's three requested features (`staff_portal`, `floor.editor`, `import.excel`)
+  and re-signed four active licenses. Prices, limits and dates were preserved. The transaction wrote a system audit event.
+- Owners can find the Excel import action in both Menu and Inventory even when locked; it explains how the Super Admin
+  enables it. Existing template/download/validate/preview/commit and update-existing flows remain in use.
+- Staff has a copyable employee sign-in link. It opens email + PIN directly, including when the password page was
+  already open. Narrow-screen login padding was reduced. Employees still need an email, a valid PIN and web access.
+- Follow-up screenshot identified that **Move chairs** disabled table dragging. Tables now remain draggable in that
+  mode and carry their chairs with them; a drag on a selected chair still adjusts only that chair. Added cursor/help
+  text and controller disposal. Tests cover incremental mouse movement, 50/100/200% zoom, a rotated table, independent
+  chair movement followed by group movement, and saving/reloading the relative chair positions.
+Verification run in this session:
+```
+API plans/staff/layout/imports: 4 suites, 30 tests passed (isolated test database).
+Web plans/console/staff portal: 58 tests passed before the final login-transition and chair-mode refinements.
+Final staff portal suite: 11 tests passed (includes the added in-place employee-link transition).
+Final chair-mode regressions: 2 tests passed (100% and 200% zoom, rotated table).
+API lint/typecheck: passed. Flutter analyze: no issues found.
+Browser: rebuilt employee link shows Email, PIN and Forgot PIN on the local app.
+```

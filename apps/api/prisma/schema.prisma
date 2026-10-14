@@ -201,6 +201,7 @@ model RestaurantTenant {
   licenses     License[]
   users        User[]
   media        Media[]
+  customRoles  CustomRole[]
 
   @@map("restaurant_tenants")
 }
@@ -292,6 +293,7 @@ enum RestaurantRole {
   waiter
   chef
   auditor
+  custom // permissions come from custom_roles (plan feature "roles.custom")
 }
 
 model User {
@@ -303,6 +305,8 @@ model User {
   passwordHash     String?              @map("password_hash")
   pinHash          String?              @map("pin_hash")
   status           UserStatus           @default(active)
+  webAccess        Boolean              @default(false) @map("web_access") // may sign in to the web portal (email + PIN)
+  pinSetAt         DateTime?            @map("pin_set_at") @db.Timestamptz(3)
   failedLoginCount Int                  @default(0) @map("failed_login_count")
   lockedUntil      DateTime?            @map("locked_until") @db.Timestamptz(3)
   seq              BigInt               @default(0)
@@ -310,6 +314,7 @@ model User {
   updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
   tenant           RestaurantTenant     @relation(fields: [tenantId], references: [id])
   roles            UserRoleAssignment[]
+  pinTokens        PinToken[]
   mfa              MFAEnrollment?       @relation("UserMfa")
 
   @@index([tenantId])
@@ -323,13 +328,50 @@ model UserRoleAssignment {
   role             RestaurantRole
   branchIds        String[]       @map("branch_ids") @db.Uuid // empty = all branches
   extraPermissions String[]       @map("extra_permissions")
+  customRoleId     String?        @map("custom_role_id") @db.Uuid
   seq              BigInt         @default(0)
   createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customRole       CustomRole?    @relation(fields: [customRoleId], references: [id], onDelete: Restrict)
 
   @@unique([userId, role])
   @@index([tenantId])
   @@map("user_role_assignments")
+}
+
+/// Owner-defined role: a name and a set of restaurant permissions (never more than its creator holds).
+model CustomRole {
+  id          String               @id @default(uuid(7)) @db.Uuid
+  tenantId    String               @map("tenant_id") @db.Uuid
+  name        String
+  description String?
+  permissions String[]
+  deleted     Boolean              @default(false)
+  seq         BigInt               @default(0)
+  createdAt   DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  assignments UserRoleAssignment[]
+  tenant      RestaurantTenant     @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, name])
+  @@map("custom_roles")
+}
+
+/// One-time link for an employee to set (invite) or reset their PIN. Only the SHA-256 of the token is stored.
+model PinToken {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  purpose   String // invite | reset
+  createdBy String?   @map("created_by") @db.Uuid
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(3)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId])
+  @@map("pin_tokens")
 }
 
 enum DevicePlatform {
@@ -357,14 +399,17 @@ model Device {
 // ---------------------------------------------------------------- layout & menu (cloud is writer)
 
 model Floor {
-  id        String  @id @default(uuid(7)) @db.Uuid
-  tenantId  String  @map("tenant_id") @db.Uuid
-  branchId  String  @map("branch_id") @db.Uuid
-  name      String
-  sortOrder Int     @default(0) @map("sort_order")
-  seq       BigInt  @default(0)
-  deleted   Boolean @default(false)
-  tables    Table[]
+  id            String  @id @default(uuid(7)) @db.Uuid
+  tenantId      String  @map("tenant_id") @db.Uuid
+  branchId      String  @map("branch_id") @db.Uuid
+  name          String
+  sortOrder     Int     @default(0) @map("sort_order")
+  width         Int     @default(1200) // layout canvas size in layout units (1 unit ≈ 1 cm)
+  height        Int     @default(800)
+  layoutVersion Int     @default(1) @map("layout_version") // optimistic lock for the floor editor
+  seq           BigInt  @default(0)
+  deleted       Boolean @default(false)
+  tables        Table[]
 
   @@index([tenantId, branchId])
   @@map("floors")
@@ -377,8 +422,16 @@ model Table {
   floorId  String  @map("floor_id") @db.Uuid
   name     String // number or name, e.g. "12"
   seats    Int     @default(4)
-  layoutX  Int     @default(0) @map("layout_x")
+  layoutX  Int     @default(0) @map("layout_x") // legacy grid position (older hubs)
   layoutY  Int     @default(0) @map("layout_y")
+  shape    String  @default("square") // round | square | rect
+  posX     Int     @default(0) @map("pos_x") // centre on the floor canvas, layout units
+  posY     Int     @default(0) @map("pos_y")
+  width    Int     @default(80)
+  height   Int     @default(80)
+  rotation Int     @default(0) // degrees, 0–359
+  chairs   Json? // [{ x, y, rotation }] relative to the table centre; null = arranged from seats
+  status   String  @default("available") // manual: available | reserved | unavailable (occupied comes from orders)
   seq      BigInt  @default(0)
   deleted  Boolean @default(false)
   floor    Floor   @relation(fields: [floorId], references: [id])
@@ -407,6 +460,7 @@ model MenuCategory {
   branchId  String?    @map("branch_id") @db.Uuid // null = tenant-wide
   name      String
   sortOrder Int        @default(0) @map("sort_order")
+  active    Boolean    @default(true) // inactive categories are hidden from ordering but keep their items
   seq       BigInt     @default(0)
   deleted   Boolean    @default(false)
   items     MenuItem[]
@@ -416,26 +470,60 @@ model MenuCategory {
 }
 
 model MenuItem {
-  id          String       @id @default(uuid(7)) @db.Uuid
-  tenantId    String       @map("tenant_id") @db.Uuid
-  categoryId  String       @map("category_id") @db.Uuid
+  id          String        @id @default(uuid(7)) @db.Uuid
+  tenantId    String        @map("tenant_id") @db.Uuid
+  categoryId  String        @map("category_id") @db.Uuid
+  code        String // stable item code (Excel imports match on it, never on the name)
   name        String
   description String?
-  unit        String       @default("plate")
-  quantity    Int          @default(1)
-  pricePaise  Int          @map("price_paise")
-  taxRuleId   String       @map("tax_rule_id") @db.Uuid
-  available   Boolean      @default(true)
-  isVeg       Boolean      @default(true) @map("is_veg")
-  imageId     String?      @map("image_id") @db.Uuid
-  plateColors Json?        @map("plate_colors") // { base, sauce, garnish } for the PlateIcon
-  seq         BigInt       @default(0)
-  deleted     Boolean      @default(false)
-  category    MenuCategory @relation(fields: [categoryId], references: [id])
-  taxRule     TaxRule      @relation(fields: [taxRuleId], references: [id])
+  active      Boolean       @default(true)
+  unit        String        @default("plate")
+  quantity    Int           @default(1)
+  pricePaise  Int           @map("price_paise") // = the default variant's price (kept for older hubs)
+  taxRuleId   String        @map("tax_rule_id") @db.Uuid
+  available   Boolean       @default(true)
+  isVeg       Boolean       @default(true) @map("is_veg")
+  imageId     String?       @map("image_id") @db.Uuid
+  plateColors Json?         @map("plate_colors") // { base, sauce, garnish } for the PlateIcon
+  seq         BigInt        @default(0)
+  deleted     Boolean       @default(false)
+  category    MenuCategory  @relation(fields: [categoryId], references: [id])
+  taxRule     TaxRule       @relation(fields: [taxRuleId], references: [id])
+  variants    MenuVariant[]
 
+  @@unique([tenantId, code])
   @@index([tenantId])
   @@map("menu_items")
+}
+
+/// A separately priced size or portion of a menu item (Cola 500 ml, Biryani Half plate). Serving quantity, portion
+/// ratio, cost price and selling price are distinct: the ratio is only a default for recipes, never for prices.
+model MenuVariant {
+  id              String       @id @default(uuid(7)) @db.Uuid
+  tenantId        String       @map("tenant_id") @db.Uuid
+  itemId          String       @map("item_id") @db.Uuid
+  code            String // stable variant code / SKU, unique in the restaurant and never reused
+  name            String // what staff and guests see: "500 ml", "Half plate"
+  portionLabel    String?      @map("portion_label") // quarter | half | full | custom text
+  servingQuantity Decimal?     @map("serving_quantity") @db.Decimal(12, 3) // how much is served, e.g. 500
+  servingUnit     String?      @map("serving_unit") // ml, l, g, kg, piece, plate, bottle …
+  portionRatio    Decimal?     @map("portion_ratio") @db.Decimal(6, 3) // default recipe scale vs the full portion
+  pricePaise      Int          @map("price_paise") // selling price
+  costPricePaise  Int?         @map("cost_price_paise") // optional manual cost; recipes give the computed cost
+  taxRuleId       String?      @map("tax_rule_id") @db.Uuid // null = the item's tax rule
+  available       Boolean      @default(true)
+  isDefault       Boolean      @default(false) @map("is_default")
+  sortOrder       Int          @default(0) @map("sort_order")
+  seq             BigInt       @default(0)
+  deleted         Boolean      @default(false)
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  item            MenuItem     @relation(fields: [itemId], references: [id])
+  recipeLines     RecipeLine[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, itemId])
+  @@map("menu_variants")
 }
 
 // ---------------------------------------------------------------- live operations (hub is writer; cloud stores synced copies)
@@ -608,6 +696,9 @@ model AuditEvent {
   branchId   String?  @map("branch_id") @db.Uuid
   actorId    String?  @map("actor_id") @db.Uuid
   actorType  String?  @map("actor_type") // admin | user | device | system
+  actorRole  String?  @map("actor_role") // role(s) at the time of the action
+  actorName  String?  @map("actor_name") // name at the time (later renames do not rewrite history)
+  requestId  String?  @map("request_id") // ties together everything one request changed
   action     String
   objectType String?  @map("object_type")
   objectId   String?  @map("object_id")
@@ -621,6 +712,7 @@ model AuditEvent {
 
   @@index([tenantId, at])
   @@index([action])
+  @@index([tenantId, actorId])
   @@map("audit_events")
 }
 
@@ -667,4 +759,190 @@ model Media {
 
   @@index([tenantId])
   @@map("media")
+}
+
+// ---------------------------------------------------------------- inventory (plan feature "inventory")
+
+/// Where stock is kept (Dry store, Walk-in cooler, Bar).
+model InventoryLocation {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([tenantId, name])
+  @@map("inventory_locations")
+}
+
+model Supplier {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  name      String
+  phone     String?
+  email     String?
+  gstin     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([tenantId, name])
+  @@map("suppliers")
+}
+
+/// A stock item. Quantities live in the base unit; the purchase unit converts with conversionFactor
+/// (1 purchase unit = conversionFactor base units). Current stock is never stored here — it is the sum of the ledger.
+model InventoryProduct {
+  id                String   @id @default(uuid(7)) @db.Uuid
+  tenantId          String   @map("tenant_id") @db.Uuid
+  sku               String
+  name              String
+  category          String?
+  baseUnit          String   @map("base_unit")
+  purchaseUnit      String   @map("purchase_unit")
+  conversionFactor  Decimal  @map("conversion_factor") @db.Decimal(14, 4)
+  unitCostPaise     Int      @default(0) @map("unit_cost_paise") // last / list cost per purchase unit
+  avgCostPaise      Decimal  @default(0) @map("avg_cost_paise") @db.Decimal(18, 6) // moving average per base unit
+  minStock          Decimal  @default(0) @map("min_stock") @db.Decimal(14, 3) // reorder level, base units
+  defaultSupplierId String?  @map("default_supplier_id") @db.Uuid
+  defaultLocationId String?  @map("default_location_id") @db.Uuid
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  movements   StockMovement[]
+  recipeLines RecipeLine[]
+  requests    ReplenishmentRequest[]
+
+  @@unique([tenantId, sku])
+  @@map("inventory_products")
+}
+
+enum StockMovementType {
+  opening
+  purchase
+  sale
+  consumption
+  wastage
+  return_to_supplier
+  customer_return
+  count_adjustment
+  adjustment
+  transfer_out
+  transfer_in
+}
+
+/// Append-only stock ledger. Quantity is signed and in the product's base unit; value is signed integer paise at the
+/// cost used for that movement. Retries are absorbed by idempotencyKey; sales by (sourceType, sourceId, productId).
+model StockMovement {
+  id             String            @id @default(uuid(7)) @db.Uuid
+  tenantId       String            @map("tenant_id") @db.Uuid
+  productId      String            @map("product_id") @db.Uuid
+  locationId     String?           @map("location_id") @db.Uuid
+  type           StockMovementType
+  quantity       Decimal           @db.Decimal(14, 3)
+  enteredQty     Decimal           @map("entered_qty") @db.Decimal(14, 3)
+  enteredUnit    String            @map("entered_unit")
+  valuePaise     Int               @map("value_paise")
+  unitCostPaise  Decimal?          @map("unit_cost_paise") @db.Decimal(18, 6) // per base unit
+  supplierId     String?           @map("supplier_id") @db.Uuid
+  reference      String? // supplier invoice / document number
+  batchNumber    String?           @map("batch_number")
+  expiryDate     DateTime?         @map("expiry_date") @db.Date
+  reason         String?
+  sourceType     String?           @map("source_type") // bill_line | import | manual
+  sourceId       String?           @map("source_id")
+  idempotencyKey String?           @map("idempotency_key")
+  actorId        String?           @map("actor_id") @db.Uuid
+  actorRole      String?           @map("actor_role")
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  product InventoryProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, idempotencyKey])
+  @@unique([tenantId, sourceType, sourceId, productId])
+  @@index([tenantId, productId])
+  @@index([tenantId, createdAt])
+  @@map("stock_movements")
+}
+
+/// What one sold unit of a menu variant consumes. Quantities are per variant (a half plate need not be half).
+model RecipeLine {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  variantId String   @map("variant_id") @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  quantity  Decimal  @db.Decimal(14, 3)
+  unit      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  variant MenuVariant      @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  product InventoryProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([variantId, productId])
+  @@index([tenantId])
+  @@map("recipe_lines")
+}
+
+/// Kitchen asks for more stock; Admin/Owner orders and receives it.
+model ReplenishmentRequest {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  productId   String   @map("product_id") @db.Uuid
+  quantity    Decimal  @db.Decimal(14, 3)
+  unit        String
+  note        String?
+  status      String   @default("requested") // requested | ordered | received | cancelled
+  requestedBy String   @map("requested_by") @db.Uuid
+  handledBy   String?  @map("handled_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  product InventoryProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, status])
+  @@map("replenishment_requests")
+}
+
+/// Restaurant expenses (rent, utilities, repairs, non-stock purchases). Never deleted: a mistake is voided with a reason.
+model Expense {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  category    String
+  description String
+  amountPaise Int       @map("amount_paise")
+  paidOn      DateTime  @map("paid_on") @db.Date
+  paymentMode String    @map("payment_mode") // cash | upi | card | bank | other
+  supplierId  String?   @map("supplier_id") @db.Uuid
+  reference   String?
+  createdBy   String    @map("created_by") @db.Uuid
+  voidedAt    DateTime? @map("voided_at") @db.Timestamptz(3)
+  voidedBy    String?   @map("voided_by") @db.Uuid
+  voidReason  String?   @map("void_reason")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([tenantId, paidOn])
+  @@map("expenses")
+}
+
+/// One Excel import: file metadata, what validation found, the parsed plan to commit, and the outcome.
+model ImportJob {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  kind        String // menu | inventory
+  mode        String // create | update
+  fileName    String    @map("file_name")
+  fileSize    Int       @map("file_size")
+  fileSha256  String    @map("file_sha256")
+  status      String // validated | invalid | committed | partially_committed
+  counts      Json
+  errors      Json
+  plan        Json // parsed rows, so commit never re-reads the file
+  result      Json?
+  actorId     String    @map("actor_id") @db.Uuid
+  actorRole   String?   @map("actor_role")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  committedAt DateTime? @map("committed_at") @db.Timestamptz(3)
+
+  @@index([tenantId, createdAt])
+  @@map("import_jobs")
 }

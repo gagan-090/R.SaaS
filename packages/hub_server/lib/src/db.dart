@@ -84,6 +84,35 @@ const _schemaV3 = <String>[
   'CREATE TABLE media_cache (id TEXT PRIMARY KEY, content_type TEXT NOT NULL, bytes BLOB NOT NULL, fetched_at TEXT NOT NULL)',
 ];
 
+/// v4: menu sizes / portions (variants) with their own prices; order lines keep the variant they were ordered as.
+const _schemaV4 = <String>[
+  'ALTER TABLE categories ADD COLUMN active INTEGER NOT NULL DEFAULT 1',
+  'ALTER TABLE items ADD COLUMN active INTEGER NOT NULL DEFAULT 1',
+  'ALTER TABLE items ADD COLUMN code TEXT',
+  '''CREATE TABLE variants (id TEXT PRIMARY KEY, item_id TEXT NOT NULL, code TEXT NOT NULL, name TEXT NOT NULL, portion_label TEXT,
+       serving_quantity REAL, serving_unit TEXT, price_paise INTEGER NOT NULL, tax_rule_id TEXT, available INTEGER NOT NULL DEFAULT 1,
+       is_default INTEGER NOT NULL DEFAULT 0, sort_order INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0)''',
+  'CREATE INDEX variants_item ON variants(item_id)',
+  'ALTER TABLE order_lines ADD COLUMN variant_id TEXT',
+  'ALTER TABLE order_lines ADD COLUMN variant_code_snapshot TEXT',
+  'ALTER TABLE order_lines ADD COLUMN variant_name_snapshot TEXT',
+];
+
+/// v5: visual floor plan — table shape, position, size, rotation, chairs, and the staff-set status (reserved /
+/// unavailable); floor canvas size.
+const _schemaV5 = <String>[
+  "ALTER TABLE tables ADD COLUMN shape TEXT NOT NULL DEFAULT 'square'",
+  'ALTER TABLE tables ADD COLUMN pos_x INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE tables ADD COLUMN pos_y INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE tables ADD COLUMN width INTEGER NOT NULL DEFAULT 80',
+  'ALTER TABLE tables ADD COLUMN height INTEGER NOT NULL DEFAULT 80',
+  'ALTER TABLE tables ADD COLUMN rotation INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE tables ADD COLUMN chairs TEXT',
+  "ALTER TABLE tables ADD COLUMN manual_status TEXT NOT NULL DEFAULT 'available'",
+  'ALTER TABLE floors ADD COLUMN width INTEGER NOT NULL DEFAULT 1200',
+  'ALTER TABLE floors ADD COLUMN height INTEGER NOT NULL DEFAULT 800',
+];
+
 /// drift database without code generation: the schema is plain SQL above and queries go through
 /// [query]/[execute]. drift provides the executor, transactions (nested = savepoints) and migrations.
 class HubDatabase extends GeneratedDatabase {
@@ -99,12 +128,12 @@ class HubDatabase extends GeneratedDatabase {
   Iterable<DatabaseSchemaEntity> get allSchemaEntities => const [];
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) async {
-          for (final s in [..._schemaV1, ..._schemaV2, ..._schemaV3]) {
+          for (final s in [..._schemaV1, ..._schemaV2, ..._schemaV3, ..._schemaV4, ..._schemaV5]) {
             await customStatement(s);
           }
         },
@@ -119,6 +148,16 @@ class HubDatabase extends GeneratedDatabase {
               await customStatement(s);
             }
           }
+          if (from < 4) {
+            for (final s in _schemaV4) {
+              await customStatement(s);
+            }
+          }
+          if (from < 5) {
+            for (final s in _schemaV5) {
+              await customStatement(s);
+            }
+          }
         },
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = ON');
@@ -129,6 +168,7 @@ class HubDatabase extends GeneratedDatabase {
         null => const Variable<String>(null),
         final bool b => Variable<bool>(b),
         final int i => Variable<int>(i),
+        final double d => Variable<double>(d),
         final String s => Variable<String>(s),
         final Uint8List b => Variable<Uint8List>(b),
         _ => throw ArgumentError('unsupported SQL argument type ${x.runtimeType}'),

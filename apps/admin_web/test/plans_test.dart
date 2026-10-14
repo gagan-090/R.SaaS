@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rsaas_admin_web/api/api_client.dart';
 import 'package:rsaas_admin_web/app.dart';
+import 'package:rsaas_admin_web/screens/plans_screen.dart';
 import 'package:rsaas_admin_web/state/providers.dart';
 import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 
@@ -38,6 +40,36 @@ Future<FixtureApi> superAdminOnPlans(WidgetTester t, {Brightness brightness = Br
 
 void main() {
   setUpAll(() => HPType.useGoogleFonts = false);
+
+  test('every server feature is configurable in the plan editor', () {
+    final source = File('../api/src/common/permissions.ts').readAsStringSync();
+    final catalog = source.split('export const FEATURE_FLAGS = {')[1].split('} as const;')[0];
+    final flags = RegExp(r"^\s*(?:'([^']+)'|(\w+)):", multiLine: true)
+        .allMatches(catalog).map((m) => m[1] ?? m[2]!).toSet();
+    expect(featureGroups.expand((g) => g.$2).map((f) => f.$1).toSet(), flags);
+  });
+
+  testWidgets('existing plans can enable staff sign-in, dragging and both Excel imports', (t) async {
+    final fx = await superAdminOnPlans(t);
+    fx.overrides['PATCH /plans/id-premium'] = (200, {...plan('premium', 'Premium', 249900), 'licensesUpdated': 2});
+    await t.tap(find.byKey(const Key('plan-menu-premium')));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Edit price & features'));
+    await t.pumpAndSettle();
+    for (final f in ['staff_portal', 'floor.editor', 'import.excel', 'roles.custom', 'expenses']) {
+      final chip = find.byKey(Key('feature-$f'));
+      await t.ensureVisible(chip);
+      await t.tap(chip);
+      await t.pumpAndSettle();
+      expect(t.widget<FilterChip>(chip).selected, isTrue);
+    }
+    await t.tap(find.byKey(const Key('save-plan')));
+    await t.pumpAndSettle();
+    final sent = jsonDecode(fx.where('PATCH', '/plans/id-premium').single.body) as Map;
+    expect(sent['featureFlags'], containsAll(['tables', 'menu', 'billing', 'staff_portal', 'floor.editor', 'import.excel', 'roles.custom', 'expenses']));
+    expect(sent['pricePaise'], 249900);
+    expect(find.textContaining('2 restaurants on this plan updated now'), findsOneWidget);
+  });
 
   testWidgets('Super Admin sees prices, adds a plan with a price, features and limits', (t) async {
     final fx = await superAdminOnPlans(t);

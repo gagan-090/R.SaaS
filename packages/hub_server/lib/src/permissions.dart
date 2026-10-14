@@ -16,11 +16,16 @@ const grantableExtras = <String, Set<String>>{
   'cashier': {'discount.apply'},
 };
 
+/// Every permission the hub knows how to enforce. A custom role's permissions are limited to these.
+final hubPermissions = {for (final s in rolePermissions.values) ...s};
+
 Set<String> permissionsFor(List<Map<String, Object?>> roles) {
   final out = <String>{};
   for (final r in roles) {
     final role = r['role'] as String;
     out.addAll(rolePermissions[role] ?? const {});
+    // owner-defined role: the cloud sends its permissions (only when the plan includes custom roles)
+    if (role == 'custom') out.addAll(((r['permissions'] as List?) ?? const []).cast<String>().where(hubPermissions.contains));
     final extras = ((r['extraPermissions'] as List?) ?? const []).cast<String>();
     out.addAll(extras.where((p) => grantableExtras[role]?.contains(p) ?? false));
   }

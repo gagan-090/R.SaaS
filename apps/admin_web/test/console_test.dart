@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -9,6 +10,9 @@ import 'package:http/testing.dart';
 import 'package:image/image.dart' as img;
 import 'package:rsaas_admin_web/api/api_client.dart';
 import 'package:rsaas_admin_web/app.dart';
+import 'package:rsaas_admin_web/screens/console/floor_editor.dart';
+import 'package:rsaas_admin_web/screens/console/import_dialog.dart';
+import 'package:rsaas_admin_web/util/download.dart';
 import 'package:rsaas_admin_web/state/providers.dart';
 import 'package:rsaas_admin_web/util/image_prep.dart';
 import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
@@ -26,12 +30,24 @@ class FakeRestaurantApi {
   final devices = <Map<String, dynamic>>[
     {'id': 'd1', 'name': 'Cashier phone', 'platform': 'android', 'isHub': true, 'pairedAt': '2026-10-13T04:00:00Z', 'lastSeenAt': DateTime.now().toUtc().toIso8601String(), 'revokedAt': null, 'online': true, 'branch': {'id': 'b1', 'code': 'BR01', 'name': 'MG Road'}},
   ];
+  final customRoles = <Map<String, dynamic>>[];
+  final tableLive = <String, String>{}; // table id → occupied / billing from synced orders
+  bool inventoryInPlan = true;
+  int failNextMovement = 0; // simulate a dropped connection: the client must retry with the same key
+  final movements = <Map<String, dynamic>>[];
+  final products = <Map<String, dynamic>>[
+    {'id': 'p1', 'sku': 'RICE-BAS', 'name': 'Basmati rice', 'category': 'Grains', 'baseUnit': 'g', 'purchaseUnit': 'kg', 'conversionFactor': 1000, 'unitCostPaise': 6000, 'avgCostPaise': 6, 'minStock': 5000, 'active': true, 'stock': 2000, 'valuePaise': 12000, 'low': true, 'negative': false, 'expiring': <Object>[], 'defaultSupplierId': null, 'defaultLocationId': null},
+  ];
+  final expenses = <Map<String, dynamic>>[];
+  Map<String, dynamic>? importJob;
+  List<String> features = ['menu', 'tables', 'roles.extended', 'kds', 'floor.editor'];
   int _n = 0;
   String id(String p) => '$p-${++_n}';
 
   Map<String, dynamic> me = {
     'type': 'user', 'id': 'u-own', 'email': 'owner@demo.com', 'name': 'Demo Owner', 'tenantId': 't1', 'roles': ['owner'],
-    'permissions': ['restaurant.profile.read', 'restaurant.profile.manage', 'license.read', 'staff.read', 'staff.manage', 'device.manage', 'floor.read', 'floor.manage', 'menu.read', 'menu.publish', 'reports.read'],
+    'permissions': ['restaurant.profile.read', 'restaurant.profile.manage', 'license.read', 'staff.read', 'staff.manage', 'device.manage', 'floor.read', 'floor.manage', 'menu.read', 'menu.publish', 'reports.read', 'order.write',
+      'inventory.read', 'inventory.manage', 'inventory.write', 'inventory.consume', 'inventory.request', 'expense.read', 'expense.write', 'import.run'],
   };
 
   bool brandingInPlan = false;
@@ -42,7 +58,7 @@ class FakeRestaurantApi {
         'branding': brandingInPlan ? brand : null,
         'restaurant': {'id': 't1', 'code': 'R000000', 'name': 'Demo Dhaba', 'gstin': '27AAAPA1234A1Z5', 'address': 'MG Road, Pune', 'status': 'active'},
         'branches': [{'id': 'b1', 'code': 'BR01', 'name': 'MG Road'}],
-        'license': {'state': 'active', 'plan': 'premium', 'planName': 'Premium', 'features': ['menu', 'tables', 'roles.extended', 'kds'], 'limits': {}, 'endsAt': '2026-11-12T00:00:00Z'},
+        'license': {'state': 'active', 'plan': 'premium', 'planName': 'Premium', 'features': features, 'limits': {}, 'endsAt': '2026-11-12T00:00:00Z'},
         'counts': {'items': items.length, 'categories': cats.length, 'tables': floors.fold<int>(0, (s, f) => s + (f['tables'] as List).length), 'staff': staff.where((u) => u['status'] == 'active').length, 'devices': devices.length},
         'hub': {'online': true, 'lastSeenAt': DateTime.now().toUtc().toIso8601String()},
       };
@@ -117,7 +133,9 @@ class FakeRestaurantApi {
           case ('GET', '/menu/items'):
             out = items;
           case ('POST', '/menu/items'):
-            final it = {'id': id('i'), 'imageId': null, 'available': true, ...body};
+            final vs = [for (final v in (body['variants'] as List).cast<Map<String, dynamic>>()) {'id': id('v'), 'code': v['code'] ?? 'C${++_n}', ...v}];
+            final it = {'id': id('i'), 'code': 'ITEM-${items.length + 1}', 'imageId': null, 'available': true, ...body, 'variants': vs,
+              'pricePaise': (vs.firstWhere((v) => v['isDefault'] == true, orElse: () => vs.first))['pricePaise']};
             items.add(it);
             out = it;
             status = 201;
@@ -136,19 +154,91 @@ class FakeRestaurantApi {
             out = f;
             status = 201;
           case ('POST', '/tables'):
-            final t = {'id': id('t'), 'name': body['name'], 'seats': body['seats'], 'floorId': body['floorId']};
+            final n = (floors.firstWhere((f) => f['id'] == body['floorId'])['tables'] as List).length;
+            final t = {'id': id('t'), 'name': body['name'], 'seats': body['seats'], 'floorId': body['floorId'], 'shape': 'square', 'x': 120 + n * 160, 'y': 120, 'width': 80, 'height': 80, 'rotation': 0, 'chairs': null, 'status': 'available'};
             (floors.firstWhere((f) => f['id'] == body['floorId'])['tables'] as List).add(t);
             out = t;
             status = 201;
           case ('GET', '/staff'):
             out = staff;
           case ('POST', '/staff'):
-            final u = {'id': id('u'), 'name': body['name'], 'role': body['role'], 'status': 'active', 'hasPin': true, 'canDiscount': body['canDiscount'] ?? false, 'email': body['email']};
+            final u = {'id': id('u'), 'name': body['name'], 'role': body['role'], 'status': body['status'] ?? 'active', 'hasPin': body['pin'] != null, 'canDiscount': body['canDiscount'] ?? false, 'email': body['email'], 'webAccess': body['webAccess'] ?? false};
             staff.add(u);
-            out = u;
+            out = {...u, 'invite': body['sendInvite'] == true ? {'emailSent': true} : null};
             status = 201;
           case ('GET', '/devices'):
             out = devices;
+          case ('GET', '/inventory/products'):
+            if (!inventoryInPlan) return http.Response('{"code":"feature_not_in_plan","message":"Your plan does not include this"}', 403);
+            out = products;
+          case ('GET', '/inventory/locations'):
+            out = [];
+          case ('GET', '/inventory/suppliers'):
+            out = [];
+          case ('GET', '/inventory/alerts'):
+            out = {'low': [for (final x in products.where((x) => x['low'] == true)) {'id': x['id'], 'sku': x['sku'], 'name': x['name'], 'stock': x['stock'], 'minStock': x['minStock'], 'unit': x['baseUnit']}], 'negative': [], 'expiring': []};
+          case ('GET', '/inventory/movements'):
+            out = movements;
+          case ('GET', '/inventory/requests'):
+            out = [];
+          case ('GET', '/inventory/valuation'):
+            out = {'method': 'Moving weighted-average cost per base unit', 'totalPaise': 12000, 'byCategory': [{'category': 'Grains', 'valuePaise': 12000}], 'thisMonth': [], 'products': []};
+          case ('POST', '/inventory/movements'):
+            if (failNextMovement > 0) {
+              failNextMovement--;
+              return http.Response('{"code":"unreachable","message":"Network error"}', 503);
+            }
+            final dup = movements.where((m) => m['idempotencyKey'] == body['idempotencyKey']).toList();
+            if (dup.isEmpty) movements.add({...body, 'id': id('m'), 'productName': 'Basmati rice', 'baseUnit': 'g', 'quantity': 10000, 'valuePaise': 70000, 'createdAt': '2026-10-14T10:00:00Z', 'actorName': 'Demo Owner'});
+            out = {'duplicate': dup.isNotEmpty, 'movements': [movements.firstWhere((m) => m['idempotencyKey'] == body['idempotencyKey'])]};
+            status = 201;
+          case ('GET', '/expenses'):
+            final live = expenses.where((e) => e['voidedAt'] == null).toList();
+            out = {'totalPaise': live.fold<int>(0, (s, e) => s + (e['amountPaise'] as int)), 'byCategory': [], 'items': expenses, 'categories': ['Rent', 'Utilities', 'Other']};
+          case ('POST', '/expenses'):
+            final e = {'id': id('e'), ...body, 'createdByName': 'Demo Owner', 'voidedAt': null, 'voidReason': null};
+            expenses.add(e);
+            out = e;
+            status = 201;
+          case ('GET', '/imports/templates/menu'):
+          case ('GET', '/imports/templates/inventory'):
+            return http.Response.bytes([0x50, 0x4b, 3, 4], 200, headers: {'content-type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+          case ('POST', '/imports/inventory/validate'):
+            importJob = {
+              'id': 'stock-job', 'kind': 'inventory', 'mode': body['mode'], 'fileName': body['fileName'], 'status': 'validated',
+              'counts': {'productsCreate': 1, 'productsUpdate': 0, 'openingMovements': 1, 'openingValuePaise': 5000, 'suppliersCreate': 0, 'locationsCreate': 0},
+              'issues': [], 'canCommit': true, 'canCommitPartially': true,
+              'preview': {'products': [{'sku': 'RICE', 'op': 'create', 'data': {'name': 'Rice'}}],
+                'opening': [{'sku': 'RICE', 'baseQty': 1000, 'baseUnit': 'g', 'valuePaise': 5000}]},
+            };
+            out = importJob;
+          case ('POST', '/imports/stock-job/commit'):
+            importJob = {...importJob!, 'status': 'committed', 'result': {'productsCreated': 1, 'productsUpdated': 0, 'openingMovements': 1, 'skipped': []}};
+            out = importJob;
+          case ('POST', '/imports/menu/validate'):
+            importJob = {
+              'id': 'job-1', 'kind': 'menu', 'mode': body['mode'], 'fileName': body['fileName'], 'status': 'invalid',
+              'counts': {'itemsCreate': 2, 'itemsUpdate': 0, 'variantsCreate': 3, 'variantsUpdate': 0, 'categoriesCreate': 1, 'recipes': 0},
+              'issues': [{'sheet': 'Variants', 'row': 4, 'column': 'selling_price', 'message': 'Use at most 2 decimals (paise)', 'severity': 'error'}],
+              'canCommit': false, 'canCommitPartially': true,
+              'preview': {
+                'categoriesToCreate': ['Soft Drinks'],
+                'items': [{'row': 2, 'code': 'COLA', 'op': 'create', 'data': {'name': 'Cola', 'category': 'Soft Drinks'}}],
+                'variants': [{'row': 2, 'itemCode': 'COLA', 'code': 'COLA-500', 'op': 'create', 'data': {'name': '500 ml', 'pricePaise': 5000}}],
+                'recipes': [],
+              },
+            };
+            out = importJob;
+          case ('POST', '/imports/job-1/commit'):
+            if (body['partial'] != true) return http.Response('{"code":"import_has_errors","message":"Fix the errors"}', 409);
+            importJob = {...importJob!, 'status': 'partially_committed', 'result': {'itemsCreated': 1, 'variantsCreated': 1, 'skipped': [{'sheet': 'Variants', 'row': 4, 'code': 'WATER-1L'}]}};
+            out = importJob;
+          case ('GET', '/imports/job-1/errors.csv'):
+            return http.Response('severity,sheet,row,column,problem', 200, headers: {'content-type': 'text/csv'});
+          case ('GET', '/staff/limits'):
+            out = {'employeeLimit': null, 'activeEmployees': staff.where((u) => u['status'] == 'active').length - 1, 'staffPortal': true, 'customRoles': true, 'extendedRoles': true};
+          case ('GET', '/roles'):
+            out = {'builtIn': [], 'custom': customRoles, 'catalog': [], 'customRolesInPlan': true};
           case ('PUT', '/me/pin'):
             staff.firstWhere((x) => x['id'] == me['id'])['hasPin'] = true;
             out = {'id': me['id'], 'hasPin': true};
@@ -161,6 +251,33 @@ class FakeRestaurantApi {
               final u = staff.firstWhere((x) => x['id'] == path.split('/').last);
               u.addAll({for (final e in body.entries) if (e.key != 'pin') e.key: e.value});
               out = u;
+            } else if (path.startsWith('/floors/') && path.endsWith('/layout')) {
+              final f = floors.firstWhere((x) => x['id'] == path.split('/')[2]);
+              if (req.method == 'PUT') {
+                if (body['version'] != (f['version'] ?? 1)) return http.Response('{"code":"layout_changed","message":"Someone else saved this floor"}', 409);
+                f['version'] = (f['version'] as int? ?? 1) + 1;
+                f['width'] = body['width'];
+                f['height'] = body['height'];
+                f['tables'] = [for (final t in (body['tables'] as List).cast<Map<String, dynamic>>()) {'id': t['id'] ?? id('t'), 'floorId': f['id'], 'status': 'available', ...t}];
+              }
+              out = {
+                'floor': {'id': f['id'], 'name': f['name'], 'width': f['width'] ?? 1200, 'height': f['height'] ?? 800, 'version': f['version'] ?? 1},
+                'tables': [for (final t in (f['tables'] as List).cast<Map<String, dynamic>>()) {...t, 'live': tableLive[t['id']] ?? t['status'] ?? 'available'}],
+                'warnings': [],
+              };
+            } else if (req.method == 'POST' && path.startsWith('/tables/') && path.endsWith('/status')) {
+              final tid = path.split('/')[2];
+              for (final f in floors) {
+                for (final t in (f['tables'] as List).cast<Map<String, dynamic>>()) {
+                  if (t['id'] == tid) t['status'] = body['status'];
+                }
+              }
+              out = {'id': tid, 'status': body['status']};
+            } else if (req.method == 'POST' && path.startsWith('/expenses/') && path.endsWith('/void')) {
+              final e = expenses.firstWhere((x) => x['id'] == path.split('/')[2]);
+              e['voidedAt'] = '2026-10-14T10:00:00Z';
+              e['voidReason'] = body['reason'];
+              out = {'id': e['id'], 'voided': true};
             } else if (req.method == 'POST' && path.endsWith('/revoke')) {
               final d = devices.firstWhere((x) => x['id'] == path.split('/')[2]);
               d['revokedAt'] = '2026-10-13T05:00:00Z';
@@ -178,13 +295,14 @@ class FakeRestaurantApi {
 const desktop = Size(1440, 900);
 const phone = Size(390, 844);
 
-Future<FakeRestaurantApi> start(WidgetTester t, {Size size = desktop, Brightness brightness = Brightness.light}) async {
+Future<FakeRestaurantApi> start(WidgetTester t, {Size size = desktop, Brightness brightness = Brightness.light, void Function(FakeRestaurantApi)? setup}) async {
   t.view.physicalSize = size;
   t.view.devicePixelRatio = 1;
   t.platformDispatcher.platformBrightnessTestValue = brightness;
   addTearDown(t.view.reset);
   addTearDown(t.platformDispatcher.clearPlatformBrightnessTestValue);
   final fake = FakeRestaurantApi();
+  setup?.call(fake);
   await t.pumpWidget(ProviderScope(
     overrides: [apiProvider.overrideWithValue(ApiClient(baseUrl: 'http://192.168.1.25:3000/api/v1', client: fake.client()))],
     child: const AdminApp(),
@@ -248,11 +366,28 @@ void main() {
       await t.tap(find.byKey(const Key('add-dish')));
       await t.pumpAndSettle();
       await t.enterText(find.byKey(const Key('dish-name')), 'Paneer Tikka');
-      await t.enterText(find.byKey(const Key('dish-price')), '249.50');
+      await t.tap(find.byKey(const Key('save-dish')));
+      await t.pumpAndSettle();
+      expect(find.text('Enter a price in rupees for Regular, e.g. 249'), findsOneWidget);
+      await t.enterText(find.byKey(const Key('size-name-0')), 'Full plate');
+      await t.enterText(find.byKey(const Key('size-price-0')), '249.50');
+      await t.ensureVisible(find.byKey(const Key('add-size')));
+      await t.tap(find.byKey(const Key('add-size')));
+      await t.pumpAndSettle();
+      await t.enterText(find.byKey(const Key('size-name-1')), 'Half plate');
+      await t.enterText(find.byKey(const Key('size-price-1')), '150');
+      await t.enterText(find.byKey(const Key('size-qty-1')), '1');
+      await t.ensureVisible(find.byKey(const Key('save-dish')));
+      await t.tap(find.byKey(const Key('save-dish')));
+      await t.pumpAndSettle();
+      expect(find.text('Give Half plate both a serving quantity and a unit, or neither'), findsOneWidget);
+      await t.enterText(find.byKey(const Key('size-qty-1')), '');
       await t.tap(find.byKey(const Key('save-dish')));
       await t.pumpAndSettle();
       final sent = api.last('POST', '/menu/items');
-      expect(sent['pricePaise'], 24950);
+      final sizes = (sent['variants'] as List).cast<Map>();
+      expect([for (final v in sizes) (v['name'], v['pricePaise'], v['isDefault'])], [('Full plate', 24950, true), ('Half plate', 15000, false)]);
+      expect(find.textContaining('· 2 sizes'), findsOneWidget);
       expect(sent['categoryId'], api.cats.single['id']);
       expect(sent['taxRuleId'], api.taxes.single['id'], reason: 'GST 5% is created on the first dish');
       expect((sent['plateColors'] as Map).keys, containsAll(['base', 'sauce', 'garnish']));
@@ -269,22 +404,49 @@ void main() {
       await t.tap(find.byKey(const Key('add-staff')));
       await t.pumpAndSettle();
       await t.enterText(find.byKey(const Key('staff-name')), 'Anita');
-      await t.enterText(find.byKey(const Key('staff-pin')), '12');
       await t.tap(find.byKey(const Key('save-staff')));
       await t.pumpAndSettle();
-      expect(find.text('PIN must be 4–8 digits'), findsOneWidget);
-      await t.enterText(find.byKey(const Key('staff-pin')), '4321');
+      expect(find.text('Enter their work email'), findsOneWidget);
+      await t.enterText(find.byKey(const Key('staff-email')), 'anita@demo.com');
+      await t.ensureVisible(find.byKey(const Key('pin-now')));
+      await t.tap(find.byKey(const Key('pin-now')));
+      await t.pumpAndSettle();
+      for (final (bad, msg) in [('12', 'PIN must be 6 to 8 digits'), ('111111', 'PIN cannot be the same digit repeated'), ('123456', 'PIN cannot be a run of digits like 123456')]) {
+        await t.enterText(find.byKey(const Key('staff-pin')), bad);
+        await t.tap(find.byKey(const Key('save-staff')));
+        await t.pumpAndSettle();
+        expect(find.text(msg), findsOneWidget);
+      }
+      await t.enterText(find.byKey(const Key('staff-pin')), '482913');
       await t.tap(find.byKey(const Key('save-staff')));
       await t.pumpAndSettle();
-      expect(api.last('POST', '/staff'), containsPair('role', 'waiter'));
-      expect(api.last('POST', '/staff'), containsPair('pin', '4321'));
+      expect(api.last('POST', '/staff'), allOf(containsPair('role', 'waiter'), containsPair('pin', '482913'), containsPair('email', 'anita@demo.com')));
+      expect(api.last('POST', '/staff').containsKey('sendInvite'), isFalse);
       expect(find.byKey(const Key('staff-Anita')), findsOneWidget);
 
       await t.tap(find.byKey(const Key('staff-Anita')));
       await t.pumpAndSettle();
-      await t.tap(find.widgetWithText(DangerButton, 'Turn off'));
+      await t.ensureVisible(find.byKey(const Key('staff-active')));
+      await t.tap(find.byKey(const Key('staff-active')));
+      await t.tap(find.byKey(const Key('save-staff')));
       await t.pumpAndSettle();
       expect(api.staff.firstWhere((u) => u['name'] == 'Anita')['status'], 'disabled');
+    });
+
+    testWidgets('[$tag] staff: invite by email is the default; web access depends on the plan', (t) async {
+      final api = await start(t, size: size, brightness: brightness);
+      await go(t, 'Staff', size: size);
+      await t.tap(find.byKey(const Key('add-staff')));
+      await t.pumpAndSettle();
+      await t.enterText(find.byKey(const Key('staff-name')), 'Kunal');
+      await t.enterText(find.byKey(const Key('staff-email')), 'kunal@demo.com');
+      await t.ensureVisible(find.byKey(const Key('web-access')));
+      await t.tap(find.byKey(const Key('web-access')));
+      await t.tap(find.byKey(const Key('save-staff')));
+      await t.pumpAndSettle();
+      expect(api.last('POST', '/staff'), allOf(containsPair('sendInvite', true), containsPair('webAccess', true)));
+      expect(api.last('POST', '/staff').containsKey('pin'), isFalse);
+      expect(find.textContaining('Invite sent to kunal@demo.com'), findsOneWidget);
     });
 
     testWidgets('[$tag] staff: an owner with no PIN is told so and sets their own', (t) async {
@@ -295,15 +457,15 @@ void main() {
       expect(find.text('No PIN'), findsOneWidget);
       await t.tap(find.byKey(const Key('set-my-pin')));
       await t.pumpAndSettle();
-      await t.enterText(find.byKey(const Key('my-pin')), '2468');
-      await t.enterText(find.byKey(const Key('my-pin-again')), '2469');
+      await t.enterText(find.byKey(const Key('my-pin')), '246813');
+      await t.enterText(find.byKey(const Key('my-pin-again')), '246814');
       await t.tap(find.byKey(const Key('save-my-pin')));
       await t.pumpAndSettle();
       expect(find.text('The two PINs do not match'), findsOneWidget);
-      await t.enterText(find.byKey(const Key('my-pin-again')), '2468');
+      await t.enterText(find.byKey(const Key('my-pin-again')), '246813');
       await t.tap(find.byKey(const Key('save-my-pin')));
       await t.pumpAndSettle();
-      expect(api.last('PUT', '/me/pin'), {'pin': '2468'});
+      expect(api.last('PUT', '/me/pin'), {'pin': '246813'});
       expect(find.byKey(const Key('no-pin-banner')), findsNothing);
       expect(find.text('PIN set'), findsOneWidget);
     });
@@ -316,6 +478,8 @@ void main() {
       await t.enterText(find.byKey(const Key('ask-field')), 'Ground floor');
       await t.tap(find.widgetWithText(PrimaryButton, 'Save'));
       await t.pumpAndSettle();
+      await t.tap(find.text('List'));
+      await t.pumpAndSettle();
       await t.tap(find.byKey(const Key('add-table')));
       await t.pumpAndSettle();
       await t.tap(find.widgetWithText(ChoiceChip, '6'));
@@ -323,6 +487,75 @@ void main() {
       await t.pumpAndSettle();
       expect(api.last('POST', '/tables'), {'floorId': api.floors.single['id'], 'name': '1', 'seats': 6});
       expect(find.byKey(const Key('console-table-1')), findsOneWidget);
+    });
+
+    testWidgets('[$tag] floor plan: edit, add, move, rotate, duplicate names refused, overlap warned, save persists', (t) async {
+      final api = await start(t, size: size, brightness: brightness);
+      api.floors.add({'id': 'f1', 'name': 'Ground', 'branchId': 'b1', 'sortOrder': 0, 'version': 1, 'tables': [
+        {'id': 't1', 'name': '1', 'seats': 4, 'floorId': 'f1', 'shape': 'square', 'x': 150, 'y': 150, 'width': 80, 'height': 80, 'rotation': 0, 'chairs': null, 'status': 'available'},
+        {'id': 't2', 'name': '2', 'seats': 2, 'floorId': 'f1', 'shape': 'round', 'x': 400, 'y': 150, 'width': 80, 'height': 80, 'rotation': 0, 'chairs': null, 'status': 'available'},
+      ]});
+      api.tableLive['t2'] = 'occupied';
+      await go(t, 'Floors & tables', size: size);
+      expect(find.byKey(const Key('table-1')), findsOneWidget);
+      expect(find.byKey(const Key('chair-1-3')), findsOneWidget, reason: '4 chairs arranged from the seats');
+      await t.tap(find.byKey(const Key('edit-plan')));
+      await t.pumpAndSettle();
+      // select table 1, rename it to "2": duplicate refused on save
+      await t.ensureVisible(find.byKey(const Key('table-1')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const Key('table-1')));
+      await t.pumpAndSettle();
+      await t.ensureVisible(find.byKey(const Key('rotate-right')));
+      await t.tap(find.byKey(const Key('rotate-right')));
+      await t.tap(find.byKey(const Key('rotate-right')));
+      await t.tap(find.byKey(const Key('seats-plus')));
+      await t.pumpAndSettle();
+      final nameField = find.descendant(of: find.byType(FloorEditor), matching: find.byType(TextFormField)).first;
+      await t.ensureVisible(nameField);
+      await t.enterText(nameField, '2');
+      await t.pumpAndSettle();
+      await t.ensureVisible(find.byKey(const Key('save-plan')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const Key('save-plan')));
+      await t.pumpAndSettle();
+      expect(find.textContaining('Two tables are called "2"'), findsWidgets);
+      await t.enterText(nameField, 'Window');
+      await t.pumpAndSettle();
+      // drag it onto table 2 → overlap warning (allowed)
+      await t.ensureVisible(find.byKey(const Key('table-Window')));
+      await t.pumpAndSettle();
+      await t.drag(find.byKey(const Key('table-Window')), const Offset(250, 0));
+      await t.pumpAndSettle();
+      await t.ensureVisible(find.byKey(const Key('save-plan')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const Key('save-plan')));
+      await t.pumpAndSettle();
+      final sent = api.last('PUT', '/layout');
+      final win = (sent['tables'] as List).cast<Map>().firstWhere((x) => x['name'] == 'Window');
+      expect((win['id'], win['rotation'], win['seats']), ('t1', 30, 5));
+      expect(win['x'], isNot(150), reason: 'moved');
+      expect(sent['version'], 1);
+      expect(api.floors.single['version'], 2);
+      expect(find.byKey(const Key('table-Window')), findsOneWidget, reason: 'reloaded from the server');
+    });
+
+    testWidgets('[$tag] floor plan: without the plan feature it is a live view; staff mark a table reserved', (t) async {
+      final api = await start(t, size: size, brightness: brightness);
+      api.features = ['menu', 'tables'];
+      api.floors.add({'id': 'f1', 'name': 'Ground', 'branchId': 'b1', 'sortOrder': 0, 'version': 1, 'tables': [
+        {'id': 't1', 'name': '1', 'seats': 4, 'floorId': 'f1', 'shape': 'square', 'x': 150, 'y': 150, 'width': 80, 'height': 80, 'rotation': 0, 'chairs': null, 'status': 'available'},
+      ]});
+      await go(t, 'Floors & tables', size: size);
+      expect(find.byKey(const Key('editor-locked')), findsOneWidget);
+      expect(find.byKey(const Key('edit-plan')), findsNothing);
+      await t.ensureVisible(find.byKey(const Key('table-1')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const Key('table-1')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const Key('status-reserved')));
+      await t.pumpAndSettle();
+      expect(api.last('POST', '/status'), {'status': 'reserved'});
     });
 
     testWidgets('[$tag] hubs & devices: shows the address for the POS and revokes only with a reason', (t) async {
@@ -420,5 +653,223 @@ void main() {
       expect(Theme.of(t.element(find.byType(Scaffold).first)).colorScheme.primary, const Color(0xFF1A73E8));
       expect(MediaQuery.of(t.element(find.byType(Scaffold).first)).textScaler, const TextScaler.linear(1.12));
     });
+  });
+
+  group('inventory & expenses', () {
+    testWidgets('owner receives stock: kg with a cost; a dropped connection retries with the same key so nothing is added twice', (t) async {
+      final api = await start(t);
+      await go(t, 'Inventory', size: desktop);
+      expect(find.byKey(const Key('stock-RICE-BAS')), findsOneWidget);
+      expect(find.text('Low'), findsOneWidget);
+      await t.tap(find.byKey(const Key('actions-RICE-BAS')));
+      await t.pumpAndSettle();
+      expect(find.text('Kitchen use'), findsOneWidget);
+      await t.tap(find.text('Receive stock'));
+      await t.pumpAndSettle();
+      await t.enterText(find.byKey(const Key('mv-qty')), '10');
+      await t.enterText(find.byKey(const Key('mv-cost')), '70');
+      api.failNextMovement = 1;
+      await t.tap(find.byKey(const Key('save-movement')));
+      await t.pumpAndSettle();
+      expect(find.byKey(const Key('mv-error')), findsOneWidget);
+      await t.tap(find.byKey(const Key('save-movement'))); // retry
+      await t.pumpAndSettle();
+      final sent = api.calls.where((c) => c.method == 'POST' && c.url.path.endsWith('/inventory/movements')).map((c) => jsonDecode(c.body) as Map).toList();
+      expect(sent.length, 2);
+      expect(sent[0]['idempotencyKey'], sent[1]['idempotencyKey']);
+      expect(sent.last, allOf(containsPair('type', 'purchase'), containsPair('quantity', 10), containsPair('unit', 'kg'), containsPair('unitCostPaise', 7000)));
+      expect(api.movements, hasLength(1));
+    });
+
+    testWidgets('a chef sees only kitchen use and wastage; wastage needs a reason', (t) async {
+      final api = await start(t, setup: (f) {
+        f.me = {...f.me, 'roles': ['chef'], 'permissions': ['menu.read', 'kds.read', 'inventory.read', 'inventory.consume', 'inventory.request']};
+      });
+      await go(t, 'Inventory', size: desktop);
+      expect(find.byKey(const Key('add-product')), findsNothing);
+      await t.tap(find.byKey(const Key('actions-RICE-BAS')));
+      await t.pumpAndSettle();
+      expect(find.text('Receive stock'), findsNothing);
+      expect(find.text('Edit product'), findsNothing);
+      await t.tap(find.text('Wastage'));
+      await t.pumpAndSettle();
+      await t.enterText(find.byKey(const Key('mv-qty')), '200');
+      await t.tap(find.byKey(const Key('save-movement')));
+      await t.pumpAndSettle();
+      expect(find.text('Give a reason'), findsOneWidget);
+      await t.tap(find.text('Burnt / over-cooked'));
+      await t.tap(find.byKey(const Key('save-movement')));
+      await t.pumpAndSettle();
+      expect(api.last('POST', '/inventory/movements'), allOf(containsPair('type', 'wastage'), containsPair('reason', 'Burnt / over-cooked'), containsPair('unit', 'g')));
+    });
+
+    testWidgets('without inventory in the plan the page explains it', (t) async {
+      await start(t, setup: (f) => f.inventoryInPlan = false);
+      await go(t, 'Inventory', size: desktop);
+      expect(find.byKey(const Key('inventory-locked')), findsOneWidget);
+    });
+
+    testWidgets('expenses: add in rupees (sent as paise), void with a reason', (t) async {
+      final api = await start(t);
+      await go(t, 'Expenses', size: desktop);
+      await t.tap(find.byKey(const Key('add-expense')));
+      await t.pumpAndSettle();
+      await t.enterText(find.byKey(const Key('expense-desc')), 'Electricity');
+      await t.enterText(find.byKey(const Key('expense-amount')), '12345.50');
+      await t.tap(find.byKey(const Key('save-expense')));
+      await t.pumpAndSettle();
+      expect(api.last('POST', '/expenses'), containsPair('amountPaise', 1234550));
+      await t.tap(find.byKey(const Key('void-Electricity')));
+      await t.pumpAndSettle();
+      await t.enterText(find.byKey(const Key('void-reason')), 'Entered twice');
+      await t.tap(find.byKey(const Key('confirm-void')));
+      await t.pumpAndSettle();
+      expect(api.expenses.single['voidReason'], 'Entered twice');
+    });
+  });
+
+  for (final zoom in [.5, 1.0, 2.0]) {
+    testWidgets('mouse drags tables at zoom $zoom without panning; saved positions reload', (t) async {
+      final api = await start(t);
+      api.floors.add({'id': 'f1', 'name': 'Ground', 'branchId': 'b1', 'tables': [
+        {'id': 't1', 'name': '1', 'seats': 4, 'shape': 'square', 'x': 150, 'y': 150, 'width': 80, 'height': 80, 'rotation': 0, 'chairs': null},
+      ]});
+      await go(t, 'Floors & tables', size: desktop);
+      await t.tap(find.byKey(const Key('edit-plan')));
+      await t.pumpAndSettle();
+      final controller = t.widget<InteractiveViewer>(find.byKey(const Key('floor-canvas'))).transformationController!;
+      controller.value = Matrix4.identity()..scaleByDouble(zoom, zoom, 1, 1);
+      await t.pump();
+      final before = controller.value.clone();
+      final gesture = await t.startGesture(t.getCenter(find.byKey(const Key('table-1'))), kind: PointerDeviceKind.mouse);
+      for (var i = 0; i < 5; i++) {
+        await gesture.moveBy(const Offset(10, 5));
+        await t.pump();
+      }
+      await gesture.up();
+      await t.pumpAndSettle();
+      expect(controller.value, before, reason: 'dragging a table must not pan the floor');
+      await t.tap(find.byKey(const Key('save-plan')));
+      await t.pumpAndSettle();
+      final saved = (api.last('PUT', '/layout')['tables'] as List).single as Map;
+      expect(saved['x'], ((150 + 50 / zoom) / 10).round() * 10);
+      expect(saved['y'], ((150 + 25 / zoom) / 10).round() * 10);
+      expect(find.byKey(const Key('table-1')), findsOneWidget);
+    });
+  }
+
+  testWidgets('owners can find both Excel imports even when their plan excludes import', (t) async {
+    final api = await start(t, setup: (a) => (a.me['permissions'] as List).remove('import.run'));
+    for (final entry in [('Menu', 'menu'), ('Inventory', 'inventory')]) {
+      await go(t, entry.$1, size: desktop);
+      await t.tap(find.byKey(Key('import-${entry.$2}')));
+      await t.pumpAndSettle();
+      expect(find.textContaining('Excel import is not in your plan'), findsOneWidget);
+      expect(find.byType(ImportDialog), findsNothing);
+    }
+    expect(api.calls.where((c) => c.url.path.contains('/imports/')), isEmpty);
+  });
+
+  for (final zoom in [1.0, 2.0]) {
+    testWidgets('Move chairs mode: chair moves independently, then table carries all chairs at zoom $zoom', (t) async {
+      final api = await start(t);
+      api.floors.add({'id': 'f1', 'name': 'Ground', 'branchId': 'b1', 'tables': [
+        {'id': 't1', 'name': '1', 'seats': 4, 'shape': 'rect', 'x': 150, 'y': 150, 'width': 100, 'height': 80, 'rotation': 90,
+          'chairs': [{'x': 0, 'y': -58, 'rotation': 180}, {'x': 0, 'y': 58, 'rotation': 0}]},
+      ]});
+      await go(t, 'Floors & tables', size: desktop);
+      await t.tap(find.byKey(const Key('edit-plan')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const Key('table-1')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const Key('chair-mode')));
+      await t.pumpAndSettle();
+      final controller = t.widget<InteractiveViewer>(find.byKey(const Key('floor-canvas'))).transformationController!;
+      controller.value = Matrix4.identity()..scaleByDouble(zoom, zoom, 1, 1);
+      await t.pump();
+      final transform = controller.value.clone();
+      final table = find.byKey(const Key('table-1'));
+      final chair = find.byKey(const Key('chair-1-0'));
+      final initialTableCenter = t.getCenter(table);
+      final initialChairCenter = t.getCenter(chair);
+      final chairDrag = await t.startGesture(initialChairCenter, kind: PointerDeviceKind.mouse);
+      await chairDrag.moveBy(Offset(10 * zoom, 0));
+      await t.pump();
+      await chairDrag.up();
+      await t.pumpAndSettle();
+      expect(t.getCenter(table), initialTableCenter, reason: 'moving a chair does not move its table');
+      expect(t.getCenter(chair).dx, closeTo(initialChairCenter.dx + 10 * zoom, .01));
+      final chairCenters = [t.getCenter(chair), t.getCenter(find.byKey(const Key('chair-1-1')))];
+      final tableDrag = await t.startGesture(t.getCenter(table), kind: PointerDeviceKind.mouse);
+      for (var i = 0; i < 5; i++) {
+        await tableDrag.moveBy(Offset(10 * zoom, 4 * zoom));
+        await t.pump();
+      }
+      await tableDrag.up();
+      await t.pumpAndSettle();
+      expect(t.getCenter(table), initialTableCenter + Offset(50 * zoom, 20 * zoom));
+      for (var i = 0; i < 2; i++) {
+        expect(t.getCenter(find.byKey(Key('chair-1-$i'))), chairCenters[i] + Offset(50 * zoom, 20 * zoom));
+      }
+      expect(controller.value, transform, reason: 'neither drag pans the floor');
+      await t.tap(find.byKey(const Key('save-plan')));
+      await t.pumpAndSettle();
+      final saved = (api.last('PUT', '/layout')['tables'] as List).single as Map;
+      expect(saved['x'], 200);
+      expect(saved['y'], 170);
+      expect(saved['chairs'], [{'x': 0, 'y': -68, 'rotation': 180}, {'x': 0, 'y': 58, 'rotation': 0}]);
+      expect(t.getCenter(find.byKey(const Key('chair-1-0'))).dx, closeTo(chairCenters[0].dx + 50 * zoom, .01));
+    });
+  }
+
+  testWidgets('inventory Excel import downloads its template and confirms the opening stock preview', (t) async {
+    final api = await start(t);
+    xlsxPicker = () async => (name: 'inventory.xlsx', bytes: [0x50, 0x4b, 3, 4]);
+    addTearDown(() => xlsxPicker = pickXlsx);
+    await go(t, 'Inventory', size: desktop);
+    await t.tap(find.byKey(const Key('import-inventory')));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('download-template')));
+    await t.pumpAndSettle();
+    expect(lastSavedFile?.name, 'house-plating-inventory-import-template.xlsx');
+    await t.tap(find.byKey(const Key('upload-xlsx')));
+    await t.pumpAndSettle();
+    expect(api.last('POST', '/imports/inventory/validate')['fileName'], 'inventory.xlsx');
+    expect(find.textContaining('Opening stock RICE: +1000 g'), findsOneWidget);
+    expect(api.calls.where((c) => c.url.path.endsWith('/commit')), isEmpty);
+    await t.tap(find.byKey(const Key('confirm-import')));
+    await t.pumpAndSettle();
+    expect(api.last('POST', '/imports/stock-job/commit'), {'partial': false});
+    expect(find.text('Imported'), findsOneWidget);
+  });
+
+  testWidgets('excel import: template, upload, errors by row and column, preview, only-valid-rows confirm, results', (t) async {
+    final api = await start(t);
+    xlsxPicker = () async => (name: 'menu.xlsx', bytes: [0x50, 0x4b, 3, 4]);
+    await go(t, 'Menu', size: desktop);
+    await t.tap(find.byKey(const Key('import-menu')));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('download-template')));
+    await t.pumpAndSettle();
+    expect(lastSavedFile?.name, 'house-plating-menu-import-template.xlsx');
+    await t.tap(find.byKey(const Key('mode-create')));
+    await t.tap(find.byKey(const Key('upload-xlsx')));
+    await t.pumpAndSettle();
+    expect(api.last('POST', '/imports/menu/validate'), allOf(containsPair('fileName', 'menu.xlsx'), containsPair('mode', 'create'), containsPair('dataBase64', 'UEsDBA==')));
+    expect(find.text('1 error to fix'), findsOneWidget);
+    expect(find.text('Sheet Variants · row 4 · column selling_price'), findsOneWidget);
+    expect(find.textContaining('New size COLA-500'), findsOneWidget);
+    final confirm = find.byKey(const Key('confirm-import'));
+    expect(t.widget<PrimaryButton>(confirm).onPressed, isNull, reason: 'errors block the import until the person chooses valid rows only');
+    await t.tap(find.byKey(const Key('error-report')));
+    await t.pumpAndSettle();
+    expect(lastSavedFile?.name, 'import-menu-errors.csv');
+    await t.tap(find.byKey(const Key('partial')));
+    await t.pumpAndSettle();
+    await t.tap(confirm);
+    await t.pumpAndSettle();
+    expect(api.last('POST', '/commit'), {'partial': true});
+    expect(find.byKey(const Key('import-done')), findsOneWidget);
+    expect(find.textContaining('Variants row 4 (WATER-1L)'), findsOneWidget);
   });
 }

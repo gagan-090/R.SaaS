@@ -7,6 +7,11 @@
   "status": 200,
   "response": [
     {
+      "key": "audit.export",
+      "description": "Export restaurant records and audit log",
+      "tier": "restaurant"
+    },
+    {
       "key": "audit.read",
       "description": "Restaurant audit log",
       "tier": "restaurant"
@@ -32,6 +37,16 @@
       "tier": "restaurant"
     },
     {
+      "key": "expense.read",
+      "description": "View purchases and expenses",
+      "tier": "restaurant"
+    },
+    {
+      "key": "expense.write",
+      "description": "Record expenses",
+      "tier": "restaurant"
+    },
+    {
       "key": "floor.manage",
       "description": "Manage floors and tables",
       "tier": "restaurant"
@@ -42,13 +57,33 @@
       "tier": "restaurant"
     },
     {
+      "key": "import.run",
+      "description": "Import menu / inventory from Excel",
+      "tier": "restaurant"
+    },
+    {
+      "key": "inventory.consume",
+      "description": "Record kitchen consumption and wastage",
+      "tier": "restaurant"
+    },
+    {
+      "key": "inventory.manage",
+      "description": "Inventory products, suppliers, locations and recipe mapping",
+      "tier": "restaurant"
+    },
+    {
       "key": "inventory.read",
-      "description": "View inventory",
+      "description": "View stock, products and movement history",
+      "tier": "restaurant"
+    },
+    {
+      "key": "inventory.request",
+      "description": "Request replenishment",
       "tier": "restaurant"
     },
     {
       "key": "inventory.write",
-      "description": "Inventory receipts, transfers, adjustments, wastage",
+      "description": "Opening stock, purchases/receipts, returns, stock counts, adjustments, transfers",
       "tier": "restaurant"
     },
     {
@@ -209,6 +244,11 @@
     {
       "key": "restaurant.profile.read",
       "description": "View restaurant profile and tax settings",
+      "tier": "restaurant"
+    },
+    {
+      "key": "roles.manage",
+      "description": "Create and edit custom roles",
       "tier": "restaurant"
     },
     {

@@ -64,6 +64,11 @@ class AuthNotifier extends Notifier<AuthState> with ChangeNotifier {
     }
   }
 
+  Future<void> pinLogin(String email, String pin) async {
+    await _api.pinLogin(email, pin);
+    await _loadMe();
+  }
+
   Future<void> verify({String? code, String? recoveryCode}) async {
     final s = state;
     if (s is! MfaChallenge) return;

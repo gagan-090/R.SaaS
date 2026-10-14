@@ -132,6 +132,95 @@ void main() {
     });
   });
 
+  group('menu sizes / portions (variants)', () {
+    Future<void> withSizes({int halfPrice = 22000, bool halfAvailable = true}) async {
+      final pull = await h.configPull();
+      pull['categories'] = [
+        {'id': 'c1', 'name': 'Mains', 'sortOrder': 0, 'deleted': false, 'active': true},
+        {'id': 'c9', 'name': 'Hidden', 'sortOrder': 1, 'deleted': false, 'active': false},
+      ];
+      (pull['items']! as List).add({'id': 'hidden-item', 'categoryId': 'c9', 'name': 'Secret', 'pricePaise': 100, 'taxRuleId': 'tx5', 'available': true, 'isVeg': true, 'deleted': false});
+      pull['variants'] = [
+        {'id': 'v-q', 'itemId': Harness.butterChicken, 'code': 'BC-Q', 'name': 'Quarter plate', 'portionLabel': 'quarter', 'servingQuantity': 1, 'servingUnit': 'plate', 'pricePaise': 12000, 'taxRuleId': null, 'available': true, 'isDefault': false, 'sortOrder': 0, 'deleted': false},
+        {'id': 'v-h', 'itemId': Harness.butterChicken, 'code': 'BC-H', 'name': 'Half plate', 'portionLabel': 'half', 'servingQuantity': 1, 'servingUnit': 'plate', 'pricePaise': halfPrice, 'taxRuleId': null, 'available': halfAvailable, 'isDefault': false, 'sortOrder': 1, 'deleted': false},
+        {'id': 'v-f', 'itemId': Harness.butterChicken, 'code': 'BC-F', 'name': 'Full plate', 'portionLabel': 'full', 'servingQuantity': 1, 'servingUnit': 'plate', 'pricePaise': 40000, 'taxRuleId': null, 'available': true, 'isDefault': true, 'sortOrder': 2, 'deleted': false},
+        {'id': 'v-500', 'itemId': Harness.lassi, 'code': 'LASSI-500', 'name': '500 ml', 'servingQuantity': 500, 'servingUnit': 'ml', 'pricePaise': 15000, 'taxRuleId': 'tx5', 'available': true, 'isDefault': true, 'sortOrder': 0, 'deleted': false},
+      ];
+      await h.hub.applyConfig(pull);
+    }
+
+    test('the POS menu lists each size with its own price; inactive categories are hidden', () async {
+      await withSizes();
+      final menu = (await h.get('/menu', session: cashier)).json;
+      final items = (menu['items']! as List).cast<Map<String, Object?>>();
+      expect(items.any((i) => i['name'] == 'Secret'), isFalse);
+      expect((menu['categories']! as List).length, 1);
+      final bc = items.firstWhere((i) => i['id'] == Harness.butterChicken);
+      expect([for (final v in (bc['variants']! as List).cast<Map<String, Object?>>()) (v['name'], v['price_paise'])], [('Quarter plate', 12000), ('Half plate', 22000), ('Full plate', 40000)]);
+      final lassi = items.firstWhere((i) => i['id'] == Harness.lassi);
+      expect(((lassi['variants']! as List).single as Map)['rate_bp'], 500, reason: 'variant tax overrides the item tax');
+    });
+
+    test('ordering a size uses its price, tax and name; the snapshot survives later price changes; KOT and bill show the size', () async {
+      await withSizes();
+      final id = await openDineIn(Harness.t1);
+      final o = await add(id, [
+        {'menuItemId': Harness.butterChicken, 'variantId': 'v-h', 'qty': 2},
+        {'menuItemId': Harness.lassi, 'qty': 1}, // no size sent: the default
+        {'menuItemId': Harness.naan, 'qty': 1}, // an item without sizes still works
+      ]);
+      final lines = (o['lines']! as List).cast<Map<String, Object?>>();
+      final half = lines.firstWhere((l) => l['variant_id'] == 'v-h');
+      expect((half['name_snapshot'], half['price_snapshot_paise'], half['variant_code_snapshot']), ('Butter Chicken · Half plate', 22000, 'BC-H'));
+      final lassi = lines.firstWhere((l) => l['menu_item_id'] == Harness.lassi);
+      expect((lassi['variant_id'], lassi['price_snapshot_paise'], lassi['tax_rate_snapshot_bp']), ('v-500', 15000, 500));
+      expect(lines.firstWhere((l) => l['menu_item_id'] == Harness.naan)['price_snapshot_paise'], 6000);
+      await withSizes(halfPrice: 25000); // owner raises the price later
+      final again = (await h.get('/orders/$id', session: cashier)).json;
+      expect((again['lines']! as List).cast<Map<String, Object?>>().firstWhere((l) => l['variant_id'] == 'v-h')['price_snapshot_paise'], 22000);
+      expect((await h.post('/orders/$id/kot', session: cashier)).status, 201);
+      final kds = (await h.get('/kds/tickets', session: cashier)).body;
+      expect(jsonEncode(kds), contains('Butter Chicken · Half plate'));
+      final outbox = await h.hub.db.query("SELECT payload FROM sync_outbox WHERE entity = 'order_line'");
+      expect(outbox.map((r) => jsonDecode(r['payload']! as String)['variant_code_snapshot']), contains('BC-H'));
+      // the bill is built from the snapshots: 2 half plates at the old price + lassi 500 ml + naan
+      final bill = await h.post('/orders/$id/bill', session: cashier, body: {});
+      expect(bill.status, anyOf(200, 201), reason: '$bill');
+      expect((bill.json['bill'] as Map? ?? bill.json)['subtotal_paise'], 2 * 22000 + 15000 + 6000);
+    });
+
+    test('an unavailable or unknown size is refused', () async {
+      await withSizes(halfAvailable: false);
+      final id = await openDineIn(Harness.t1);
+      final r = await h.post('/orders/$id/lines', session: cashier, body: {'lines': [{'menuItemId': Harness.butterChicken, 'variantId': 'v-h', 'qty': 1}]});
+      expect(r.code, 'item_unavailable');
+      final r2 = await h.post('/orders/$id/lines', session: cashier, body: {'lines': [{'menuItemId': Harness.butterChicken, 'variantId': 'v-500', 'qty': 1}]});
+      expect(r2.status, 404, reason: "another item's size");
+    });
+  });
+
+  test('floor plan: tables carry shape, position and chairs; reserved shows, unavailable refuses new orders', () async {
+    final pull = await h.configPull();
+    pull['floors'] = [{'id': 'f1', 'name': 'Ground', 'sortOrder': 0, 'deleted': false, 'width': 1500, 'height': 900}];
+    pull['tables'] = [
+      {'id': Harness.t1, 'floorId': 'f1', 'name': '1', 'seats': 2, 'layoutX': 0, 'layoutY': 0, 'deleted': false, 'shape': 'round', 'posX': 150, 'posY': 150, 'width': 80, 'height': 80, 'rotation': 0, 'chairs': [{'x': -60, 'y': 0, 'rotation': 90}], 'status': 'reserved'},
+      {'id': Harness.t2, 'floorId': 'f1', 'name': '2', 'seats': 6, 'layoutX': 2, 'layoutY': 0, 'deleted': false, 'shape': 'rect', 'posX': 400, 'posY': 150, 'width': 160, 'height': 80, 'rotation': 90, 'chairs': null, 'status': 'unavailable'},
+      {'id': Harness.t3, 'floorId': 'f1', 'name': '3', 'seats': 4, 'layoutX': 4, 'layoutY': 0, 'deleted': false}, // from an older cloud
+    ];
+    await h.hub.applyConfig(pull);
+    final st = (await h.get('/state', session: cashier)).json;
+    expect((st['floors']! as List).cast<Map<String, Object?>>().single['width'], 1500);
+    final tables = {for (final t in (st['tables']! as List).cast<Map<String, Object?>>()) t['name']: t};
+    expect((tables['1']!['shape'], tables['1']!['pos_x'], tables['1']!['status'], (tables['1']!['chairs'] as List).length), ('round', 150, 'reserved', 1));
+    expect((tables['2']!['rotation'], tables['2']!['status']), (90, 'unavailable'));
+    expect((tables['3']!['pos_x'], tables['3']!['shape']), (420, 'square'), reason: 'legacy grid position is placed on the plan');
+    expect((await h.post('/orders', session: cashier, body: {'type': 'dine_in', 'tableId': Harness.t2})).code, 'table_unavailable');
+    final id = await openDineIn(Harness.t1); // a reserved table seats its guests
+    final st2 = (await h.get('/state', session: cashier)).json;
+    expect((st2['tables']! as List).cast<Map<String, Object?>>().firstWhere((t) => t['id'] == Harness.t1)['status'], 'occupied');
+    expect((await h.post('/orders/$id/transfer', session: cashier, body: {'toTableId': Harness.t2})).code, 'table_unavailable');
+  });
+
   group('AC-04 table transfer', () {
     test('moves once with all lines and timestamps; occupied target is a conflict', () async {
       final a = await openDineIn(Harness.t1);

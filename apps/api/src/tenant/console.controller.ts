@@ -5,8 +5,8 @@ import { z } from 'zod';
 import type { Actor, AuditDetails } from '../common/actor';
 import { AuditCtx, CurrentActor } from '../common/actor';
 import { Audited, AuthenticatedOnly, Public, RequirePermissions, RequiresFeature } from '../common/decorators';
-import { badRequest, conflict, forbidden, notFound } from '../common/errors';
-import { EXTENDED_ROLES, type RestaurantRoleName } from '../common/permissions';
+import { conflict, forbidden, notFound } from '../common/errors';
+import { pinProblem } from '../staff/pin-policy';
 import { uuidv7 } from '../common/uuid';
 import { apiBody, zbody, ZodPipe } from '../common/validation';
 import { hashPassword } from '../auth/auth.service';
@@ -14,31 +14,12 @@ import { DbService, Tx } from '../db/db.service';
 import { LicenseService } from '../licensing/license.service';
 import { BrandingBody, DEFAULT_BRANDING, decodeImage, effectiveBranding, ImageBody } from './branding';
 
-/** Roles an owner / IT admin can give staff from the console. The owner account itself is created at onboarding. */
-const STAFF_ROLES = ['it_admin', 'cashier', 'waiter', 'chef', 'auditor'] as const;
-const Pin = z.string().regex(/^\d{4,8}$/, 'PIN must be 4–8 digits');
-const StaffBody = z
-  .object({
-    name: z.string().trim().min(1).max(80),
-    role: z.enum(STAFF_ROLES),
-    pin: Pin,
-    phone: z.string().trim().max(20).optional(),
-    // console sign-in is optional (IT admins / auditors who use the web console)
-    email: z.string().trim().toLowerCase().email().optional(),
-    password: z.string().min(8).max(200).optional(),
-    canDiscount: z.boolean().default(false), // cashier extra permission (G cell)
-  })
-  .refine((b) => !b.email || !!b.password, { message: 'A password is required with an email', path: ['password'] });
-const StaffPatch = z.object({
-  name: z.string().trim().min(1).max(80).optional(),
-  role: z.enum(STAFF_ROLES).optional(),
-  pin: Pin.optional(),
-  phone: z.string().trim().max(20).nullable().optional(),
-  status: z.enum(['active', 'disabled']).optional(),
-  canDiscount: z.boolean().optional(),
+const Pin = z.string().superRefine((p, ctx) => {
+  const problem = pinProblem(p);
+  if (problem) ctx.addIssue({ code: 'custom', message: problem });
 });
 const MyPinBody = z.object({ pin: Pin });
-const CategoryPatch = z.object({ name: z.string().trim().min(1).max(60).optional(), sortOrder: z.number().int().optional() });
+const CategoryPatch = z.object({ name: z.string().trim().min(1).max(60).optional(), sortOrder: z.number().int().optional(), active: z.boolean().optional() });
 const RevokeBody = z.object({ reason: z.string().trim().min(3).max(500) });
 const DashboardQuery = z.object({
   range: z.enum(['today', '7d', '30d']).optional(),
@@ -388,86 +369,6 @@ export class ConsoleController {
     Object.assign(audit, { objectType: 'restaurant', objectId: a.tenantId, before: { logoImageId: prev } });
   }
 
-  // ---------------- staff
-
-  @RequirePermissions('staff.read')
-  @Get('staff')
-  staff(@CurrentActor() a: Actor) {
-    return this.t(a, async (tx) =>
-      (await tx.user.findMany({ include: { roles: true }, orderBy: [{ status: 'asc' }, { name: 'asc' }] })).map((u) => ({
-        id: u.id, name: u.name, email: u.email, phone: u.phone, status: u.status, hasPin: !!u.pinHash, createdAt: u.createdAt,
-        role: u.roles[0]?.role ?? null, canDiscount: u.roles.some((r) => r.extraPermissions.includes('discount.apply')),
-      })),
-    );
-  }
-
-  private async assertRoleAllowed(tx: Tx, a: Actor, role: RestaurantRoleName) {
-    if (!EXTENDED_ROLES.includes(role)) return;
-    const ent = await this.licenses.entitlement(tx, a.tenantId!);
-    if (!ent.features.includes('roles.extended')) throw forbidden('feature_not_in_plan', `The ${role.replace('_', ' ')} role needs the Premium plan`);
-  }
-
-  @RequirePermissions('staff.manage')
-  @Audited('staff.created')
-  @Post('staff')
-  @ApiBody(apiBody(StaffBody))
-  async createStaff(@CurrentActor() a: Actor, @Body(zbody(StaffBody)) b: z.infer<typeof StaffBody>, @AuditCtx() audit: AuditDetails) {
-    if (b.role === 'it_admin' && !a.roles.includes('owner')) throw forbidden('owner_only', 'Only the owner can add IT admins');
-    const [pinHash, passwordHash] = await Promise.all([hashPassword(b.pin), b.password ? hashPassword(b.password) : Promise.resolve(null)]);
-    const u = await this.t(a, async (tx) => {
-      await this.assertRoleAllowed(tx, a, b.role);
-      if (b.email) {
-        const taken = await this.db.platform((p) => Promise.all([p.user.findUnique({ where: { email: b.email } }), p.platformAdmin.findUnique({ where: { email: b.email } })]));
-        if (taken[0] || taken[1]) throw conflict('email_taken', 'That email is already used');
-      }
-      return tx.user.create({
-        data: {
-          tenantId: a.tenantId!, name: b.name, phone: b.phone, email: b.email ?? null, passwordHash, pinHash,
-          roles: { create: { tenantId: a.tenantId!, role: b.role, branchIds: [], extraPermissions: b.role === 'cashier' && b.canDiscount ? ['discount.apply'] : [] } },
-        },
-      });
-    });
-    // never audit the PIN or password
-    Object.assign(audit, { objectType: 'user', objectId: u.id, after: { name: u.name, role: b.role, email: u.email, canDiscount: b.canDiscount } });
-    return { id: u.id, name: u.name, role: b.role, status: u.status };
-  }
-
-  @RequirePermissions('staff.manage')
-  @Audited('staff.updated')
-  @Patch('staff/:id')
-  @ApiBody(apiBody(StaffPatch))
-  async updateStaff(@CurrentActor() a: Actor, @Param('id', ParseUUIDPipe) id: string, @Body(zbody(StaffPatch)) b: z.infer<typeof StaffPatch>, @AuditCtx() audit: AuditDetails) {
-    const pinHash = b.pin ? await hashPassword(b.pin) : undefined;
-    const r = await this.t(a, async (tx) => {
-      const before = await tx.user.findUnique({ where: { id }, include: { roles: true } });
-      if (!before) throw notFound('Staff member');
-      const role = before.roles[0];
-      if (role?.role === 'owner' && (b.role || b.status === 'disabled')) throw forbidden('owner_protected', 'The owner account cannot be demoted or disabled here');
-      if (id === a.id && b.status === 'disabled') throw badRequest('self_disable', 'You cannot disable your own account');
-      if (b.role) await this.assertRoleAllowed(tx, a, b.role);
-      if ((b.role === 'it_admin' || role?.role === 'it_admin') && !a.roles.includes('owner')) throw forbidden('owner_only', 'Only the owner can change IT admins');
-      const after = await tx.user.update({
-        where: { id },
-        data: { name: b.name, phone: b.phone, status: b.status, ...(pinHash ? { pinHash } : {}) },
-      });
-      if (role && (b.role || b.canDiscount !== undefined)) {
-        const nextRole = b.role ?? role.role;
-        const canDiscount = b.canDiscount ?? role.extraPermissions.includes('discount.apply');
-        await tx.userRoleAssignment.update({
-          where: { id: role.id },
-          data: { role: nextRole, extraPermissions: nextRole === 'cashier' && canDiscount ? ['discount.apply'] : [] },
-        });
-      }
-      if (b.status === 'disabled') {
-        // sign the person out everywhere in the cloud; hubs drop them on the next config pull
-        await this.db.platform((p) => p.refreshToken.updateMany({ where: { subjectType: 'user', subjectId: id, revokedAt: null }, data: { revokedAt: new Date() } }));
-      }
-      return { before: { name: before.name, status: before.status, role: role?.role }, after: { name: after.name, status: after.status, role: b.role ?? role?.role, pinChanged: !!pinHash } };
-    });
-    Object.assign(audit, { objectType: 'user', objectId: id, before: r.before, after: r.after });
-    return { id, ...r.after };
-  }
-
   /** Anyone with a restaurant account sets their own POS PIN — the owner created at sign-up has none yet. */
   @AuthenticatedOnly()
   @Audited('staff.pin_set')
@@ -476,7 +377,7 @@ export class ConsoleController {
   @ApiBody(apiBody(MyPinBody))
   async setMyPin(@CurrentActor() a: Actor, @Body(zbody(MyPinBody)) b: z.infer<typeof MyPinBody>, @AuditCtx() audit: AuditDetails) {
     const pinHash = await hashPassword(b.pin);
-    const u = await this.t(a, (tx) => tx.user.update({ where: { id: a.id }, data: { pinHash }, select: { id: true, name: true } }));
+    const u = await this.t(a, (tx) => tx.user.update({ where: { id: a.id }, data: { pinHash, pinSetAt: new Date() }, select: { id: true, name: true } }));
     // never audit the PIN itself
     Object.assign(audit, { objectType: 'user', objectId: u.id, after: { name: u.name, pinChanged: true } });
     return { id: u.id, hasPin: true };
@@ -560,6 +461,7 @@ export class ConsoleController {
       const it = await tx.menuItem.findUnique({ where: { id } });
       if (!it || it.deleted) throw notFound('Menu item');
       await tx.menuItem.update({ where: { id }, data: { deleted: true } }); // tombstone: hubs hide it on the next pull
+      await tx.menuVariant.updateMany({ where: { itemId: id }, data: { deleted: true, available: false } });
       await this.bumpMenu(tx, a);
       return it;
     });

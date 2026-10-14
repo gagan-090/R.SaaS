@@ -63,9 +63,19 @@ class _OrderScreenState extends ConsumerState<OrderScreen> {
     }
   }
 
+  /// One tap adds a dish; a dish with several sizes / portions first asks which one (each has its own price).
   Future<void> _add(Json item) async {
     HapticFeedback.selectionClick();
-    await _do(() => _api.addLines(widget.orderId, [{'menuItemId': item['id'], 'qty': 1}]));
+    final variants = ((item['variants'] as List?) ?? const []).cast<Json>();
+    String? variantId = variants.length == 1 ? variants.single['id'] as String? : null;
+    if (variants.length > 1) {
+      variantId = await showModalBottomSheet<String>(
+        context: context,
+        builder: (c) => _SizePicker(item: item, variants: variants),
+      );
+      if (variantId == null) return;
+    }
+    await _do(() => _api.addLines(widget.orderId, [{'menuItemId': item['id'], 'variantId': ?variantId, 'qty': 1}]));
   }
 
   Future<void> _sendKot() async {
@@ -571,4 +581,49 @@ class _Dashes extends CustomPainter {
 
   @override
   bool shouldRepaint(_Dashes o) => o.color != color;
+}
+
+/// Bottom sheet: the sizes / portions of a dish with their prices. Unavailable ones are shown but cannot be picked.
+class _SizePicker extends StatelessWidget {
+  const _SizePicker({required this.item, required this.variants});
+  final Json item;
+  final List<Json> variants;
+
+  static String _serving(Json v) {
+    final q = v['serving_quantity'] as num?;
+    if (q == null || v['serving_unit'] == null) return '';
+    return '${q % 1 == 0 ? q.toInt() : q} ${v['serving_unit']}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.hp;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(HPSpace.lg, 0, HPSpace.lg, HPSpace.lg),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text('${item['name']}', style: HPType.titleCard(p.text)),
+          Text('Choose a size', style: HPType.body(p.muted)),
+          const SizedBox(height: HPSpace.md),
+          for (final v in variants)
+            Padding(
+              padding: const EdgeInsets.only(bottom: HPSpace.sm),
+              child: Material(
+                color: p.surface,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(HPRadius.card), side: BorderSide(color: p.line)),
+                child: ListTile(
+                  key: Key('size-${v['name']}'),
+                  enabled: v['available'] == 1 || v['available'] == true,
+                  minTileHeight: 60,
+                  title: Text('${v['name']}', style: HPType.label(p.text)),
+                  subtitle: Text([_serving(v), if (!(v['available'] == 1 || v['available'] == true)) 'Sold out'].where((s) => s.isNotEmpty).join(' · '), style: HPType.body(p.muted)),
+                  trailing: Text(rupees(v['price_paise'] as int), style: HPType.label(p.accentInk).copyWith(fontSize: 17)),
+                  onTap: () => Navigator.pop(context, v['id'] as String),
+                ),
+              ),
+            ),
+        ]),
+      ),
+    );
+  }
 }

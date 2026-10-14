@@ -4,8 +4,9 @@
  *   fixtures/*.json     — one REAL request/response pair per endpoint, recorded by driving the API end to end
  *   fixtures/INDEX.md   — list of endpoints and fixture files
  * Secrets in responses (tokens, TOTP secrets, recovery codes) are replaced with placeholders.
- * Usage: pnpm --filter @rsaas/api openapi   (needs the dev database; it creates demo rows)
+ * Usage: pnpm --filter @rsaas/api openapi   (always runs against the isolated <db>_test database — never your dev data)
  */
+import './contracts-env'; // must run first: points the app at the isolated _test database
 import * as fs from 'fs';
 import * as path from 'path';
 import { authenticator } from 'otplib';

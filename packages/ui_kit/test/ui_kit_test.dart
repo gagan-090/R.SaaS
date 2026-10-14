@@ -183,4 +183,17 @@ void main() {
     HPBrand.activate(null);
     expect((HPColors.saffron, HPType.heading('Bills')), (HPColors.amber, 'Bills'));
   });
+
+  test('floor plan: chairs follow the seat count; rotated tables overlap by their real footprint', () {
+    expect(HPFloorTable.arrangeChairs('round', 80, 80, 4).length, 4);
+    expect(HPFloorTable.arrangeChairs('rect', 140, 80, 6).length, 6);
+    expect(HPFloorTable.arrangeChairs('rect', 200, 80, 7).length, 7);
+    HPFloorTable t(String n, double x, double y, {int rot = 0, double w = 160, double h = 40}) =>
+        HPFloorTable(name: n, seats: 4, shape: 'rect', x: x, y: y, width: w, height: h, rotation: rot);
+    expect(floorOverlaps([t('A', 100, 100), t('B', 100, 160)]), isEmpty);
+    expect(floorOverlaps([t('A', 100, 100, rot: 90), t('B', 100, 160)]), [('A', 'B')], reason: 'turned upright it reaches table B');
+    final j = t('C', 10, 20)..chairs = [const HPChair(1, 2, 90)];
+    final back = HPFloorTable.fromJson(j.toJson());
+    expect((back.x, back.chairs!.single.rotation), (10, 90));
+  });
 }

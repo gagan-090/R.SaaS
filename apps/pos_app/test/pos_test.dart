@@ -499,6 +499,47 @@ void main() {
     expect(find.text('KITCHEN'), findsWidgets);
   });
 
+  testWidgets('a dish with sizes asks which one; the line and total use that size\'s price; sold-out sizes cannot be picked', (t) async {
+    final hub = await start(t);
+    await signIn(t, 'Ravi', '1234');
+    await t.tap(find.byKey(const Key('table-1')));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('waiter-Anita')));
+    await t.pumpAndSettle();
+    expect(find.text('from ₹30'), findsOneWidget, reason: 'card shows the lowest available price');
+    await t.tap(find.byKey(const Key('dish-Cola')));
+    await t.pumpAndSettle();
+    expect(find.text('Choose a size'), findsOneWidget);
+    expect(find.text('1 l · Sold out'), findsOneWidget);
+    await t.tap(find.byKey(const Key('size-1 litre')));
+    await t.pumpAndSettle();
+    expect(find.text('Choose a size'), findsOneWidget, reason: 'a sold-out size does nothing');
+    await t.tap(find.byKey(const Key('size-500 ml')));
+    await t.pumpAndSettle();
+    final line = (hub.orders.values.single['lines'] as List).cast<Map>().single;
+    expect((line['name_snapshot'], line['price_snapshot_paise'], line['variant_id']), ('Cola · 500 ml', 5000, 'v500'));
+    expect(find.textContaining('Cola · 500 ml'), findsWidgets);
+  });
+
+  testWidgets('floor plan: tables where the owner placed them; tap one to start an order; out-of-use tables refuse', (t) async {
+    final hub = await start(t);
+    hub.tables.last['manual_status'] = 'unavailable';
+    await signIn(t, 'Ravi', '1234');
+    await t.tap(find.byKey(const Key('plan-toggle')));
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('plan-table-1')), findsOneWidget);
+    expect(find.text('Out of use'), findsWidgets, reason: 'legend + state');
+    await t.tap(find.byKey(const Key('plan-table-2')));
+    await t.pumpAndSettle();
+    expect(find.text('Table 2 is marked out of use'), findsOneWidget);
+    expect(hub.orders, isEmpty);
+    await t.tap(find.byKey(const Key('plan-table-1')));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('waiter-Anita')));
+    await t.pumpAndSettle();
+    expect(hub.orders.values.single['table_id'], 't1');
+  });
+
   testWidgets('appearance: Dark from More overrides a light device; Auto follows it again', (t) async {
     await start(t, size: phone, brightness: Brightness.light);
     await signIn(t, 'Ravi', '1234');

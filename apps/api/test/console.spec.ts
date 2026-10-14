@@ -33,69 +33,18 @@ describe('restaurant console', () => {
     expect(o.hub).toBeNull();
   });
 
-  describe('staff', () => {
-    it('owner adds a waiter with a PIN; the hub receives them on the next pull; PIN never in audit', async () => {
-      const reg = (await t.http().post(api('/devices/register-hub')).set(bearer(prem.ownerToken)).send({ name: 'Hub', platform: 'android' }).expect(201)).body;
-      const p0 = (await t.http().get(api('/sync/pull?since=0')).set('X-Device-Token', reg.deviceToken).expect(200)).body;
-      const w = (await t.http().post(api('/staff')).set(bearer(prem.ownerToken)).send({ name: 'Anita', role: 'waiter', pin: '4321' }).expect(201)).body;
-      expect(w).toMatchObject({ name: 'Anita', role: 'waiter', status: 'active' });
-      const p1 = (await t.http().get(api(`/sync/pull?since=${p0.cursor}`)).set('X-Device-Token', reg.deviceToken).expect(200)).body;
-      const pulled = p1.users.find((u: { id: string }) => u.id === w.id);
-      expect(pulled.roles).toEqual([{ role: 'waiter', extraPermissions: [] }]);
-      expect(pulled.pinHash).toMatch(/^\$argon2id\$v=19\$m=19456,p=1,t=2\$/); // node-argon2 PHC string — the hub verifies it offline (hub_test)
-      const audit = await t.owner.auditEvent.findFirstOrThrow({ where: { action: 'staff.created', objectId: w.id } });
-      expect(JSON.stringify(audit)).not.toContain('4321');
-      const list = (await t.http().get(api('/staff')).set(bearer(prem.ownerToken)).expect(200)).body;
-      expect(list.find((u: { id: string }) => u.id === w.id)).toMatchObject({ role: 'waiter', hasPin: true });
-    });
-
-    it('PIN change, cashier discount grant, and disabling flow to the hub; the owner cannot be disabled', async () => {
-      const c = (await t.http().post(api('/staff')).set(bearer(prem.ownerToken)).send({ name: 'Ravi', role: 'cashier', pin: '1111' }).expect(201)).body;
-      await t.http().patch(api(`/staff/${c.id}`)).set(bearer(prem.ownerToken)).send({ pin: '2222', canDiscount: true }).expect(200);
-      const row = await t.owner.user.findUniqueOrThrow({ where: { id: c.id }, include: { roles: true } });
-      expect(row.roles[0].extraPermissions).toEqual(['discount.apply']);
-      await t.http().patch(api(`/staff/${c.id}`)).set(bearer(prem.ownerToken)).send({ status: 'disabled' }).expect(200);
-      expect((await t.owner.user.findUniqueOrThrow({ where: { id: c.id } })).status).toBe('disabled');
-      const r = await t.http().patch(api(`/staff/${prem.ownerUserId}`)).set(bearer(prem.ownerToken)).send({ status: 'disabled' }).expect(403);
-      expect(r.body.code).toBe('owner_protected');
-      await t.http().post(api('/staff')).set(bearer(prem.ownerToken)).send({ name: 'x', role: 'waiter', pin: '12' }).expect(400);
-    });
-
-    it('chef / IT admin / auditor need Premium; standard owners can add cashiers and waiters', async () => {
-      const r = await t.http().post(api('/staff')).set(bearer(std.ownerToken)).send({ name: 'Kunal', role: 'chef', pin: '7777' }).expect(403);
-      expect(r.body.code).toBe('feature_not_in_plan');
-      await t.http().post(api('/staff')).set(bearer(std.ownerToken)).send({ name: 'Sohan', role: 'waiter', pin: '5555' }).expect(201);
-      await t.http().post(api('/staff')).set(bearer(prem.ownerToken)).send({ name: 'Kunal', role: 'chef', pin: '7777' }).expect(201);
-    });
-
-    it('an IT admin with console sign-in can be added by the owner and can then manage staff, but not other IT admins', async () => {
-      const email = `it-${uuidv7().slice(-8)}@example.test`;
-      await t.http().post(api('/staff')).set(bearer(prem.ownerToken)).send({ name: 'Imran', role: 'it_admin', pin: '3333', email }).expect(400); // password required
-      await t.http().post(api('/staff')).set(bearer(prem.ownerToken)).send({ name: 'Imran', role: 'it_admin', pin: '3333', email, password: 'It-admin-pass-1' }).expect(201);
-      const it = (await t.http().post(api('/auth/login')).send({ email, password: 'It-admin-pass-1' }).expect(200)).body;
-      await t.http().post(api('/staff')).set(bearer(it.accessToken)).send({ name: 'Sohan', role: 'waiter', pin: '6666' }).expect(201);
-      const r = await t.http().post(api('/staff')).set(bearer(it.accessToken)).send({ name: 'Other IT', role: 'it_admin', pin: '6666' }).expect(403);
-      expect(r.body.code).toBe('owner_only');
-      await t.http().post(api('/staff')).set(bearer(prem.ownerToken)).send({ name: 'dup', role: 'waiter', pin: '1234', email, password: 'whatever-123' }).expect(409);
-    });
-
+  describe('own PIN', () => {
     it('an owner without a PIN (signed up on the web) sets their own; /me reports it and the PIN never reaches audit', async () => {
       await t.owner.user.update({ where: { id: std.ownerUserId }, data: { pinHash: null } });
       expect((await t.http().get(api('/me')).set(bearer(std.ownerToken)).expect(200)).body).toMatchObject({ hasPin: false });
       await t.http().put(api('/me/pin')).set(bearer(std.ownerToken)).send({ pin: '12' }).expect(400);
-      await t.http().put(api('/me/pin')).set(bearer(std.ownerToken)).send({ pin: '2468' }).expect(200);
+      await t.http().put(api('/me/pin')).set(bearer(std.ownerToken)).send({ pin: '123456' }).expect(400); // too simple
+      await t.http().put(api('/me/pin')).set(bearer(std.ownerToken)).send({ pin: '246813' }).expect(200);
       const me = (await t.http().get(api('/me')).set(bearer(std.ownerToken)).expect(200)).body;
       expect(me.hasPin).toBe(true);
       expect(me.pinHash).toBeUndefined();
-      expect((await t.owner.user.findUniqueOrThrow({ where: { id: std.ownerUserId } })).pinHash).toBeTruthy();
       const audit = await t.owner.auditEvent.findFirstOrThrow({ where: { action: 'staff.pin_set', objectId: std.ownerUserId } });
-      expect(JSON.stringify(audit)).not.toContain('2468');
-    });
-
-    it('cashiers cannot manage staff', async () => {
-      const cashier = await addStaff(t, prem.tenantId, 'cashier');
-      await t.http().post(api('/staff')).set(bearer(cashier.token)).send({ name: 'x', role: 'waiter', pin: '1234' }).expect(403);
-      await t.http().get(api('/staff')).set(bearer(cashier.token)).expect(403);
+      expect(JSON.stringify(audit)).not.toContain('246813');
     });
   });
 
@@ -172,7 +121,7 @@ describe('restaurant console', () => {
     const tax = (await t.http().post(api('/tax-rules')).set(auth).send({ name: 'GST 5%', rateBp: 500 }).expect(201)).body;
     const mains = (await t.http().post(api('/menu/categories')).set(auth).send({ name: 'Mains' }).expect(201)).body;
     const chicken = (await t.http().post(api('/menu/items')).set(auth).send({ categoryId: mains.id, name: 'Butter Chicken', pricePaise: 34000, taxRuleId: tax.id }).expect(201)).body;
-    const waiter = (await t.http().post(api('/staff')).set(auth).send({ name: 'Anita', role: 'waiter', pin: '5555' }).expect(201)).body;
+    const waiter = (await t.http().post(api('/staff')).set(auth).send({ name: 'Anita', email: `anita-${uuidv7().slice(-8)}@example.test`, role: 'waiter', sendInvite: true }).expect(201)).body;
     const floor = (await t.http().post(api('/floors')).set(auth).send({ branchId: std.branchId, name: 'Ground' }).expect(201)).body;
     const table = (await t.http().post(api('/tables')).set(auth).send({ floorId: floor.id, name: '7' }).expect(201)).body;
 

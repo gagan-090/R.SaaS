@@ -10,118 +10,164 @@
   },
   "status": 200,
   "response": {
-    "cursor": "676",
+    "cursor": "5757",
     "menuVersion": 2,
     "tenant": {
-      "id": "01a132d6-e5a0-75c2-8856-77db77821521",
+      "id": "01a13942-29f3-78a1-af36-76851e22aaa1",
       "name": "Spice Route Kitchen",
       "gstin": "27AAAPA1234A1Z5",
       "address": "FC Road, Shivajinagar, Pune",
-      "status": "active"
+      "status": "active",
+      "branding": null
     },
     "licenseToken": "<licenseToken>",
     "branches": [
       {
-        "id": "01a132d6-e5a1-7912-818c-45417aae865a",
-        "tenantId": "01a132d6-e5a0-75c2-8856-77db77821521",
+        "id": "01a13942-29f9-7722-a29b-1ad4d133d291",
+        "tenantId": "01a13942-29f3-78a1-af36-76851e22aaa1",
         "franchiseId": null,
         "code": "BR01",
         "name": "Spice Route",
         "address": "FC Road, Pune",
         "gstin": "27AAAPA1234A1Z5",
         "settings": {},
-        "seq": "663",
-        "createdAt": "2026-10-13T01:18:26.722Z"
+        "seq": "5741",
+        "createdAt": "2026-10-14T07:13:19.865Z"
       }
     ],
     "floors": [
       {
-        "id": "01a132d6-e78e-7b23-a8d9-26f7667d39f5",
-        "tenantId": "01a132d6-e5a0-75c2-8856-77db77821521",
-        "branchId": "01a132d6-e5a1-7912-818c-45417aae865a",
+        "id": "01a13942-2f12-7150-ab2f-d047ec1120ab",
+        "tenantId": "01a13942-29f3-78a1-af36-76851e22aaa1",
+        "branchId": "01a13942-29f9-7722-a29b-1ad4d133d291",
         "name": "Ground floor (AC)",
         "sortOrder": 0,
-        "seq": "668",
+        "width": 1200,
+        "height": 800,
+        "layoutVersion": 1,
+        "seq": "5746",
         "deleted": false
       }
     ],
     "tables": [
       {
-        "id": "01a132d6-e7a4-73d2-9039-f4f437ee99be",
-        "tenantId": "01a132d6-e5a0-75c2-8856-77db77821521",
-        "branchId": "01a132d6-e5a1-7912-818c-45417aae865a",
-        "floorId": "01a132d6-e78e-7b23-a8d9-26f7667d39f5",
+        "id": "01a13942-2f76-7eb2-be6c-0f3de7934a80",
+        "tenantId": "01a13942-29f3-78a1-af36-76851e22aaa1",
+        "branchId": "01a13942-29f9-7722-a29b-1ad4d133d291",
+        "floorId": "01a13942-2f12-7150-ab2f-d047ec1120ab",
         "name": "12",
         "seats": 6,
         "layoutX": 0,
         "layoutY": 0,
-        "seq": "671",
+        "shape": "square",
+        "posX": 120,
+        "posY": 120,
+        "width": 80,
+        "height": 80,
+        "rotation": 0,
+        "chairs": null,
+        "status": "available",
+        "seq": "5749",
         "deleted": false
       },
       {
-        "id": "01a132d6-e7b4-7940-bcc6-f4060b411f7d",
-        "tenantId": "01a132d6-e5a0-75c2-8856-77db77821521",
-        "branchId": "01a132d6-e5a1-7912-818c-45417aae865a",
-        "floorId": "01a132d6-e78e-7b23-a8d9-26f7667d39f5",
-        "name": "13",
+        "id": "01a13942-2fa0-7bd3-b5d6-e2875ed6560c",
+        "tenantId": "01a13942-29f3-78a1-af36-76851e22aaa1",
+        "branchId": "01a13942-29f9-7722-a29b-1ad4d133d291",
+        "floorId": "01a13942-2f12-7150-ab2f-d047ec1120ab",
+        "name": "13 (removed d6560c)",
         "seats": 2,
         "layoutX": 0,
         "layoutY": 0,
-        "seq": "672",
+        "shape": "round",
+        "posX": 280,
+        "posY": 120,
+        "width": 80,
+        "height": 80,
+        "rotation": 0,
+        "chairs": null,
+        "status": "available",
+        "seq": "5750",
         "deleted": true
       }
     ],
     "taxRules": [
       {
-        "id": "01a132d6-e7e8-7192-bd99-d972aee3d00c",
-        "tenantId": "01a132d6-e5a0-75c2-8856-77db77821521",
+        "id": "01a13942-305e-7441-a613-b72023ab7f58",
+        "tenantId": "01a13942-29f3-78a1-af36-76851e22aaa1",
         "name": "GST 5%",
         "rateBp": 500,
-        "seq": "673",
+        "seq": "5751",
         "deleted": false
       }
     ],
     "categories": [
       {
-        "id": "01a132d6-e7ff-7ce3-b9b2-225d2ebed7d3",
-        "tenantId": "01a132d6-e5a0-75c2-8856-77db77821521",
+        "id": "01a13942-309f-7d01-bcf9-0a6315703d98",
+        "tenantId": "01a13942-29f3-78a1-af36-76851e22aaa1",
         "branchId": null,
         "name": "Mains",
         "sortOrder": 1,
-        "seq": "674",
+        "active": true,
+        "seq": "5752",
         "deleted": false
       }
     ],
     "items": [
       {
-        "id": "01a132d6-e81c-7972-aa56-04bbd97cbb06",
-        "tenantId": "01a132d6-e5a0-75c2-8856-77db77821521",
-        "categoryId": "01a132d6-e7ff-7ce3-b9b2-225d2ebed7d3",
+        "id": "01a13942-30ea-7a61-8d9d-c6d4231c5cc4",
+        "tenantId": "01a13942-29f3-78a1-af36-76851e22aaa1",
+        "categoryId": "01a13942-309f-7d01-bcf9-0a6315703d98",
+        "code": "ITEM-0001",
         "name": "Butter Chicken",
         "description": "Tomato-butter gravy",
+        "active": true,
         "unit": "plate",
         "quantity": 1,
         "pricePaise": 35000,
-        "taxRuleId": "01a132d6-e7e8-7192-bd99-d972aee3d00c",
+        "taxRuleId": "01a13942-305e-7441-a613-b72023ab7f58",
         "available": true,
-        "isVeg": true,
+        "isVeg": false,
         "imageId": null,
         "plateColors": {
           "base": "#D9622B",
           "sauce": "#F2C27B",
           "garnish": "#4F8A3B"
         },
-        "seq": "676",
+        "seq": "5756",
         "deleted": false
+      }
+    ],
+    "variants": [
+      {
+        "id": "01a13942-30f9-7500-a2a2-dc4b3681ddd4",
+        "tenantId": "01a13942-29f3-78a1-af36-76851e22aaa1",
+        "itemId": "01a13942-30ea-7a61-8d9d-c6d4231c5cc4",
+        "code": "ITEM-0001-REGULAR",
+        "name": "Regular",
+        "portionLabel": null,
+        "servingQuantity": 1,
+        "servingUnit": "plate",
+        "portionRatio": 1,
+        "pricePaise": 35000,
+        "costPricePaise": null,
+        "taxRuleId": null,
+        "available": true,
+        "isDefault": true,
+        "sortOrder": 0,
+        "seq": "5757",
+        "deleted": false,
+        "createdAt": "2026-10-14T07:13:21.657Z",
+        "updatedAt": "2026-10-14T07:13:21.723Z"
       }
     ],
     "users": [
       {
-        "id": "01a132d6-e5dc-7a60-9033-de4ec40e319b",
+        "id": "01a13942-2a03-7a40-850a-afac4502d9a9",
         "name": "Asha Rao",
         "status": "active",
         "pinHash": null,
-        "seq": "666",
+        "seq": "5744",
         "roles": [
           {
             "role": "owner",

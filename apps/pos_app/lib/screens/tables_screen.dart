@@ -34,6 +34,14 @@ class TableMapScreen extends ConsumerStatefulWidget {
 class _TableMapScreenState extends ConsumerState<TableMapScreen> {
   String? _floor;
   int _refresh = 0;
+  bool _plan = false; // floor plan (the owner's layout) instead of the grid
+
+  /// The same action for a grid tile and a table on the plan.
+  VoidCallback? _tapTable(HubApi api, Json t, bool canWrite) {
+    if (t['orderId'] != null) return () => _continue(t['orderId'] as String);
+    if (t['status'] == 'unavailable') return () => toast(context, 'Table ${t['name']} is marked out of use');
+    return canWrite ? () => _openOrder(api, tableId: t['id'] as String, tableName: '${t['name']}', type: 'dine_in') : null;
+  }
 
   Future<void> _openOrder(HubApi api, {String? tableId, String? tableName, required String type}) async {
     final session = ref.read(sessionProvider)!;
@@ -138,6 +146,12 @@ class _TableMapScreenState extends ConsumerState<TableMapScreen> {
                           StatusChip(label: '$seated seated', tone: HPTone.saffron, icon: Icons.restaurant_rounded),
                           if (billing > 0) StatusChip(label: '$billing billing', tone: HPTone.danger, icon: Icons.receipt_rounded),
                           if (!canWrite) const StatusChip(label: 'Read-only', icon: Icons.visibility_outlined),
+                          ActionChip(
+                            key: const Key('plan-toggle'),
+                            avatar: Icon(_plan ? Icons.grid_view_rounded : Icons.map_outlined, size: 18),
+                            label: Text(_plan ? 'Grid' : 'Floor plan'),
+                            onPressed: () => setState(() => _plan = !_plan),
+                          ),
                         ]),
                         if (floors.length > 1) ...[
                           const SizedBox(height: HPSpace.md),
@@ -160,7 +174,33 @@ class _TableMapScreenState extends ConsumerState<TableMapScreen> {
                       ]),
                     ),
                   ),
-                  if (tables.isEmpty)
+                  if (tables.isNotEmpty && _plan)
+                    SliverPadding(
+                      padding: EdgeInsets.symmetric(horizontal: pad),
+                      sliver: SliverToBoxAdapter(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                          SizedBox(
+                            height: narrow ? 380 : 520,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(HPRadius.card),
+                              child: FloorPlanView(
+                                key: ValueKey('plan-$floorId'),
+                                width: ((floors.where((f) => f['id'] == floorId).firstOrNull?['width'] as num?) ?? 1200).toDouble(),
+                                height: ((floors.where((f) => f['id'] == floorId).firstOrNull?['height'] as num?) ?? 800).toDouble(),
+                                tables: [for (final t in tables) HPFloorTable.fromJson(t)],
+                                onTap: (ft) {
+                                  final t = tables.firstWhere((x) => x['id'] == ft.id);
+                                  _tapTable(api, t, canWrite)?.call();
+                                },
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: HPSpace.sm),
+                          const FloorLegend(),
+                        ]),
+                      ),
+                    )
+                  else if (tables.isEmpty)
                     const SliverFillRemaining(hasScrollBody: false, child: EmptyState(icon: Icons.table_restaurant_outlined, title: 'No tables yet', message: 'The owner adds floors and tables in the web console.'))
                   else
                     SliverPadding(
@@ -174,13 +214,17 @@ class _TableMapScreenState extends ConsumerState<TableMapScreen> {
                               expand: true,
                               name: '${t['name']}',
                               seats: t['seats'] as int,
-                              state: switch (t['status']) { 'occupied' => TableState.ordering, 'bill_printed' => TableState.billPrinted, _ => TableState.free },
+                              state: switch (t['status']) {
+                                'occupied' => TableState.ordering,
+                                'bill_printed' => TableState.billPrinted,
+                                'reserved' => TableState.reserved,
+                                'unavailable' => TableState.unavailable,
+                                _ => TableState.free,
+                              },
                               runningTotal: t['totalPaise'] == null ? null : rupees(t['totalPaise'] as int),
                               minutesSeated: t['openedAt'] == null ? null : minutesSince(t['openedAt']),
                               caption: (t['waiterName'] as String?)?.split(' (').first,
-                              onTap: t['orderId'] != null
-                                  ? () => _continue(t['orderId'] as String)
-                                  : (canWrite ? () => _openOrder(api, tableId: t['id'] as String, tableName: '${t['name']}', type: 'dine_in') : null),
+                              onTap: _tapTable(api, t, canWrite),
                             ),
                         ]),
                       ),

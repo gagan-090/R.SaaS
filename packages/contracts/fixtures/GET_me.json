@@ -7,9 +7,9 @@
   "status": 200,
   "response": {
     "type": "admin",
-    "id": "01a132d6-e3ea-7893-8fe4-08d5e2914fef",
-    "email": "admin-mv5zsfb8-09c960@example.test",
-    "name": "admin-mv5zsfb8-09c960@example.test",
+    "id": "01a13942-2619-7592-aa94-e78a14215590",
+    "email": "admin-mv7rwndf-2710b8@example.test",
+    "name": "admin-mv7rwndf-2710b8@example.test",
     "mfaEnrolled": true,
     "roles": [
       "Super Admin"
