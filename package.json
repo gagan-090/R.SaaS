@@ -2,12 +2,19 @@
   "name": "restaurant-saas",
   "private": true,
   "packageManager": "pnpm@11.23.0",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
+    "build": "pnpm --filter @rsaas/api build",
     "api:dev": "pnpm --filter @rsaas/api start:dev",
     "api:test": "pnpm --filter @rsaas/api test",
     "api:lint": "pnpm --filter @rsaas/api lint",
     "secrets:dev": "bash infra/scripts/gen-dev-secrets.sh",
     "secret-scan": "bash infra/scripts/secret-scan.sh"
+  },
+  "dependencies": {
+    "@neon/config": "^1.9.1",
+    "@neon/env": "^1.6.1"
   }
 }

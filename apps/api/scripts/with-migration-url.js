@@ -4,9 +4,9 @@
 const path = require('path');
 const { spawnSync } = require('child_process');
 require('dotenv').config({ path: path.resolve(__dirname, '../../../.env.local'), quiet: true });
-const url = process.env.MIGRATION_DATABASE_URL;
+const url = process.env.MIGRATION_DATABASE_URL || process.env.DATABASE_URL_UNPOOLED;
 if (!url) {
-  console.error('MIGRATION_DATABASE_URL is not set (run infra/scripts/gen-dev-secrets.sh)');
+  console.error('MIGRATION_DATABASE_URL or DATABASE_URL_UNPOOLED is not set');
   process.exit(1);
 }
 const [cmd, ...args] = process.argv.slice(2);
