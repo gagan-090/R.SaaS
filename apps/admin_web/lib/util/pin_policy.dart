@@ -7,3 +7,4 @@ String? pinProblem(String p) {
   if (run(1) || run(-1)) return 'PIN cannot be a run of digits like 123456';
   return null;
 }
+

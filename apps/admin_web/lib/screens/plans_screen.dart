@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 
 import '../api/api_client.dart';
+import '../util/money_input.dart';
 import '../state/providers.dart';
 import '../widgets/common.dart';
 
@@ -279,7 +280,9 @@ class _PlanEditorState extends State<PlanEditor> {
   }
 
   Future<void> _save() async {
-    final rupees = double.tryParse(_price.text.trim().replaceAll(',', ''));
+    final rupees = parseRupees(_price.text);
+    final annual = parseRupees(_yearlyPrice.text);
+    if (annual == null || annual < 0) return setState(() => _error = 'Enter the annual price');
     if (_name.text.trim().isEmpty) return setState(() => _error = 'Give the plan a name');
     if (rupees == null || rupees < 0) return setState(() => _error = 'Enter the price in rupees, e.g. 999');
     if (_isNew && !RegExp(r'^[a-z][a-z0-9_]{2,30}$').hasMatch(_code.text.trim())) {
@@ -302,8 +305,8 @@ class _PlanEditorState extends State<PlanEditor> {
     });
     final body = {
       'name': _name.text.trim(),
-      'pricePaise': (rupees * 100).round(),
-      'yearlyPricePaise': (rupees * 1000).round(),
+      'pricePaise': rupees,
+      'yearlyPricePaise': annual,
       'tier': _tier,
       'billingCycle': _cycle,
       'featureFlags': _features.toList(),
@@ -347,8 +350,11 @@ class _PlanEditorState extends State<PlanEditor> {
           controller: _price,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
-          decoration: const InputDecoration(labelText: 'Price', prefixText: '₹ ', helperText: 'Per billing period, before GST'),
+          onChanged: _autoYearly,
+          decoration: const InputDecoration(labelText: 'Monthly price', prefixText: '₹ ', helperText: 'Before GST'),
         ),
+        const SizedBox(height: HPSpace.md),
+        TextField(key: const Key('plan-yearly-price'), controller: _yearlyPrice, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Annual price', prefixText: '₹ ', helperText: 'Full year total; set your own discount')),
         const SizedBox(height: HPSpace.md),
         SegmentedButton<String>(
           showSelectedIcon: false,

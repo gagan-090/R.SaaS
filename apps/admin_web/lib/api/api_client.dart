@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import '../util/session_store.dart';
 
 /// Build-time API base URL: flutter run/build --dart-define=API_BASE_URL=https://api.example.com/api/v1
 const apiBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://localhost:3000/api/v1');
@@ -18,12 +19,16 @@ class ApiException implements Exception {
 typedef Json = Map<String, dynamic>;
 
 /// Thin client for the cloud API (contract: packages/contracts/openapi.json).
-/// Tokens live in memory only — a browser refresh signs the admin out (no tokens in localStorage).
+/// The refresh token survives reloads in this tab only; access tokens remain in memory.
 class ApiClient {
-  ApiClient({String baseUrl = apiBaseUrl, http.Client? client})
+  ApiClient({String baseUrl = apiBaseUrl, http.Client? client, String? Function()? sessionReader, void Function(String?)? sessionWriter})
       : _base = baseUrl,
-        _http = client ?? http.Client();
+        _http = client ?? http.Client(),
+        _readSession = sessionReader ?? readSession,
+        _writeSession = sessionWriter ?? writeSession;
 
+  final String? Function() _readSession;
+  final void Function(String?) _writeSession;
   final String _base;
   final http.Client _http;
   String? accessToken;
@@ -70,14 +75,22 @@ class ApiClient {
     return res.bodyBytes;
   }
 
-  Future<bool> _refresh() async {
+  Future<bool>? _refreshing;
+  Future<bool> restoreSession() async {
+    refreshToken = _readSession();
+    return refreshToken != null && await _refresh();
+  }
+
+  Future<bool> _refresh() => _refreshing ??= _rotate().whenComplete(() => _refreshing = null);
+
+  Future<bool> _rotate() async {
     try {
       final r = await _send('POST', '/auth/refresh', body: {'refreshToken': refreshToken}, retry: false) as Json;
-      accessToken = r['accessToken'] as String;
-      refreshToken = r['refreshToken'] as String;
+      _setTokens(r);
       return true;
     } catch (_) {
       accessToken = refreshToken = null;
+      _writeSession(null);
       return false;
     }
   }
@@ -85,6 +98,7 @@ class ApiClient {
   void _setTokens(Json t) {
     accessToken = t['accessToken'] as String;
     refreshToken = t['refreshToken'] as String;
+    _writeSession(refreshToken);
   }
 
   // ---- auth
@@ -126,7 +140,13 @@ class ApiClient {
       } catch (_) {}
     }
     accessToken = refreshToken = null;
+    _writeSession(null);
   }
+
+  Future<Json> reserveTable(String id, Json body) async => await _send('POST', '/tables/$id/reservations', body: body) as Json;
+  Future<Json> cancelReservation(String id) async => await _send('POST', '/reservations/$id/cancel') as Json;
+  Future<Json> quickMenu(Json body) async => await _send('POST', '/menu/quick-create', body: body) as Json;
+  Future<Json> receivePurchase(Json body) async => await _send('POST', '/inventory/purchases', body: body) as Json;
 
   Future<Json> me() async => await _send('GET', '/me') as Json;
 
@@ -147,6 +167,7 @@ class ApiClient {
   Future<Json> registrations({String state = 'awaiting', String? q}) async =>
       await _send('GET', '/restaurants/registrations', query: {'state': state, if (q != null && q.isNotEmpty) 'q': q}) as Json;
   Future<Json> resendVerification(String id) async => await _send('POST', '/restaurants/registrations/$id/resend') as Json;
+  Future<Json> activateRegistration(String id, String password) async => await _send('POST', '/restaurants/registrations/$id/activate', body: {'password': password}) as Json;
   Future<Json> cancelRegistration(String id, String reason) async => await _send('POST', '/restaurants/registrations/$id/cancel', body: {'reason': reason}) as Json;
   Future<Json> restaurant(String id) async => await _send('GET', '/restaurants/$id') as Json;
   Future<Json> registerRestaurant(Json body) async => await _send('POST', '/restaurants', body: body) as Json;

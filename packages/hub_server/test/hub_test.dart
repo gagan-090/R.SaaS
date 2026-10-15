@@ -40,6 +40,23 @@ void main() {
       expect((await h.get('/state')).status, 200);
     });
 
+    test('login refreshes the owner-assigned PIN before checking it', () async {
+      var calls = 0;
+      final fresh = HubServer(h.hub, hubName: 'Fresh PIN', refreshStaff: () async {
+        calls++;
+        final current = await h.hub.db.selectOne('SELECT pin_hash FROM users WHERE id = ?', [Harness.owner]);
+        await h.hub.db.execute('UPDATE users SET pin_hash = ? WHERE id = ?', [current!['pin_hash'], Harness.cashier]);
+      });
+      final server = await fresh.start(address: InternetAddress.loopbackIPv4, port: 0);
+      try {
+        final response = await http.post(Uri.parse('http://127.0.0.1:${server.port}/hub/v1/session/login'), headers: {'x-device-token': h.deviceToken, 'content-type': 'application/json'}, body: jsonEncode({'userId': Harness.cashier, 'pin': Harness.pins[Harness.owner]}));
+        expect(response.statusCode, 200);
+        expect(calls, 1);
+        final old = await h.post('/session/login', body: {'userId': Harness.cashier, 'pin': Harness.pins[Harness.cashier]});
+        expect(old.status, 401);
+      } finally { await fresh.stop(); }
+    });
+
     test('pairing code is one-time and issues a branch-bound device token', () async {
       final info = await h.get('/pairing/info');
       expect(info.json['certFingerprint'], 'AA:BB');

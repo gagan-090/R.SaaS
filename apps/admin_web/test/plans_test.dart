@@ -80,7 +80,10 @@ void main() {
     await t.pumpAndSettle();
     await t.enterText(find.byKey(const Key('plan-name')), 'Pro Plus');
     await t.enterText(find.byKey(const Key('plan-price')), '1499');
+    await t.enterText(find.byKey(const Key('plan-yearly-price')), '12000');
+    await t.ensureVisible(find.byKey(const Key('feature-kds')));
     await t.tap(find.byKey(const Key('feature-kds')));
+    await t.ensureVisible(find.text('Yearly'));
     await t.tap(find.text('Yearly'));
     await t.pump();
     await t.tap(find.byKey(const Key('save-plan')));
@@ -88,6 +91,7 @@ void main() {
     final body = jsonDecode(fx.where('POST', '/plans').single.body) as Map;
     expect(body['code'], 'pro_plus', reason: 'code derived from the name');
     expect(body['pricePaise'], 149900);
+    expect(body['yearlyPricePaise'], 1200000);
     expect(body['billingCycle'], 'yearly');
     expect(body['featureFlags'], containsAll(['tables', 'billing', 'kds']));
     expect((body['limits'] as Map)['branches'], 1);

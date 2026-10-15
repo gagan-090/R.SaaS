@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +7,7 @@ import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 
 import '../../api/api_client.dart';
 import '../../widgets/common.dart';
+import '../../util/image_prep.dart';
 
 /// Visual floor editor (plan feature "floor.editor"): drag tables and chairs, rotate, resize, change shape, add,
 /// duplicate and delete; grid snapping, zoom and pan; save / cancel / reload. Without edit rights (or without the
@@ -21,6 +23,8 @@ class FloorEditor extends StatefulWidget {
 }
 
 class _FloorEditorState extends State<FloorEditor> {
+  String? _background;
+  String _search = '';
   Json? _server; // last loaded layout
   Object? _error;
   List<HPFloorTable> _tables = [];
@@ -64,6 +68,7 @@ class _FloorEditorState extends State<FloorEditor> {
         _w = (f['width'] as num).toDouble();
         _h = (f['height'] as num).toDouble();
         _version = f['version'] as int;
+        _background = f['backgroundImage'] as String?;
         _tables = [
           for (final t in (l['tables'] as List).cast<Json>()) HPFloorTable.fromJson(t, status: '${t['live']}' == 'available' ? 'free' : '${t['live']}'),
         ];
@@ -153,6 +158,7 @@ class _FloorEditorState extends State<FloorEditor> {
     try {
       final r = await widget.api.saveFloorLayout(widget.floorId, {
         'version': _version,
+        'backgroundImage': _background,
         'width': _w.round(),
         'height': _h.round(),
         'tables': [for (final t in _tables) t.toJson()],
@@ -176,6 +182,34 @@ class _FloorEditorState extends State<FloorEditor> {
     await _load();
   }
 
+  Future<void> _reserve(HPFloorTable t) async {
+    final name = TextEditingController(), phone = TextEditingController(), guests = TextEditingController(text: '${t.seats}');
+    DateTime start = DateTime.now().add(const Duration(hours: 1));
+    int duration = 90;
+    String? error;
+    bool busy = false;
+    await showDialog<void>(context: context, builder: (d) => StatefulBuilder(builder: (d, update) => HPDialog(title: 'Reserve table ${t.name}', actions: [SecondaryButton(label: 'Close', onPressed: () => Navigator.pop(d)), PrimaryButton(label: 'Reserve', busy: busy, onPressed: busy ? null : () async {
+      final count = int.tryParse(guests.text);
+      if (name.text.trim().isEmpty || count == null || count < 1 || count > t.seats) { update(() => error = 'Enter a guest name and 1–${t.seats} guests.'); return; }
+      update(() { busy = true; error = null; });
+      try { await widget.api.reserveTable(t.id!, {'guestName': name.text.trim(), 'phone': phone.text.trim(), 'guests': count, 'startsAt': start.toUtc().toIso8601String(), 'endsAt': start.add(Duration(minutes: duration)).toUtc().toIso8601String()}); if (d.mounted) Navigator.pop(d); await _load(); }
+      catch (e) { if (d.mounted) update(() { busy = false; error = '$e'; }); }
+    })], child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      TextField(controller: name, decoration: const InputDecoration(labelText: 'Guest name')), const SizedBox(height: 12),
+      TextField(controller: phone, decoration: const InputDecoration(labelText: 'Phone (optional)')), const SizedBox(height: 12),
+      TextField(controller: guests, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Guests')),
+      TextButton.icon(icon: const Icon(Icons.calendar_month), label: Text('${start.year}-${start.month}-${start.day} · ${TimeOfDay.fromDateTime(start).format(d)}'), onPressed: () async {
+        final day = await showDatePicker(context: d, initialDate: start, firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 365)));
+        if (day == null || !d.mounted) return;
+        final time = await showTimePicker(context: d, initialTime: TimeOfDay.fromDateTime(start));
+        if (time != null) update(() => start = DateTime(day.year, day.month, day.day, time.hour, time.minute));
+      }),
+      DropdownButtonFormField<int>(initialValue: duration, decoration: const InputDecoration(labelText: 'Duration'), items: [for (final m in [30,60,90,120,180]) DropdownMenuItem(value: m, child: Text('$m minutes'))], onChanged: (v) => duration = v!),
+      if (error != null) Text(error!, style: TextStyle(color: d.hp.danger)),
+    ]))));
+    name.dispose(); phone.dispose(); guests.dispose();
+  }
+
   Future<void> _setStatus(HPFloorTable t) async {
     final s = await showDialog<String>(
       context: context,
@@ -187,6 +221,7 @@ class _FloorEditorState extends State<FloorEditor> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text('${t.seats} seats · ${floorStateStyle(d.hp, t.status).$3}', style: HPType.body(d.hp.muted)),
+            if (widget.canSetStatus) TextButton.icon(onPressed: () => Navigator.pop(d, 'booking'), icon: const Icon(Icons.calendar_month_outlined), label: const Text('Book a reservation')),
             if (widget.canSetStatus && t.status != 'occupied' && t.status != 'bill_printed') ...[
               const SizedBox(height: HPSpace.md),
               for (final (v, l) in [('available', 'Available'), ('reserved', 'Reserved'), ('unavailable', 'Out of use')])
@@ -197,6 +232,7 @@ class _FloorEditorState extends State<FloorEditor> {
       ),
     );
     if (s == null) return;
+    if (s == 'booking') { await _reserve(t); return; }
     try {
       await widget.api.setTableStatus(t.id!, s);
       await _load();
@@ -212,6 +248,15 @@ class _FloorEditorState extends State<FloorEditor> {
       cursor: SystemMouseCursors.move,
       child: eagerPan(key: key, onStart: (_) => onStart?.call(), onUpdate: (d) => onMove(d.delta), onEnd: (_) => onEnd?.call(), child: child),
     );
+  }
+
+  Future<void> _uploadBackground() async {
+    try {
+      final raw = await pickPhoto();
+      if (raw == null || !mounted) return;
+      final prepared = prepareFloorPhoto(raw);
+      _change(() => _background = 'data:image/jpeg;base64,${prepared.base64}');
+    } catch (e) { if (mounted) showError(context, e); }
   }
 
   void _zoom(double by) {
@@ -254,9 +299,10 @@ class _FloorEditorState extends State<FloorEditor> {
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         color: p.ground,
+                        image: DecorationImage(image: _background == null ? const AssetImage('assets/classic-floor.jpg') : MemoryImage(base64Decode(_background!.split(',').last)) as ImageProvider, fit: BoxFit.cover, opacity: .45),
                         border: Border.all(color: p.outline),
                       ),
-                      child: CustomPaint(painter: FloorGridPainter(p.line.withValues(alpha: .7))),
+                      child: CustomPaint(painter: FloorGridPainter(p.line.withValues(alpha: .25))),
                     ),
                   ),
                   for (final (i, t) in _tables.indexed)
@@ -281,7 +327,7 @@ class _FloorEditorState extends State<FloorEditor> {
                             : null,
                         child: FloorTableView(
                           table: t,
-                          selected: _sel == i,
+                          selected: _sel == i || (_search.isNotEmpty && t.name.toLowerCase().contains(_search.toLowerCase())),
                           warn: warnNames.contains(t.name),
                           highlightChairs: _editable && _chairMode && _sel == i,
                           onChairDrag: _editable && _chairMode && _sel == i
@@ -308,6 +354,8 @@ class _FloorEditorState extends State<FloorEditor> {
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         if (_editable) ...[
+          TextButton.icon(onPressed: _uploadBackground, icon: const Icon(Icons.add_photo_alternate_outlined), label: const Text('Upload floor image')),
+          if (_background != null) TextButton(onPressed: () => _change(() => _background = null), child: const Text('Classic floor')),
           PopupMenuButton<String>(
             key: const Key('add-plan-table'),
             tooltip: 'Add a table',
@@ -376,6 +424,8 @@ class _FloorEditorState extends State<FloorEditor> {
               ]),
             ),
           ),
+        TextField(decoration: const InputDecoration(prefixIcon: Icon(Icons.search), labelText: 'Find a table by name or number'), onChanged: (v) => setState(() { _search = v; final i = _tables.indexWhere((t) => t.name.toLowerCase() == v.toLowerCase()); if (i >= 0) { _sel = i; final t = _tables[i]; _tc.value = Matrix4.identity()..translateByDouble(200-t.x, 200-t.y, 0, 1); } })),
+        const SizedBox(height: HPSpace.sm),
         Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, spacing: HPSpace.md, runSpacing: HPSpace.sm, children: [toolbar, actions]),
         if (_editable)
           Padding(padding: const EdgeInsets.only(top: HPSpace.sm), child: Text('Drag a table to move it with all its chairs. Turn on Move chairs to adjust individual chairs on the selected table. Choose Save plan to keep your changes.', style: HPType.body(p.muted))),
@@ -403,6 +453,9 @@ class _FloorEditorState extends State<FloorEditor> {
       Text('LIVE FLOOR', style: HPType.overline(p.muted)),
       const SizedBox(height: HPSpace.sm),
       const FloorLegend(),
+      const SizedBox(height: 16),
+      Text('UPCOMING RESERVATIONS', style: HPType.overline(p.muted)),
+      for (final r in ((_server?['reservations'] as List?) ?? const [])) ListTile(contentPadding: EdgeInsets.zero, title: Text('${r['guestName']} · ${r['guests']} guests'), subtitle: Text('Table ${_tables.where((t) => t.id == r['tableId']).firstOrNull?.name ?? ''} · ${DateTime.tryParse('${r['startsAt']}')?.toLocal()}'), trailing: widget.canSetStatus ? IconButton(tooltip: 'Cancel reservation', icon: const Icon(Icons.event_busy), onPressed: () async { try { await widget.api.cancelReservation('${r['id']}'); await _load(); } catch (e) { if (mounted) showError(context, e); } }) : null),
       const SizedBox(height: HPSpace.md),
       Text(
         widget.canSetStatus ? 'Tap a table to mark it reserved or out of use.' : 'Tables show their state from the POS (synced every few seconds).',

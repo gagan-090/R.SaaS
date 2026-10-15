@@ -31,3 +31,14 @@ Future<Uint8List?> pickPhoto() async {
   final r = await FilePicker.pickFiles(type: FileType.image, withData: true);
   return r?.files.single.bytes;
 }
+
+/// Floor plans keep their original aspect ratio, with a bounded upload size.
+PreparedImage prepareFloorPhoto(Uint8List raw) {
+  if (raw.length > 15 * 1024 * 1024) throw const FormatException('Choose an image smaller than 15 MB.');
+  final decoded = img.decodeImage(raw);
+  if (decoded == null) throw const FormatException('Choose a JPG, PNG or WebP floor image.');
+  final resized = decoded.width >= decoded.height ? img.copyResize(decoded, width: 1200) : img.copyResize(decoded, height: 1200);
+  final bytes = img.encodeJpg(resized, quality: 72);
+  if (bytes.length > 650000) throw const FormatException('This image is too detailed. Choose a smaller floor plan.');
+  return (contentType: 'image/jpeg', base64: base64Encode(bytes), bytes: bytes);
+}

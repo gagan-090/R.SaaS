@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
@@ -20,6 +21,12 @@ class _AdminsScreenState extends ConsumerState<AdminsScreen> {
     final api = ref.read(apiProvider);
     return () async => (await api.admins(), await api.roles());
   }
+
+  Timer? _statusTimer;
+  @override
+  void initState() { super.initState(); _statusTimer = Timer.periodic(const Duration(seconds: 30), (_) { if (mounted) _reload(); }); }
+  @override
+  void dispose() { _statusTimer?.cancel(); super.dispose(); }
 
   void _reload() => setState(() => _load = _mk());
 
@@ -107,6 +114,7 @@ class _AdminsScreenState extends ConsumerState<AdminsScreen> {
         return ListView(padding: EdgeInsets.all(isNarrowWeb(c) ? HPSpace.lg : HPSpace.x4), children: [
           Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, runSpacing: HPSpace.md, children: [
             Text('Platform admins', style: Theme.of(c).textTheme.headlineMedium),
+            IconButton(tooltip: 'Refresh account and MFA status', onPressed: _reload, icon: const Icon(Icons.refresh)),
             if (can('platform.admin.invite')) SizedBox(width: 200, child: PrimaryButton(key: const Key('add-platform-admin'), label: 'Add admin', icon: Icons.person_add_alt, height: 52, onPressed: _add)),
           ]),
           const SizedBox(height: HPSpace.md),

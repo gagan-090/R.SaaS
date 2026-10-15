@@ -9,6 +9,7 @@ import '../../state/providers.dart';
 import '../../widgets/common.dart';
 import 'dashboard_screen.dart' show rupees;
 import 'import_dialog.dart';
+import 'purchase_dialog.dart';
 
 const stockUnits = ['g', 'kg', 'mg', 'ml', 'l', 'piece', 'dozen', 'bottle', 'can', 'packet', 'box', 'case', 'plate', 'portion'];
 
@@ -79,6 +80,12 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     }
   }
 
+  Future<void> _purchase() async {
+    if (_products!.isEmpty || _suppliers!.isEmpty) { showError(context, 'Add products and a supplier first, then receive your purchase here.'); return; }
+    final saved = await showDialog<bool>(context: context, builder: (_) => PurchaseDialog(api: _api, products: _products!, suppliers: _suppliers!, locations: _locations!));
+    if (saved == true) { await _load(); if (mounted) showDone(context, 'Purchase received. Stock and cost updated.'); }
+  }
+
   Future<void> _editProduct([Json? p]) async {
     final saved = await showDialog<String>(context: context, builder: (_) => _ProductEditor(api: _api, product: p, locations: _locations!, suppliers: _suppliers!));
     if (saved != null) {
@@ -109,6 +116,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     final alertCount = ((_alerts!['low'] as List).length) + ((_alerts!['negative'] as List).length) + ((_alerts!['expiring'] as List).length);
     final tabs = <(String, Widget)>[
       ('Stock', _stockTab(p)),
+      ('Purchases', Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [if (_can('inventory.write')) Align(alignment: Alignment.centerRight, child: PrimaryButton(label: 'Receive purchase', icon: Icons.local_shipping_outlined, onPressed: _purchase)), const SizedBox(height: 16), _MovementsTab(key: ValueKey('purchases-$_reload'), api: _api, initialType: 'purchase')])),
       ('Movements', _MovementsTab(key: ValueKey('mv-$_reload'), api: _api)),
       ('Alerts${alertCount > 0 ? ' · $alertCount' : ''}', _AlertsTab(alerts: _alerts!)),
       ('Requests', _RequestsTab(key: ValueKey('rq-$_reload'), api: _api, products: _products!, canRequest: _can('inventory.request'), canHandle: _can('inventory.write'))),
@@ -337,7 +345,7 @@ class _MovementDialogState extends State<_MovementDialog> {
 
   Future<void> _save() async {
     final q = double.tryParse(_qty.text.trim());
-    if (q == null || q <= 0) return setState(() => _error = widget.type == 'count' ? 'Enter the quantity you counted' : 'Enter a quantity above 0');
+    if (q == null || (widget.type == 'count' ? q < 0 : q <= 0)) return setState(() => _error = widget.type == 'count' ? 'Enter the quantity you counted' : 'Enter a quantity above 0');
     if (_needsReason && _reason.text.trim().isEmpty) return setState(() => _error = 'Give a reason');
     if (_expiry.text.trim().isNotEmpty && !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(_expiry.text.trim())) return setState(() => _error = 'Expiry date as YYYY-MM-DD');
     if (widget.type == 'transfer' && (_to == null || _to == _location)) return setState(() => _error = 'Choose where the stock goes');
@@ -451,15 +459,16 @@ class _MovementDialogState extends State<_MovementDialog> {
 // ---------------------------------------------------------------- tabs
 
 class _MovementsTab extends StatefulWidget {
-  const _MovementsTab({super.key, required this.api});
+  const _MovementsTab({super.key, required this.api, this.initialType});
   final ApiClient api;
+  final String? initialType;
   @override
   State<_MovementsTab> createState() => _MovementsTabState();
 }
 
 class _MovementsTabState extends State<_MovementsTab> {
   List<Json>? _rows;
-  String? _type;
+  late String? _type = widget.initialType;
 
   @override
   void initState() {

@@ -6,7 +6,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "pnpm --filter @rsaas/api build",
+    "build": "pnpm --filter @rsaas/api prisma:generate && pnpm --filter @rsaas/api build",
     "api:dev": "pnpm --filter @rsaas/api start:dev",
     "api:test": "pnpm --filter @rsaas/api test",
     "api:lint": "pnpm --filter @rsaas/api lint",

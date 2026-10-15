@@ -13,6 +13,8 @@ sealed class AuthState {
   const AuthState();
 }
 
+class RestoringSession extends AuthState { const RestoringSession(); }
+
 class SignedOut extends AuthState {
   const SignedOut();
 }
@@ -42,7 +44,12 @@ class AuthNotifier extends Notifier<AuthState> with ChangeNotifier {
   @override
   AuthState build() {
     ref.read(apiProvider).onSessionExpired = () => _set(const SignedOut());
-    return const SignedOut();
+    Future.microtask(_restore);
+    return const RestoringSession();
+  }
+
+  Future<void> _restore() async {
+    try { if (await _api.restoreSession()) { await _loadMe(); } else { _set(const SignedOut()); } } catch (_) { _set(const SignedOut()); }
   }
 
   ApiClient get _api => ref.read(apiProvider);

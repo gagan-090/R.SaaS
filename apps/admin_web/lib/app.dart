@@ -42,13 +42,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       final loc = state.matchedLocation;
       if (loc == '/verify-email' || loc == '/set-pin') return null; // emailed links work whether or not someone is signed in
       return switch (s) {
+        RestoringSession() => loc == '/restoring' ? null : '/restoring',
         SignedOut() => loc == '/login' ? null : '/login',
         MfaChallenge() || MfaEnrollment() => loc == '/mfa' ? null : '/mfa',
         SignedIn(:final isRestaurant) when isRestaurant => loc.startsWith('/console') ? null : '/console',
-        SignedIn() => (loc == '/login' || loc == '/mfa' || loc.startsWith('/console')) ? '/' : null,
+        SignedIn() => (loc == '/restoring' || loc == '/login' || loc == '/mfa' || loc.startsWith('/console')) ? '/' : null,
       };
     },
     routes: [
+      GoRoute(path: '/restoring', builder: (_, _) => const Scaffold(body: Center(child: CircularProgressIndicator()))),
       GoRoute(path: '/login', builder: (_, s) => LoginScreen(employee: s.uri.queryParameters['mode'] == 'employee')),
       GoRoute(path: '/mfa', builder: (_, _) => const MfaScreen()),
       GoRoute(path: '/verify-email', builder: (_, s) => VerifyEmailScreen(token: s.uri.queryParameters['token'])),

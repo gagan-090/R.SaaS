@@ -5,6 +5,7 @@ import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 import '../../api/api_client.dart';
 import '../../state/providers.dart';
 import '../../util/image_prep.dart';
+import '../../util/money_input.dart';
 import '../../widgets/common.dart';
 import 'dashboard_screen.dart' show rupees;
 import 'import_dialog.dart';
@@ -123,6 +124,36 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     _taxes = (await _api.taxRules()).cast<Json>();
   }
 
+  Future<void> _quickAdd() async {
+    await _ensureTax();
+    if (!mounted) return;
+    final category = TextEditingController(text: _cats!.where((c) => c['id'] == _cat).firstOrNull?['name'] as String? ?? 'Main course');
+    final rows = TextEditingController();
+    String? error;
+    bool busy = false;
+    final saved = await showDialog<bool>(context: context, builder: (d) => StatefulBuilder(builder: (d, update) => HPDialog(title: 'Quick menu entry', actions: [SecondaryButton(label: 'Cancel', onPressed: busy ? null : () => Navigator.pop(d)), PrimaryButton(label: 'Create dishes', busy: busy, onPressed: busy ? null : () async {
+      final items = <Json>[];
+      for (final line in rows.text.split('\n').where((l) => l.trim().isNotEmpty)) {
+        final fields = line.trim().split(RegExp(r'\t|\s*\|\s*'));
+        final price = fields.length == 2 ? parseRupees(fields[1]) : null;
+        if (price == null || price < 0 || fields.first.trim().isEmpty) { update(() => error = 'Use one dish per line: Name | Price in rupees'); return; }
+        items.add({'name': fields.first.trim(), 'pricePaise': price});
+      }
+      if (items.isEmpty || items.length > 100 || category.text.trim().isEmpty) { update(() => error = 'Enter a category and 1–100 dishes.'); return; }
+      update(() { busy = true; error = null; });
+      try { await _api.quickMenu({'categoryName': category.text.trim(), 'taxRuleId': _taxes!.first['id'], 'items': items}); if (d.mounted) Navigator.pop(d, true); }
+      catch (e) { if (d.mounted) update(() { busy = false; error = '$e'; }); }
+    })], child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      TextField(controller: category, decoration: const InputDecoration(labelText: 'Category (created automatically if new)')),
+      const SizedBox(height: 16),
+      TextField(controller: rows, minLines: 6, maxLines: 12, decoration: const InputDecoration(labelText: 'Paste names and prices from Excel, or type', hintText: 'Paneer Tikka | 240\nDal Makhani | 180\nButter Naan | 50')),
+      const SizedBox(height: 8), Text('Prices in rupees, before ${_taxes!.first['name']}. Dishes start as vegetarian; edit each dish for portions or non-veg. For full menus with sizes, use Excel import.'),
+      if (error != null) Text(error!, style: TextStyle(color: d.hp.danger)),
+    ]))));
+    category.dispose(); rows.dispose();
+    if (saved == true) { await _load(); if (mounted) showDone(context, 'Menu created'); }
+  }
+
   Future<void> _editItem([Json? item]) async {
     if (_cats!.isEmpty) {
       showError(context, 'Add a category first (for example "Starters").');
@@ -224,7 +255,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
             final done = await showDialog<bool>(context: context, builder: (_) => ImportDialog(api: _api, kind: 'menu'));
             if (done == true) await _load();
           }),
-        if (edit) PrimaryButton(key: const Key('add-dish'), label: 'Add dish', icon: Icons.add_rounded, height: 48, onPressed: () => _editItem()),
+        if (edit) SecondaryButton(label: 'Quick add / paste', onPressed: _quickAdd),
+              PrimaryButton(key: const Key('add-dish'), label: 'Add dish', icon: Icons.add_rounded, height: 48, onPressed: () => _editItem()),
       ],
       child: narrow
           ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [categoryRail, const SizedBox(height: HPSpace.lg), grid])
@@ -555,6 +587,10 @@ class _ItemEditorState extends State<_ItemEditor> {
         Row(children: [
           Expanded(child: Text('SIZES & PORTIONS', style: HPType.overline(p.muted))),
           TextButton.icon(key: const Key('add-size'), onPressed: _sizes.length >= 20 ? null : () => setState(() => _sizes.add(_SizeDraft.blank())), icon: const Icon(Icons.add_rounded, size: 18), label: const Text('Add size')),
+        ]),
+        Wrap(spacing: 8, children: [
+          TextButton(onPressed: () => setState(() { _sizes.clear(); for (final (name, ratio) in [('Quarter', .25), ('Half', .5), ('Full', 1.0)]) { _sizes.add(_SizeDraft(name: '$name plate', portion: name.toLowerCase(), ratio: '$ratio', qty: '$ratio', unit: 'plate', isDefault: ratio == 1)); } }), child: const Text('Quarter / Half / Full')),
+          TextButton(onPressed: () => setState(() { _sizes.clear(); for (final quantity in [250, 500, 1000]) { _sizes.add(_SizeDraft(name: '$quantity ml', qty: '$quantity', unit: 'ml', isDefault: quantity == 250)); } }), child: const Text('Drink sizes: 250 / 500 / 1000 ml')),
         ]),
         Text('Each size has its own price (before GST). A half plate does not have to cost half.', style: HPType.body(p.muted).copyWith(fontSize: 12)),
         const SizedBox(height: HPSpace.sm),

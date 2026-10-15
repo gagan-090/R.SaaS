@@ -19,5 +19,5 @@ export function pinProblem(pin: string): string | null {
   return null;
 }
 
-/** Legacy POS-only PINs (4–8 digits) — still accepted for the POS, never for the web portal. */
 export const LEGACY_PIN = /^\d{4,8}$/;
+

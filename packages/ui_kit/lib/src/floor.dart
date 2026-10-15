@@ -185,6 +185,7 @@ class FloorTableView extends StatelessWidget {
                     border: Border.all(color: highlightChairs ? p.accent : p.outline),
                     borderRadius: BorderRadius.circular(6),
                   ),
+                  child: Icon(Icons.chair_rounded, size: 18, color: p.muted),
                 ),
               ),
             ),
@@ -207,6 +208,7 @@ class FloorTableView extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.all(4),
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.table_restaurant_rounded, size: 18, color: edge),
                       Text(table.name, style: HPType.titleCard(p.text).copyWith(fontSize: 18)),
                       Text('${table.seats} seats', style: HPType.body(p.muted).copyWith(fontSize: 11)),
                     ]),

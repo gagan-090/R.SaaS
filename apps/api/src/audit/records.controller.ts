@@ -15,6 +15,7 @@ export const MODULES: Record<string, string[]> = {
   'Employees & roles': ['staff.', 'role.'],
   'Menu & prices': ['menu.', 'tax_rule.'],
   'Floor layout': ['floor.', 'table.'],
+  'Purchases & receipts': ['inventory.purchase', 'inventory.request'],
   Inventory: ['inventory.'],
   Expenses: ['expense.'],
   Imports: ['import.'],

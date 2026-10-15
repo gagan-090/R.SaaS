@@ -1139,7 +1139,7 @@ class _AuditScreenState extends State<AuditScreen> {
                 child: ChoiceChip(
                   label: Text(label),
                   selected: _category == cat,
-                  onSelected: (_) => setState(() => _category = cat),
+                  onSelected: (_) => setState(() { _category = cat; if (cat == null) { _a = _t = _q = null; _action.clear(); _tenant.clear(); _search.clear(); } }),
                 ),
               ),
           ]),
@@ -1220,6 +1220,13 @@ class _PendingRegistrationsState extends ConsumerState<PendingRegistrations> {
   String _q = '';
   int _reload = 0;
   final _busy = <String>{};
+
+  Future<void> _activate(Map<String, dynamic> r) async {
+    final password = TextEditingController();
+    final ok = await showDialog<bool>(context: context, builder: (d) => HPDialog(title: 'Activate ${r['restaurantName']}', actions: [SecondaryButton(label: 'Cancel', onPressed: () => Navigator.pop(d)), PrimaryButton(label: 'Activate', onPressed: () { if (password.text.length >= 12) Navigator.pop(d, true); })], child: TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'Owner password', helperText: 'At least 12 characters. No email required.'))));
+    if (ok != true) { password.dispose(); return; }
+    try { await ref.read(apiProvider).activateRegistration(r['id'] as String, password.text); if (mounted) { setState(() => _reload++); showDone(context, 'Restaurant active. Owner can sign in with email and password.'); } } catch (e) { if (mounted) showError(context, e); } finally { password.dispose(); }
+  }
 
   Future<void> _resend(Map<String, dynamic> r) async {
     setState(() => _busy.add(r['id'] as String));
@@ -1328,6 +1335,7 @@ class _PendingRegistrationsState extends ConsumerState<PendingRegistrations> {
                               onPressed: () => _resend(r),
                             ),
                           ),
+                          TextButton.icon(onPressed: () => _activate(r), icon: const Icon(Icons.check_circle_outline), label: const Text('Activate without email')),
                           SizedBox(width: 120, child: SecondaryButton(key: Key('cancel-${r['restaurantName']}'), label: 'Cancel', height: 44, onPressed: () => _cancel(r))),
                         ]),
                       ],

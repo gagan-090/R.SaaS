@@ -29,7 +29,7 @@ Future<void> main() async {
   } catch (e) {
     stderr.writeln('initial pull failed (working offline): $e');
   }
-  final server = HubServer(hub, hubName: Platform.localHostname, certFingerprint: tls.fingerprint);
+  final server = HubServer(hub, hubName: Platform.localHostname, refreshStaff: worker.pullOnce, certFingerprint: tls.fingerprint);
   final port = int.parse(Platform.environment['HUB_PORT'] ?? '8443');
   await server.start(port: port, tls: tls.context());
   worker.start();

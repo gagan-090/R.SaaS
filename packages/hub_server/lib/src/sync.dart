@@ -112,7 +112,10 @@ class SyncWorker {
   }
 
   /// Pulls config changes since the stored cursor and applies them (license token verified first).
-  Future<void> pullOnce() async {
+  Future<void>? _pulling;
+  Future<void> pullOnce() => _pulling ??= _pullConfig().whenComplete(() => _pulling = null);
+
+  Future<void> _pullConfig() async {
     final since = await db.getMeta('config_cursor') ?? '0';
     final body = await cloud.pull(since);
     await hub.applyConfig(body);

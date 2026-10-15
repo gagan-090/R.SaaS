@@ -9,6 +9,7 @@ import { badRequest, conflict, forbidden, notFound } from '../common/errors';
 import { UNIT_KEYS } from '../common/units';
 import { apiBody, zbody } from '../common/validation';
 import { DbService, Tx } from '../db/db.service';
+import { uuidv7 } from '../common/uuid';
 
 export const CODE = z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{0,39}$/, 'Codes use letters, digits, - _ . (max 40)');
 
@@ -48,6 +49,10 @@ const ItemBody = z
     quantity: z.number().int().positive().optional(),
   })
   .refine((b) => !!b.variants || b.pricePaise !== undefined, { message: 'Add at least one size or portion with a price', path: ['variants'] });
+const QuickMenuBody = z.object({
+  categoryName: z.string().trim().min(1).max(60), taxRuleId: z.string().uuid(),
+  items: z.array(z.object({ name: z.string().trim().min(1).max(120), pricePaise: z.number().int().nonnegative().max(1000000000), isVeg: z.boolean().default(true) })).min(1).max(100),
+});
 const ItemPatch = z.object({
   categoryId: z.string().uuid().optional(),
   name: z.string().trim().min(1).max(120).optional(),
@@ -172,6 +177,31 @@ export class MenuController {
     const [it] = await this.t(a, (tx) => this.withVariants(tx, { id }));
     if (!it) throw notFound('Menu item');
     return it;
+  }
+
+  @RequirePermissions('menu.publish')
+  @RequiresFeature('menu')
+  @Audited('menu.quick_created')
+  @Post('quick-create')
+  @ApiBody(apiBody(QuickMenuBody))
+  async quickCreate(@CurrentActor() a: Actor, @Body(zbody(QuickMenuBody)) b: z.infer<typeof QuickMenuBody>, @AuditCtx() audit: AuditDetails) {
+    const result = await this.t(a, async tx => {
+      await tx.$queryRaw`SELECT id FROM restaurant_tenants WHERE id = ${a.tenantId!}::uuid FOR UPDATE`;
+      if (!(await tx.taxRule.findFirst({ where: { id: b.taxRuleId, deleted: false } }))) throw notFound('Tax rule');
+      let category = await tx.menuCategory.findFirst({ where: { name: { equals: b.categoryName, mode: 'insensitive' }, deleted: false } });
+      category ??= await tx.menuCategory.create({ data: { tenantId: a.tenantId!, name: b.categoryName } });
+      const names = b.items.map(i => i.name.toLowerCase());
+      if (new Set(names).size !== names.length) throw conflict('duplicate_dish', 'Remove repeated dish names before saving');
+      const existing = await tx.menuItem.findMany({ where: { categoryId: category.id, deleted: false }, select: { name: true } });
+      if (existing.some(i => names.includes(i.name.toLowerCase()))) throw conflict('duplicate_dish', 'A dish already exists in this category. Edit it from the menu instead.');
+      const rows = b.items.map(line => { const id = uuidv7(); return { id, tenantId: a.tenantId!, categoryId: category.id, taxRuleId: b.taxRuleId, code: `Q-${id.replace(/-/g, '')}`, name: line.name, pricePaise: line.pricePaise, isVeg: line.isVeg }; });
+      await tx.menuItem.createMany({ data: rows });
+      await tx.menuVariant.createMany({ data: rows.map(item => ({ tenantId: a.tenantId!, itemId: item.id, code: `${item.code}-REG`, name: 'Regular', pricePaise: item.pricePaise, available: true, isDefault: true })) });
+      await this.bump(tx, a);
+      return { count: b.items.length, categoryId: category.id };
+    });
+    Object.assign(audit, { objectType: 'menu_category', objectId: result.categoryId, after: { dishes: b.items.map(i => i.name), count: result.count } });
+    return result;
   }
 
   @RequirePermissions('menu.publish')

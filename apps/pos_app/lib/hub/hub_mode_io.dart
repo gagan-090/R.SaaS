@@ -44,7 +44,7 @@ class HubHost {
     } catch (_) {
       // offline start: keep serving the LAN with the last pulled config
     }
-    _server = HubServer(_hub!, hubName: Platform.localHostname, certFingerprint: fingerprint);
+    _server = HubServer(_hub!, hubName: Platform.localHostname, refreshStaff: _worker!.pullOnce, certFingerprint: fingerprint);
     await _server!.start(port: port, tls: tls.context());
     _worker!.start();
     localDeviceToken ??= await _hub!.registerSelf('This hub (${Platform.localHostname})', Platform.isWindows ? 'windows' : 'android');

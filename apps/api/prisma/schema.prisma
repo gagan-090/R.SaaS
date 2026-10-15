@@ -418,6 +418,7 @@ model Floor {
   sortOrder     Int     @default(0) @map("sort_order")
   width         Int     @default(1200) // layout canvas size in layout units (1 unit ≈ 1 cm)
   height        Int     @default(800)
+  backgroundImage String? @map("background_image")
   layoutVersion Int     @default(1) @map("layout_version") // optimistic lock for the floor editor
   seq           BigInt  @default(0)
   deleted       Boolean @default(false)
@@ -989,4 +990,20 @@ model AuditArchive {
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@map("audit_archives")
+}
+
+model TableReservation {
+  id String @id @default(uuid(7)) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  branchId String @map("branch_id") @db.Uuid
+  tableId String @map("table_id") @db.Uuid
+  guestName String @map("guest_name")
+  phone String?
+  guests Int
+  startsAt DateTime @map("starts_at") @db.Timestamptz
+  endsAt DateTime @map("ends_at") @db.Timestamptz
+  status String @default("confirmed")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  @@index([tenantId, tableId, startsAt])
+  @@map("table_reservations")
 }

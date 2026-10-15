@@ -35,7 +35,7 @@ const ProductPatch = ProductBody.omit({ sku: true }).partial();
 const MovementBody = z.object({
   type: z.enum(MANUAL_TYPES),
   productId: z.string().uuid(),
-  quantity: z.number().refine((n) => n !== 0 && Math.abs(n) <= 1_000_000_000, 'Quantity must not be 0'),
+  quantity: z.number().min(-1_000_000_000).max(1_000_000_000),
   unit: Unit,
   locationId: z.string().uuid().nullish(),
   toLocationId: z.string().uuid().nullish(),
@@ -46,7 +46,15 @@ const MovementBody = z.object({
   expiryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD').nullish(),
   reason: z.string().trim().max(300).nullish(),
   idempotencyKey: z.string().min(8).max(100),
-}).refine((b) => b.type === 'adjustment' || b.quantity > 0, { message: 'Quantity must be positive', path: ['quantity'] });
+}).refine((b) => (b.type === 'count' ? b.quantity >= 0 : b.type === 'adjustment' ? b.quantity !== 0 : b.quantity > 0), { message: 'Quantity must be positive', path: ['quantity'] });
+const PurchaseBody = z.object({
+  supplierId: z.string().uuid(), reference: z.string().trim().min(1).max(80),
+  locationId: z.string().uuid().nullish(), idempotencyKey: z.string().uuid(),
+  lines: z.array(z.object({ productId: z.string().uuid(), quantity: z.number().positive().max(1000000),
+    unit: Unit, unitCostPaise: z.number().int().nonnegative().max(1000000000),
+    batchNumber: z.string().trim().max(40).optional(), expiryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  })).min(1).max(100),
+});
 const MovementQuery = z.object({
   productId: z.string().uuid().optional(), type: z.string().optional(), from: z.string().optional(), to: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(1000).default(200),
@@ -75,6 +83,30 @@ export class InventoryController {
   private t<T>(a: Actor, fn: (tx: Tx) => Promise<T>) {
     if (!a.tenantId) throw forbidden('tenant_only', 'Restaurant account required');
     return this.db.tenant(a.tenantId, fn);
+  }
+
+  @RequirePermissions('inventory.write')
+  @RequiresFeature('inventory')
+  @Audited('inventory.purchase_received')
+  @Post('inventory/purchases')
+  @ApiBody(apiBody(PurchaseBody))
+  async purchase(@CurrentActor() a: Actor, @Body(zbody(PurchaseBody)) b: z.infer<typeof PurchaseBody>, @AuditCtx() audit: AuditDetails) {
+    const result = await this.t(a, async tx => {
+      // Serialize retries of the same receipt, including receipts with different product lists.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${a.tenantId! + ':' + b.idempotencyKey}, 0))`;
+      const existing = await tx.stockMovement.findMany({ where: { sourceType: 'purchase_receipt', sourceId: b.idempotencyKey } });
+      if (existing.length) return { receiptId: b.idempotencyKey, lines: existing.length, duplicate: true };
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${a.tenantId! + ':' + b.supplierId + ':' + b.reference}, 0))`;
+      if (await tx.stockMovement.findFirst({ where: { supplierId: b.supplierId, reference: b.reference, type: 'purchase' } })) throw conflict('duplicate_invoice', 'This supplier invoice has already been received');
+      await this.inv.lock(tx, b.lines.map(l => l.productId));
+      for (const [i, line] of b.lines.entries()) {
+        await this.inv.record(tx, a, { ...line, type: 'purchase', supplierId: b.supplierId, locationId: b.locationId,
+          reference: b.reference, idempotencyKey: `${b.idempotencyKey}:${i}`, sourceType: 'purchase_receipt', sourceId: b.idempotencyKey });
+      }
+      return { receiptId: b.idempotencyKey, lines: b.lines.length, duplicate: false };
+    });
+    Object.assign(audit, { objectType: 'purchase_receipt', objectId: result.receiptId, after: { reference: b.reference, lines: result.lines } });
+    return result;
   }
 
   // ---------------------------------------------------------------- locations & suppliers

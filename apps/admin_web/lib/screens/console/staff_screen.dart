@@ -405,7 +405,7 @@ class _StaffEditorState extends State<_StaffEditor> {
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             obscureText: true,
             maxLength: 8,
-            decoration: InputDecoration(labelText: _isNew ? 'PIN (6 to 8 digits)' : 'New PIN (leave empty to keep)', counterText: '', prefixIcon: const Icon(Icons.pin_outlined)),
+            decoration: InputDecoration(labelText: _isNew ? 'PIN (6 to 8 digits, e.g. 246813)' : 'New PIN (leave empty to keep)', counterText: '', prefixIcon: const Icon(Icons.pin_outlined)),
           ),
         if (!_isNew && widget.user!['email'] != null)
           Wrap(spacing: HPSpace.sm, children: [

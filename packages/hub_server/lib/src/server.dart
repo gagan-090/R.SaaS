@@ -14,9 +14,10 @@ import 'util.dart';
 /// HTTP + WebSocket API of the branch hub (Build Spec §09), served at /hub/v1.
 /// Devices send `X-Device-Token`; staff actions also send `Authorization: Bearer <session token>`.
 class HubServer {
-  HubServer(this.hub, {required this.hubName, this.certFingerprint});
+  HubServer(this.hub, {required this.hubName, this.certFingerprint, this.refreshStaff});
 
   final HubService hub;
+  final Future<void> Function()? refreshStaff;
   final String hubName;
 
   /// SHA-256 fingerprint of the hub's TLS certificate; clients pin it at pairing.
@@ -77,6 +78,7 @@ class HubServer {
     r.post('/session/login', (Request q) async {
       final deviceId = await hub.authenticateDevice(q.headers['x-device-token']);
       final b = await _body(q);
+      try { await refreshStaff?.call().timeout(const Duration(seconds: 5)); } catch (_) { /* Offline: use the last synced PIN. */ }
       return _json(await hub.staffLogin(deviceId, '${b['userId']}', '${b['pin']}'));
     });
 

@@ -23,12 +23,18 @@ const LayoutTable = z.object({
   chairs: z.array(Chair).max(40).nullish(),
 });
 const LayoutBody = z.object({
+  backgroundImage: z.string().max(900000).regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/).nullable().optional(),
   version: z.number().int().positive(),
   width: z.number().int().min(300).max(10000),
   height: z.number().int().min(300).max(10000),
   tables: z.array(LayoutTable).max(300),
 });
 const StatusBody = z.object({ status: z.enum(['available', 'reserved', 'unavailable']) });
+
+const ReservationBody = z.object({
+ guestName: z.string().trim().min(1).max(100), phone: z.string().trim().max(30).optional(),
+ guests: z.number().int().min(1).max(40), startsAt: z.coerce.date(), endsAt: z.coerce.date(),
+}).refine(b => b.endsAt > b.startsAt && b.endsAt.getTime() - b.startsAt.getTime() <= 86400000, 'Choose an end time after the start, within 24 hours');
 
 type TableRow = Prisma.TableGetPayload<object>;
 const tableOut = (t: TableRow) => ({
@@ -104,9 +110,11 @@ export class LayoutController {
     if (a.branchIds.length && !a.branchIds.includes(floor.branchId)) throw forbidden('branch_scope', 'Not your branch');
     const tables = await tx.table.findMany({ where: { floorId, deleted: false }, orderBy: { name: 'asc' } });
     const live = await liveTableStates(tx);
+    const reservations = await tx.tableReservation.findMany({ where: { tableId: { in: tables.map(t => t.id) }, status: 'confirmed', endsAt: { gt: new Date() } }, orderBy: { startsAt: 'asc' } });
     return {
-      floor: { id: floor.id, branchId: floor.branchId, name: floor.name, width: floor.width, height: floor.height, version: floor.layoutVersion },
-      tables: tables.map((t) => ({ ...tableOut(t), live: live.get(t.id) ?? t.status })),
+      reservations,
+      floor: { id: floor.id, branchId: floor.branchId, name: floor.name, width: floor.width, height: floor.height, version: floor.layoutVersion, backgroundImage: floor.backgroundImage },
+      tables: tables.map((t) => ({ ...tableOut(t), live: live.get(t.id) ?? (reservations.some(r => r.tableId === t.id && r.startsAt <= new Date()) ? 'reserved' : t.status) })),
       warnings: overlaps(tables.map((t) => ({ name: t.name, shape: t.shape, x: t.posX, y: t.posY, width: t.width, height: t.height, rotation: t.rotation }))),
     };
   }
@@ -129,7 +137,7 @@ export class LayoutController {
       if (!floor || floor.deleted) throw notFound('Floor');
       if (a.branchIds.length && !a.branchIds.includes(floor.branchId)) throw forbidden('branch_scope', 'Not your branch');
       // optimistic lock: claim the version first, so two editors saving at once cannot both win
-      const claimed = await tx.floor.updateMany({ where: { id, layoutVersion: b.version }, data: { layoutVersion: { increment: 1 }, width: b.width, height: b.height } });
+      const claimed = await tx.floor.updateMany({ where: { id, layoutVersion: b.version }, data: { layoutVersion: { increment: 1 }, width: b.width, height: b.height, ...(b.backgroundImage !== undefined ? { backgroundImage: b.backgroundImage } : {}) } });
       if (claimed.count === 0) throw conflict('layout_changed', 'Someone else saved this floor since you opened it. Reload to see their changes.');
 
       const names = b.tables.map((t) => t.name.trim().toLowerCase());
@@ -178,6 +186,39 @@ export class LayoutController {
     });
     Object.assign(audit, { branchId: r.branchId, objectType: 'floor', objectId: id, before: r.before, after: r.after });
     return r.result;
+  }
+
+  @RequirePermissions('order.write')
+  @RequiresFeature('tables')
+  @Audited('table.reservation_created')
+  @Post('tables/:id/reservations')
+  @ApiBody(apiBody(ReservationBody))
+  async reserve(@CurrentActor() a: Actor, @Param('id', ParseUUIDPipe) id: string, @Body(zbody(ReservationBody)) b: z.infer<typeof ReservationBody>, @AuditCtx() audit: AuditDetails) {
+    const reservation = await this.t(a, async tx => {
+      await tx.$queryRaw`SELECT id FROM tables WHERE id = ${id}::uuid FOR UPDATE`;
+      const table = await tx.table.findUnique({ where: { id } });
+      if (!table || table.deleted) throw notFound('Table');
+      if (a.branchIds.length && !a.branchIds.includes(table.branchId)) throw forbidden('branch_scope', 'Not your branch');
+      if (b.guests > table.seats) throw conflict('table_capacity', 'Choose a table with enough seats');
+      if (b.endsAt <= new Date()) throw conflict('past_reservation', 'Choose a future reservation');
+      if (await tx.tableReservation.findFirst({ where: { tableId: id, status: 'confirmed', startsAt: { lt: b.endsAt }, endsAt: { gt: b.startsAt } } })) throw conflict('reservation_overlap', 'This table is already reserved at that time');
+      return tx.tableReservation.create({ data: { ...b, tableId: id, tenantId: a.tenantId!, branchId: table.branchId } });
+    });
+    Object.assign(audit, { objectType: 'reservation', objectId: reservation.id, branchId: reservation.branchId, after: { tableId: id, startsAt: reservation.startsAt, guests: reservation.guests } });
+    return reservation;
+  }
+
+  @RequirePermissions('order.write')
+  @Audited('table.reservation_cancelled')
+  @Post('reservations/:id/cancel')
+  async cancelReservation(@CurrentActor() a: Actor, @Param('id', ParseUUIDPipe) id: string, @AuditCtx() audit: AuditDetails) {
+    return this.t(a, async tx => {
+      const r = await tx.tableReservation.findUnique({ where: { id } });
+      if (!r) throw notFound('Reservation');
+      if (a.branchIds.length && !a.branchIds.includes(r.branchId)) throw forbidden('branch_scope', 'Not your branch');
+      Object.assign(audit, { objectType: 'reservation', objectId: id, branchId: r.branchId, after: { status: 'cancelled' } });
+      return tx.tableReservation.update({ where: { id }, data: { status: 'cancelled' } });
+    });
   }
 
   /** Staff mark a table reserved or out of use; occupied / billing always come from orders. */

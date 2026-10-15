@@ -221,6 +221,21 @@ export class RestaurantsController {
     return { id, cancelledAt: r.cancelledAt };
   }
 
+  @RequirePermissions('platform.restaurant.create')
+  @Audited('restaurant.activated_by_admin')
+  @Post('registrations/:id/activate')
+  @ApiBody(apiBody(z.object({ password: z.string().min(12).max(128) })))
+  async activateRegistration(@Param('id', ParseUUIDPipe) id: string, @Body(zbody(z.object({ password: z.string().min(12).max(128) }))) b: { password: string }, @AuditCtx() audit: AuditDetails) {
+    const token = randomToken(32);
+    await this.db.platform(async tx => {
+      const changed = await tx.restaurantRegistration.updateMany({ where: { id, verifiedAt: null, cancelledAt: null }, data: { tokenHash: sha256(token), expiresAt: new Date(Date.now() + 3600000) } });
+      if (!changed.count) throw conflict('registration_unavailable', 'Registration is already activated or cancelled');
+    });
+    const result = await this.verifyEmail({ token, password: b.password });
+    Object.assign(audit, { objectType: 'restaurant', objectId: result.tenantId, after: { activationMethod: 'admin_assisted', registrationId: id } });
+    return result;
+  }
+
   private async assertEmailFree(tx: Tx, email: string) {
     if (await tx.restaurantTenant.findUnique({ where: { ownerEmail: email } })) {
       throw conflict('duplicate_email', 'A restaurant with this owner email already exists');
@@ -401,7 +416,7 @@ export class RestaurantsController {
         throw conflict('invalid_transition', `Only suspended restaurants can be archived (current status: ${tenant.status}). Suspend the restaurant first.`);
       }
 
-      const [branches, users, licenses, payments, customRoles, auditEvents, syncEvents, devices, menuCategories, menuItems, floors, tables] = await Promise.all([
+      const [branches, users, licenses, payments, customRoles, auditEvents, syncEvents, devices, menuCategories, menuItems, floors, tables, reservations] = await Promise.all([
         tx.branch.findMany({ where: { tenantId: id } }),
         tx.user.findMany({ where: { tenantId: id }, include: { roles: true } }),
         tx.license.findMany({ where: { tenantId: id } }),
@@ -414,6 +429,7 @@ export class RestaurantsController {
         tx.menuItem.findMany({ where: { tenantId: id }, include: { variants: true } }),
         tx.floor.findMany({ where: { tenantId: id } }),
         tx.table.findMany({ where: { tenantId: id } }),
+        tx.tableReservation.findMany({ where: { tenantId: id } }),
       ]);
 
       const bundle = {
@@ -433,6 +449,7 @@ export class RestaurantsController {
           menuItems: menuItems.length,
           floors: floors.length,
           tables: tables.length,
+          reservations: reservations.length,
         },
         data: {
           tenant,
@@ -448,6 +465,7 @@ export class RestaurantsController {
           menuItems,
           floors,
           tables,
+          reservations,
         },
       };
 
