@@ -156,6 +156,22 @@ class _AdminsScreenState extends ConsumerState<AdminsScreen> {
                             } catch (e) {
                               if (context.mounted) showError(context, e);
                             }
+                          } else if (v == 'delete') {
+                            final reason = await ReasonDialog.show(
+                              context,
+                              title: 'Remove admin ${a['name']}?',
+                              confirmLabel: 'Remove admin',
+                              message: 'This platform admin will be removed from the platform and their active sessions revoked. A full audit log is recorded.',
+                              destructive: true,
+                            );
+                            if (reason == null || !context.mounted) return;
+                            try {
+                              await ref.read(apiProvider).deleteAdmin(a['id'] as String, reason);
+                              _reload();
+                              if (context.mounted) showDone(context, 'Admin ${a['name']} removed');
+                            } catch (e) {
+                              if (context.mounted) showError(context, e);
+                            }
                           }
                         },
                         itemBuilder: (_) => [
@@ -164,6 +180,8 @@ class _AdminsScreenState extends ConsumerState<AdminsScreen> {
                           if (a['id'] != myId && can('platform.admin.roles')) const PopupMenuItem(value: 'roles', child: Text('Edit roles')),
                           if (a['id'] != myId && can('platform.mfa.reset') && a['mfaEnrolled'] == true) const PopupMenuItem(value: 'mfa', child: Text('Reset MFA…')),
                           if (a['id'] != myId && can('platform.admin.deactivate') && a['status'] == 'active') const PopupMenuItem(value: 'deactivate', child: Text('Deactivate…')),
+                          if (a['id'] != myId && (can('platform.admin.deactivate') || isSuperAdmin) && a['status'] != 'deleted')
+                            PopupMenuItem(value: 'delete', child: Text('Remove admin (Delete)…', style: TextStyle(color: context.hp.danger))),
                         ],
                       ),
                   ]),

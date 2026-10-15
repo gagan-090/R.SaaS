@@ -153,7 +153,12 @@ class ApiClient {
   Future<Json> setStatus(String id, String action, String reason) async => await _send('POST', '/restaurants/$id/status', body: {'action': action, 'reason': reason}) as Json;
   Future<Json> licenseAction(String id, String action, String reason, {String? planCode}) async =>
       await _send('POST', '/restaurants/$id/licenses', body: {'action': action, 'reason': reason, 'planCode': ?planCode}) as Json;
+  Future<Json> archiveRestaurant(String id, String reason) async => await _send('POST', '/restaurants/$id/archive', body: {'reason': reason}) as Json;
+  Future<Uint8List> downloadArchive(String id) => getBytes('/restaurants/$id/archive/download');
+  Future<Json> restoreRestaurant(String id, String reason) async => await _send('POST', '/restaurants/$id/restore', body: {'reason': reason}) as Json;
+  Future<Json> deleteRestaurant(String id, String reason) async => await _send('POST', '/restaurants/$id/delete', body: {'reason': reason}) as Json;
   Future<Json> recordPayment(String id, Json body) async => await _send('POST', '/restaurants/$id/payments', body: body) as Json;
+
   Future<List<dynamic>> plans({bool includeArchived = false}) async =>
       await _send('GET', '/plans', query: {if (includeArchived) 'includeArchived': 'true'}) as List<dynamic>;
   Future<Json> createPlan(Json body) async => await _send('POST', '/plans', body: body) as Json;
@@ -167,11 +172,19 @@ class ApiClient {
   Future<Json> activateAdmin(String id, String password) async => await _send('POST', '/platform/admins/$id/activate', body: {'password': password}) as Json;
   Future<Json> setRoles(String id, List<String> roleIds) async => await _send('PATCH', '/platform/admins/$id/roles', body: {'roleIds': roleIds}) as Json;
   Future<Json> deactivate(String id, String reason) async => await _send('POST', '/platform/admins/$id/deactivate', body: {'reason': reason}) as Json;
+  Future<Json> deleteAdmin(String id, String reason) async => await _send('POST', '/platform/admins/$id/delete', body: {'reason': reason}) as Json;
   Future<Json> resetMfa(String id, String reason, String stepUpToken) async =>
       await _send('POST', '/platform/admins/$id/mfa/reset', body: {'reason': reason}, headers: {'x-step-up-token': stepUpToken}) as Json;
-  Future<Json> audit({String? action, String? tenantId, int page = 1}) async => await _send('GET', '/platform/audit', query: {
+
+  // ---- platform attention & audit
+  Future<Json> attention() async => await _send('GET', '/platform/attention') as Json;
+  Future<Json> audit({String? category, String? action, String? tenantId, String? q, String? from, String? to, int page = 1}) async => await _send('GET', '/platform/audit', query: {
+        if (category != null && category.isNotEmpty) 'category': category,
         if (action != null && action.isNotEmpty) 'action': action,
         if (tenantId != null && tenantId.isNotEmpty) 'tenantId': tenantId,
+        if (q != null && q.isNotEmpty) 'q': q,
+        if (from != null && from.isNotEmpty) 'from': from,
+        if (to != null && to.isNotEmpty) 'to': to,
         'page': '$page',
         'pageSize': '50',
       }) as Json;

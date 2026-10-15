@@ -42,6 +42,20 @@ class FixtureApi {
           // not in the recorded fixtures: an empty queue unless a test overrides it
           return http.Response.bytes(utf8.encode(jsonEncode({'counts': {'awaiting': 0, 'expired': 0}, 'items': []})), 200, headers: {'content-type': 'application/json'});
         }
+        if (req.method == 'GET' && path == '/platform/attention') {
+          return http.Response.bytes(
+            utf8.encode(jsonEncode({
+              'counts': {'overdue': 0, 'upcoming': 0, 'suspended3m': 0, 'archived1y': 0, 'awaiting': 0},
+              'overdueLicenses': [],
+              'upcomingLicenses': [],
+              'suspendedTenants': [],
+              'archivedTenants': [],
+              'awaitingRegistrations': [],
+            })),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
         for (final (m, re, file) in _routes) {
           if (m == req.method && RegExp(re).hasMatch(path)) {
             if (file.isEmpty) return http.Response('', 204);

@@ -34,7 +34,9 @@ const RoleBody = z.object({
 const AuditQuery = z.object({
   actorId: z.string().uuid().optional(),
   action: z.string().optional(),
-  tenantId: z.string().uuid().optional(),
+  category: z.string().optional(), // account_lifecycle, authentication, account_creation, account_deletion, mfa_reset, auth_success, auth_failure
+  tenantId: z.string().optional(),
+  q: z.string().optional(),
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
   page: z.coerce.number().int().min(1).default(1),
@@ -210,6 +212,55 @@ export class PlatformController {
     return { id, status: 'disabled' };
   }
 
+  /** Housekeeping: Removes an admin user, frees the email for future registration, revokes sessions, and records audit trail. */
+  @RequirePermissions('platform.admin.deactivate')
+  @Audited('platform.admin.deleted')
+  @Post('admins/:id/delete')
+  @HttpCode(200)
+  @ApiBody(apiBody(ReasonBody))
+  async deleteAdmin(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(zbody(ReasonBody)) b: z.infer<typeof ReasonBody>,
+    @CurrentActor() actor: Actor,
+    @AuditCtx() audit: AuditDetails,
+  ) {
+    if (id === actor.id) throw forbidden('self_action', 'You cannot remove your own admin account');
+    const { before, after } = await this.db.platform(async (tx) => {
+      const t = await tx.platformAdmin.findUnique({ where: { id }, include: { roles: { include: { role: true } } } });
+      if (!t) throw notFound('Admin');
+      // Protect the last Super Admin
+      const isSuper = t.roles.some((r) => r.role.name === 'Super Admin');
+      if (isSuper) {
+        const remainingSuperAdmins = await tx.platformAdminRole.count({
+          where: { role: { name: 'Super Admin' }, admin: { status: { in: ['active', 'invited'] }, id: { not: id } } },
+        });
+        if (remainingSuperAdmins === 0) throw conflict('last_super_admin', 'Cannot remove the last active Super Admin account');
+      }
+      assertSubset(actor, t.roles.flatMap((r) => r.role.permissions));
+
+      const freedEmail = `deleted_${Date.now()}_${t.email}`;
+      const updated = await tx.platformAdmin.update({
+        where: { id },
+        data: {
+          status: 'deleted',
+          email: freedEmail,
+          deletedAt: new Date(),
+        },
+        include: { roles: { include: { role: true } }, mfa: true },
+      });
+      await tx.refreshToken.updateMany({ where: { subjectType: 'admin', subjectId: id, revokedAt: null }, data: { revokedAt: new Date() } });
+      return { before: t, after: updated };
+    });
+    Object.assign(audit, {
+      objectType: 'admin',
+      objectId: id,
+      before: { email: before.email, status: before.status },
+      after: { email: after.email, status: after.status, deletedAt: after.deletedAt },
+      reason: b.reason,
+    });
+    return { id, status: 'deleted', message: `Admin ${before.name} removed successfully` };
+  }
+
   /** AC-03: needs platform.mfa.reset + a fresh step-up token; writes an audit event and a notification atomically. */
   @RequirePermissions('platform.mfa.reset')
   @Post('admins/:id/mfa/policy')
@@ -306,15 +357,201 @@ export class PlatformController {
     return role;
   }
 
+  /** Needs attention work queue: overdue payments, upcoming renewals, suspended > 3m, archived > 1y, awaiting verification. */
+  @RequirePermissions('platform.restaurant.read')
+  @Get('attention')
+  async attention() {
+    const now = new Date();
+    const in30 = new Date(now.getTime() + 30 * 86_400_000);
+    const threeMonthsAgo = new Date(now.getTime() - 90 * 86_400_000);
+    const oneYearAgo = new Date(now.getTime() - 365 * 86_400_000);
+
+    return this.db.platform(async (tx) => {
+      // 1. Overdue licenses (active status, endsAt <= now) & upcoming licenses (active, endsAt > now and endsAt <= in30)
+      const activeTenantsWithLicenses = await tx.restaurantTenant.findMany({
+        where: { status: 'active' },
+        include: {
+          licenses: { where: { status: 'active' }, include: { plan: true }, orderBy: { endsAt: 'desc' }, take: 1 },
+        },
+      });
+
+      const overdueLicenses: Array<{ id: string; name: string; code: string; plan: string; endsAt: Date; daysOverdue: number }> = [];
+      const upcomingLicenses: Array<{ id: string; name: string; code: string; plan: string; endsAt: Date; daysLeft: number }> = [];
+
+      for (const t of activeTenantsWithLicenses) {
+        const lic = t.licenses[0];
+        if (!lic) continue;
+        if (lic.endsAt <= now) {
+          const daysOverdue = Math.floor((now.getTime() - lic.endsAt.getTime()) / 86_400_000);
+          overdueLicenses.push({ id: t.id, name: t.name, code: t.code, plan: lic.plan.name, endsAt: lic.endsAt, daysOverdue });
+        } else if (lic.endsAt <= in30) {
+          const daysLeft = Math.ceil((lic.endsAt.getTime() - now.getTime()) / 86_400_000);
+          upcomingLicenses.push({ id: t.id, name: t.name, code: t.code, plan: lic.plan.name, endsAt: lic.endsAt, daysLeft });
+        }
+      }
+
+      // 2. Suspended for more than 3 months
+      const suspendedTenants = await tx.restaurantTenant.findMany({
+        where: {
+          status: 'suspended',
+          OR: [
+            { statusChangedAt: { lte: threeMonthsAgo } },
+            { statusChangedAt: null, updatedAt: { lte: threeMonthsAgo } },
+          ],
+        },
+        orderBy: { statusChangedAt: 'asc' },
+      });
+
+      // 3. Archived for more than 1 year
+      const archivedTenants = await tx.restaurantTenant.findMany({
+        where: {
+          status: 'archived',
+          OR: [
+            { statusChangedAt: { lte: oneYearAgo } },
+            { statusChangedAt: null, updatedAt: { lte: oneYearAgo } },
+          ],
+        },
+        orderBy: { statusChangedAt: 'asc' },
+      });
+
+      // 4. Registrations awaiting verification
+      const awaitingRegistrations = await tx.restaurantRegistration.findMany({
+        where: { verifiedAt: null, cancelledAt: null, expiresAt: { gt: now } },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      return {
+        counts: {
+          overdue: overdueLicenses.length,
+          upcoming: upcomingLicenses.length,
+          suspended3m: suspendedTenants.length,
+          archived1y: archivedTenants.length,
+          awaiting: awaitingRegistrations.length,
+        },
+        overdueLicenses,
+        upcomingLicenses,
+        suspendedTenants: suspendedTenants.map((t) => ({
+          id: t.id,
+          name: t.name,
+          code: t.code,
+          suspendedAt: t.statusChangedAt ?? t.updatedAt,
+          daysSuspended: Math.floor((now.getTime() - (t.statusChangedAt ?? t.updatedAt).getTime()) / 86_400_000),
+          reason: t.statusReason,
+        })),
+        archivedTenants: archivedTenants.map((t) => ({
+          id: t.id,
+          name: t.name,
+          code: t.code,
+          archivedAt: t.statusChangedAt ?? t.updatedAt,
+          daysArchived: Math.floor((now.getTime() - (t.statusChangedAt ?? t.updatedAt).getTime()) / 86_400_000),
+          reason: t.statusReason,
+        })),
+        awaitingRegistrations: awaitingRegistrations.map((r) => ({
+          id: r.id,
+          restaurantName: r.restaurantName,
+          ownerEmail: r.ownerEmail,
+          ownerName: r.ownerName,
+          createdAt: r.createdAt,
+          expiresAt: r.expiresAt,
+        })),
+      };
+    });
+  }
+
   @RequirePermissions('platform.audit.read')
   @Get('audit')
   async auditLog(@Query(new ZodPipe(AuditQuery)) q: z.infer<typeof AuditQuery>) {
-    const where: Prisma.AuditEventWhereInput = {
-      actorId: q.actorId, tenantId: q.tenantId,
-      action: q.action ? { contains: q.action } : undefined,
-      at: q.from || q.to ? { gte: q.from, lte: q.to } : undefined,
-    };
+    // 1.5 year retention window (548 days)
+    const minRetention = new Date(Date.now() - 548 * 86_400_000);
+    const fromDate = q.from ? (q.from < minRetention ? minRetention : q.from) : minRetention;
+    const toDate = q.to;
+
+    // Granular category resolution
+    let actionFilter: Prisma.StringFilter | Prisma.Enumerable<Prisma.AuditEventWhereInput> | undefined = undefined;
+    if (q.action) {
+      actionFilter = { contains: q.action };
+    } else if (q.category) {
+      switch (q.category) {
+        case 'account_lifecycle':
+          actionFilter = {
+            in: [
+              'platform.admin.created', 'platform.admin.invited', 'platform.admin.activated',
+              'platform.admin.deactivated', 'platform.admin.deleted', 'platform.admin.mfa_reset',
+              'platform.admin.mfa_policy_changed', 'restaurant.created', 'restaurant.archived',
+              'restaurant.restored', 'restaurant.deleted', 'user.created', 'user.deleted', 'staff.created', 'staff.deleted'
+            ],
+          };
+          break;
+        case 'account_creation':
+          actionFilter = {
+            in: ['platform.admin.created', 'platform.admin.invited', 'platform.admin.activated', 'restaurant.created', 'user.created', 'staff.created'],
+          };
+          break;
+        case 'account_deletion':
+          actionFilter = {
+            in: ['platform.admin.deleted', 'user.deleted', 'staff.deleted', 'restaurant.deleted'],
+          };
+          break;
+        case 'mfa_reset':
+          actionFilter = {
+            in: ['platform.admin.mfa_reset', 'platform.admin.mfa_policy_changed', 'auth.mfa_reset'],
+          };
+          break;
+        case 'authentication':
+          actionFilter = {
+            in: [
+              'auth.login', 'auth.login_recovery_code', 'auth.pin_login', 'auth.logout',
+              'auth.step_up', 'auth.login_failed', 'auth.mfa_failed', 'auth.step_up_failed',
+              'auth.refresh_reuse_detected',
+            ],
+          };
+          break;
+        case 'auth_success':
+          actionFilter = {
+            in: ['auth.login', 'auth.login_recovery_code', 'auth.pin_login', 'auth.step_up'],
+          };
+          break;
+        case 'auth_failure':
+          actionFilter = {
+            in: ['auth.login_failed', 'auth.mfa_failed', 'auth.step_up_failed', 'auth.refresh_reuse_detected'],
+          };
+          break;
+        case 'restaurant_lifecycle':
+          actionFilter = {
+            in: ['restaurant.registered', 'restaurant.created', 'restaurant.status_changed', 'restaurant.archived', 'restaurant.restored', 'restaurant.deleted'],
+          };
+          break;
+      }
+    }
+
     return this.db.platform(async (tx) => {
+      let resolvedTenantId = q.tenantId;
+      if (q.tenantId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(q.tenantId)) {
+        // user passed restaurant code or name instead of uuid
+        const found = await tx.restaurantTenant.findFirst({
+          where: { OR: [{ code: { equals: q.tenantId, mode: 'insensitive' } }, { name: { contains: q.tenantId, mode: 'insensitive' } }] },
+          select: { id: true },
+        });
+        resolvedTenantId = found?.id ?? '00000000-0000-0000-0000-000000000000';
+      }
+
+      const where: Prisma.AuditEventWhereInput = {
+        actorId: q.actorId,
+        tenantId: resolvedTenantId,
+        ...(actionFilter ? { action: actionFilter as never } : {}),
+        at: { gte: fromDate, ...(toDate ? { lte: toDate } : {}) },
+        ...(q.q
+          ? {
+              OR: [
+                { action: { contains: q.q, mode: 'insensitive' } },
+                { reason: { contains: q.q, mode: 'insensitive' } },
+                { actorName: { contains: q.q, mode: 'insensitive' } },
+                { ip: { contains: q.q, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      };
+
       const [items, total] = await Promise.all([
         tx.auditEvent.findMany({ where, orderBy: { at: 'desc' }, skip: (q.page - 1) * q.pageSize, take: q.pageSize }),
         tx.auditEvent.count({ where }),
@@ -334,10 +571,12 @@ export class PlatformController {
       ]);
       const tenantName = new Map(tenants.map((t) => [t.id, t.name]));
       return {
+        retentionMonths: 18,
+        retentionDays: 548,
         items: items.map((i) => ({
           ...i,
-          actorName: i.actorId ? (who.get(i.actorId)?.name ?? null) : null,
-          actorRole: i.actorId ? (who.get(i.actorId)?.detail ?? null) : null,
+          actorName: i.actorName ?? (i.actorId ? (who.get(i.actorId)?.name ?? null) : null),
+          actorRole: i.actorRole ?? (i.actorId ? (who.get(i.actorId)?.detail ?? null) : null),
           tenantName: i.tenantId ? (tenantName.get(i.tenantId) ?? null) : null,
         })),
         total, page: q.page, pageSize: q.pageSize,

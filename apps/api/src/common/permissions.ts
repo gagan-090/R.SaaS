@@ -145,13 +145,13 @@ const PREMIUM: FeatureFlag[] = [
   'staff_portal', 'roles.custom', 'floor.editor', 'import.excel', 'expenses',
 ];
 
-/** Seeded plans. Prices are placeholders until the client supplies them (Chef's Defaults). */
+/** Seeded plans in tier order: Standard 1 (bottom), Professional 2 (mid), Premium 3 (top). Customers choose monthly or yearly. */
 export const PLAN_DEFAULTS = [
-  { code: 'standard', name: 'Standard', tier: 1, featureFlags: STANDARD, pricePaise: 0,
+  { code: 'standard', name: 'Standard', tier: 1, featureFlags: STANDARD, pricePaise: 99900, yearlyPricePaise: 999000,
     limits: { branches: 1, floorsPerBranch: 1, devicesPerBranch: 1, concurrentCashiers: 1, staffPerBranch: null } },
-  { code: 'professional', name: 'Professional', tier: 2, featureFlags: PROFESSIONAL, pricePaise: 0,
+  { code: 'professional', name: 'Professional', tier: 2, featureFlags: PROFESSIONAL, pricePaise: 299900, yearlyPricePaise: 2999000,
     limits: { branches: 1, floorsPerBranch: null, devicesPerBranch: null, concurrentCashiers: null, staffPerBranch: null } },
-  { code: 'premium', name: 'Premium', tier: 3, featureFlags: PREMIUM, pricePaise: 0,
+  { code: 'premium', name: 'Premium', tier: 3, featureFlags: PREMIUM, pricePaise: 599900, yearlyPricePaise: 5999000,
     limits: { branches: null, floorsPerBranch: null, devicesPerBranch: null, concurrentCashiers: null, staffPerBranch: null } },
 ] as const;
 

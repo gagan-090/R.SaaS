@@ -1,6 +1,7 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query, Res } from '@nestjs/common';
 import { ApiBody, ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import type { Response } from 'express';
 import { License, Prisma, TenantStatus } from '@prisma/client';
 import { uuidv7 } from '../common/uuid';
 import { z } from 'zod';
@@ -17,6 +18,7 @@ import { DbService, Tx } from '../db/db.service';
 import { verifyRestaurantEmail } from '../mail/templates';
 import { LicenseService } from '../licensing/license.service';
 import { Mailer } from '../mail/mail.service';
+import { ColdStorage } from '../storage/cold-storage';
 
 const GSTIN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 
@@ -53,7 +55,7 @@ const PatchBody = z.object({
   address: z.string().max(500).nullable().optional(),
 });
 const StatusBody = z.object({
-  action: z.enum(['activate', 'suspend', 'block', 'reactivate']),
+  action: z.enum(['activate', 'suspend', 'block', 'reactivate', 'archive', 'restore', 'delete']),
   reason: z.string().trim().min(3).max(500),
 });
 const LicenseBody = z.object({
@@ -71,12 +73,15 @@ const PaymentBody = z.object({
   licenseId: z.string().uuid().optional(),
 });
 
-/** Allowed status transitions (Build Spec §06). */
+/** Allowed status transitions: Create -> Active <---> Suspend <---> Archived ---> Delete */
 const TRANSITIONS: Record<z.infer<typeof StatusBody>['action'], { from: TenantStatus[]; to: TenantStatus }> = {
-  activate: { from: ['pending'], to: 'active' },
+  activate: { from: ['pending', 'suspended'], to: 'active' },
   suspend: { from: ['active'], to: 'suspended' },
   block: { from: ['active', 'suspended'], to: 'blocked' },
   reactivate: { from: ['suspended', 'blocked'], to: 'active' },
+  archive: { from: ['suspended'], to: 'archived' },
+  restore: { from: ['archived'], to: 'suspended' },
+  delete: { from: ['archived'], to: 'deleted' },
 };
 
 const addCycle = (from: Date, cycle: 'monthly' | 'yearly') => {
@@ -96,7 +101,7 @@ const licenseView = (l: License & { plan?: { code: string; name: string } }) => 
 @ApiBearerAuth()
 @Controller('restaurants')
 export class RestaurantsController {
-  constructor(private db: DbService, private licenses: LicenseService, private mailer: Mailer, private audit: AuditService) {}
+  constructor(private db: DbService, private licenses: LicenseService, private mailer: Mailer, private audit: AuditService, private coldStorage: ColdStorage) {}
 
   // ------------------------------------------------------------ onboarding (AC-01)
 
@@ -317,16 +322,17 @@ export class RestaurantsController {
     return this.db.platform(async (tx) => {
       const t = await tx.restaurantTenant.findUnique({ where: { id }, include: { branches: true } });
       if (!t) throw notFound('Restaurant');
-      const [licenses, devices, payments] = await Promise.all([
+      const [licenses, devices, payments, archives] = await Promise.all([
         tx.license.findMany({ where: { tenantId: id }, include: { plan: true }, orderBy: { createdAt: 'desc' } }),
         tx.device.findMany({ where: { tenantId: id } }),
         tx.paymentRecord.findMany({ where: { tenantId: id }, orderBy: { paidAt: 'desc' } }),
+        tx.restaurantArchive.findMany({ where: { tenantId: id }, orderBy: { createdAt: 'desc' } }),
       ]);
       const ent = await this.licenses.entitlement(tx, id);
       return {
         ...t, licenses: licenses.map(licenseView), currentLicense: ent.license ? licenseView({ ...ent.license, plan: licenses[0]?.plan }) : null,
         entitlement: { state: ent.state, readOnly: ent.readOnly, features: ent.features },
-        devices: devices.map((d) => ({ ...d, deviceTokenHash: undefined })), payments,
+        devices: devices.map((d) => ({ ...d, deviceTokenHash: undefined })), payments, archives,
       };
     });
   }
@@ -351,7 +357,16 @@ export class RestaurantsController {
   @Post(':id/status')
   @HttpCode(200)
   @ApiBody(apiBody(StatusBody))
-  async setStatus(@Param('id', ParseUUIDPipe) id: string, @Body(zbody(StatusBody)) b: z.infer<typeof StatusBody>, @AuditCtx() audit: AuditDetails) {
+  async setStatus(@Param('id', ParseUUIDPipe) id: string, @Body(zbody(StatusBody)) b: z.infer<typeof StatusBody>, @CurrentActor() actor: Actor, @AuditCtx() audit: AuditDetails) {
+    if (b.action === 'archive') {
+      return this.archive(id, { reason: b.reason }, actor, audit);
+    }
+    if (b.action === 'restore') {
+      return this.restore(id, { reason: b.reason }, actor, audit);
+    }
+    if (b.action === 'delete') {
+      return this.deleteRestaurant(id, { reason: b.reason }, actor, audit);
+    }
     const rule = TRANSITIONS[b.action];
     const { before, after } = await this.db.platform(async (tx) => {
       const t = await tx.restaurantTenant.findUnique({ where: { id } });
@@ -362,6 +377,262 @@ export class RestaurantsController {
     });
     Object.assign(audit, { tenantId: id, objectType: 'restaurant', objectId: id, before: { status: before.status }, after: { status: after.status }, reason: b.reason });
     return { id, status: after.status, statusReason: after.statusReason };
+  }
+
+  /**
+   * Cold storage archiving for restaurants in "suspended" status.
+   * Bundles all restaurant data & logs into a compressed, verified document and transitions status to "archived".
+   */
+  @RequirePermissions('platform.restaurant.status')
+  @Audited('restaurant.archived')
+  @Post(':id/archive')
+  @HttpCode(200)
+  @ApiBody(apiBody(z.object({ reason: z.string().trim().min(3).max(500) })))
+  async archive(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(zbody(z.object({ reason: z.string().trim().min(3).max(500) }))) b: { reason: string },
+    @CurrentActor() actor: Actor,
+    @AuditCtx() audit: AuditDetails,
+  ) {
+    const result = await this.db.platform(async (tx) => {
+      const tenant = await tx.restaurantTenant.findUnique({ where: { id } });
+      if (!tenant) throw notFound('Restaurant');
+      if (tenant.status !== 'suspended') {
+        throw conflict('invalid_transition', `Only suspended restaurants can be archived (current status: ${tenant.status}). Suspend the restaurant first.`);
+      }
+
+      const [branches, users, licenses, payments, customRoles, auditEvents, syncEvents, devices, menuCategories, menuItems, floors, tables] = await Promise.all([
+        tx.branch.findMany({ where: { tenantId: id } }),
+        tx.user.findMany({ where: { tenantId: id }, include: { roles: true } }),
+        tx.license.findMany({ where: { tenantId: id } }),
+        tx.paymentRecord.findMany({ where: { tenantId: id } }),
+        tx.customRole.findMany({ where: { tenantId: id } }),
+        tx.auditEvent.findMany({ where: { tenantId: id }, orderBy: { at: 'asc' } }),
+        tx.syncEvent.findMany({ where: { tenantId: id }, orderBy: { createdAt: 'asc' } }),
+        tx.device.findMany({ where: { tenantId: id } }),
+        tx.menuCategory.findMany({ where: { tenantId: id } }),
+        tx.menuItem.findMany({ where: { tenantId: id }, include: { variants: true } }),
+        tx.floor.findMany({ where: { tenantId: id } }),
+        tx.table.findMany({ where: { tenantId: id } }),
+      ]);
+
+      const bundle = {
+        version: 1,
+        archivedAt: new Date().toISOString(),
+        tenantId: id,
+        restaurantCode: tenant.code,
+        restaurantName: tenant.name,
+        counts: {
+          branches: branches.length,
+          users: users.length,
+          licenses: licenses.length,
+          payments: payments.length,
+          auditEvents: auditEvents.length,
+          syncEvents: syncEvents.length,
+          devices: devices.length,
+          menuItems: menuItems.length,
+          floors: floors.length,
+          tables: tables.length,
+        },
+        data: {
+          tenant,
+          branches,
+          users,
+          licenses,
+          payments,
+          customRoles,
+          auditEvents,
+          syncEvents,
+          devices,
+          menuCategories,
+          menuItems,
+          floors,
+          tables,
+        },
+      };
+
+      const storageKey = `restaurants/${id}/${Date.now()}-archive.json.gz`;
+      const stored = await this.coldStorage.put(storageKey, bundle);
+
+      const archiveRecord = await tx.restaurantArchive.create({
+        data: {
+          tenantId: id,
+          storage: stored.storage,
+          storageKey: stored.key,
+          sha256: stored.sha256,
+          sizeBytes: stored.sizeBytes,
+          counts: bundle.counts,
+          createdBy: actor.id,
+        },
+      });
+
+      const updated = await tx.restaurantTenant.update({
+        where: { id },
+        data: { status: 'archived', statusReason: b.reason, statusChangedAt: new Date() },
+      });
+
+      return { before: tenant, after: updated, archive: archiveRecord };
+    });
+
+    Object.assign(audit, {
+      tenantId: id,
+      objectType: 'restaurant',
+      objectId: id,
+      before: { status: result.before.status },
+      after: { status: result.after.status, archiveId: result.archive.id, sha256: result.archive.sha256 },
+      reason: b.reason,
+    });
+
+    return {
+      id,
+      status: 'archived',
+      statusReason: result.after.statusReason,
+      archiveId: result.archive.id,
+      sha256: result.archive.sha256,
+      sizeBytes: result.archive.sizeBytes,
+      counts: result.archive.counts,
+      message: 'Restaurant logs archived to cold storage. You can download the archive bundle for S3 cold storage tier.',
+    };
+  }
+
+  /**
+   * Downloads verified cold storage archive gzip bundle for S3 cold storage tier.
+   */
+  @RequirePermissions('platform.restaurant.read')
+  @Get(':id/archive/download')
+  async downloadArchive(@Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
+    const [archive, tenant] = await this.db.platform(async (tx) => {
+      const a = await tx.restaurantArchive.findFirst({
+        where: { tenantId: id },
+        orderBy: { createdAt: 'desc' },
+      });
+      const t = await tx.restaurantTenant.findUnique({ where: { id }, select: { code: true, name: true } });
+      return [a, t] as const;
+    });
+    if (!archive) throw notFound('Archive');
+    const bytes = await this.coldStorage.getVerified(archive.storageKey, archive.sha256);
+    const filename = `restaurant-${tenant?.code ?? id}-archive.json.gz`;
+    res.setHeader('content-type', 'application/gzip');
+    res.setHeader('content-disposition', `attachment; filename="${filename}"`);
+    res.setHeader('x-checksum-sha256', archive.sha256);
+    res.send(bytes);
+  }
+
+  /**
+   * Restores an archived restaurant back into "suspended" status after verifying checksums.
+   * Following the requested flow: Archived -> Suspend -> Active.
+   */
+  @RequirePermissions('platform.restaurant.status')
+  @Audited('restaurant.restored')
+  @Post(':id/restore')
+  @HttpCode(200)
+  @ApiBody(apiBody(z.object({ reason: z.string().trim().min(3).max(500) })))
+  async restore(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(zbody(z.object({ reason: z.string().trim().min(3).max(500) }))) b: { reason: string },
+    @CurrentActor() actor: Actor,
+    @AuditCtx() audit: AuditDetails,
+  ) {
+    const result = await this.db.platform(async (tx) => {
+      const tenant = await tx.restaurantTenant.findUnique({ where: { id } });
+      if (!tenant) throw notFound('Restaurant');
+      if (tenant.status !== 'archived') {
+        throw conflict('invalid_transition', `Only archived restaurants can be restored (current status: ${tenant.status}).`);
+      }
+      const archive = await tx.restaurantArchive.findFirst({
+        where: { tenantId: id },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (!archive) throw notFound('Archive');
+
+      // Verify the archive exists and matches checksum
+      await this.coldStorage.getVerified(archive.storageKey, archive.sha256);
+
+      // Record restore metadata
+      await tx.restaurantArchive.update({
+        where: { id: archive.id },
+        data: { restoredAt: new Date(), restoredBy: actor.id },
+      });
+
+      // Strictly transition to 'suspended'
+      const updated = await tx.restaurantTenant.update({
+        where: { id },
+        data: { status: 'suspended', statusReason: `Restored: ${b.reason}`, statusChangedAt: new Date() },
+      });
+
+      return { before: tenant, after: updated, archive };
+    });
+
+    Object.assign(audit, {
+      tenantId: id,
+      objectType: 'restaurant',
+      objectId: id,
+      before: { status: result.before.status },
+      after: { status: result.after.status },
+      reason: b.reason,
+    });
+
+    return {
+      id,
+      status: 'suspended',
+      statusReason: result.after.statusReason,
+      message: 'Restaurant logs verified and restored from cold storage. Restaurant status transitioned to suspended. Ready for review and reactivation.',
+    };
+  }
+
+  /**
+   * Final deletion flow: A restaurant can only be deleted after being archived.
+   */
+  @RequirePermissions('platform.restaurant.status')
+  @Audited('restaurant.deleted')
+  @Post(':id/delete')
+  @HttpCode(200)
+  @ApiBody(apiBody(z.object({ reason: z.string().trim().min(3).max(500) })))
+  async deleteRestaurant(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(zbody(z.object({ reason: z.string().trim().min(3).max(500) }))) b: { reason: string },
+    @CurrentActor() actor: Actor,
+    @AuditCtx() audit: AuditDetails,
+  ) {
+    const result = await this.db.platform(async (tx) => {
+      const tenant = await tx.restaurantTenant.findUnique({ where: { id } });
+      if (!tenant) throw notFound('Restaurant');
+      if (tenant.status !== 'archived') {
+        throw conflict('invalid_transition', `A restaurant must be archived before it can be deleted (current status: ${tenant.status}).`);
+      }
+      const archive = await tx.restaurantArchive.findFirst({ where: { tenantId: id } });
+      if (!archive) {
+        throw conflict('no_archive', 'Cannot delete restaurant without a verified cold storage archive.');
+      }
+
+      // Mark tenant as deleted
+      const updated = await tx.restaurantTenant.update({
+        where: { id },
+        data: { status: 'deleted', statusReason: b.reason, statusChangedAt: new Date() },
+      });
+
+      // Revoke any refresh tokens for users
+      const tenantUsers = await tx.user.findMany({ where: { tenantId: id }, select: { id: true } });
+      if (tenantUsers.length) {
+        await tx.refreshToken.updateMany({
+          where: { subjectType: 'user', subjectId: { in: tenantUsers.map((u) => u.id) }, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+      }
+
+      return { before: tenant, after: updated };
+    });
+
+    Object.assign(audit, {
+      tenantId: id,
+      objectType: 'restaurant',
+      objectId: id,
+      before: { status: result.before.status },
+      after: { status: result.after.status },
+      reason: b.reason,
+    });
+
+    return { id, status: 'deleted', statusReason: result.after.statusReason };
   }
 
   // ------------------------------------------------------------ licensing

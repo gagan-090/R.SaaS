@@ -36,12 +36,6 @@ const limitKeys = <(String, String)>[
   ('concurrentCashiers', 'Cashiers at once'), ('staffPerBranch', 'Staff per branch'),
 ];
 
-String _price(Json p) {
-  final paise = p['pricePaise'] as int;
-  final r = formatPaise(paise);
-  return '${r.endsWith('.00') ? r.substring(0, r.length - 3) : r} / ${p['billingCycle'] == 'yearly' ? 'year' : 'month'}';
-}
-
 /// P8 Plans: what each plan costs and includes. Super Admins add plans, change prices and features, and archive
 /// plans they no longer sell (licenses on an archived plan keep working until changed).
 class PlansScreen extends ConsumerStatefulWidget {
@@ -95,11 +89,18 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
       key: ValueKey('$_reload-$_archived'),
       load: () => ref.read(apiProvider).plans(includeArchived: _archived),
       builder: (c, data, reload) {
-        final plans = data.cast<Json>();
+        final plans = data.cast<Json>().toList();
+        // Strict ordering: Standard (tier 1) -> Professional (tier 2) -> Premium (tier 3)
+        plans.sort((a, b) {
+          final tA = (a['tier'] as int?) ?? 999;
+          final tB = (b['tier'] as int?) ?? 999;
+          if (tA != tB) return tA.compareTo(tB);
+          return ((a['pricePaise'] as int?) ?? 0).compareTo((b['pricePaise'] as int?) ?? 0);
+        });
         final narrow = isNarrowWeb(context);
         return PageFrame(
           title: 'Plans',
-          subtitle: 'What restaurants pay and what they get. Changes apply to new licenses and renewals.',
+          subtitle: 'Standard, Professional, and Premium subscription plans. Customers can purchase monthly or yearly.',
           actions: [
             FilterChip(label: const Text('Show archived'), selected: _archived, onSelected: (v) => setState(() => _archived = v)),
             if (edit) PrimaryButton(key: const Key('add-plan'), label: 'Add plan', icon: Icons.add_rounded, height: 48, onPressed: () => _edit()),
@@ -132,6 +133,10 @@ class _PlanCard extends StatelessWidget {
     final archived = plan['archived'] == true;
     final features = (plan['featureFlags'] as List).cast<String>();
     final limits = (plan['limits'] as Map).cast<String, dynamic>();
+    final monthlyPaise = (plan['pricePaise'] as int?) ?? 0;
+    final yearlyPaise = (plan['yearlyPricePaise'] as int?) ?? (monthlyPaise * 10);
+    final tier = plan['tier'] as int?;
+    final tierName = switch (tier) { 1 => 'Bottom Tier', 2 => 'Mid Tier', 3 => 'Top Tier', _ => 'Custom Tier' };
     return Opacity(
       opacity: archived ? .6 : 1,
       child: Card(
@@ -139,9 +144,30 @@ class _PlanCard extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(HPSpace.x2),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Expanded(child: Text('${plan['name']}', style: HPType.titleCard(p.text).copyWith(fontSize: 24), overflow: TextOverflow.ellipsis)),
-              if (archived) const StatusChip(label: 'Archived', tone: HPTone.danger),
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${plan['name']}', style: HPType.titleCard(p.text).copyWith(fontSize: 24), overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Text('${plan['code']}', style: HPType.mono(p.faint)),
+                        if (tier != null) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(color: p.raised, borderRadius: BorderRadius.circular(4)),
+                            child: Text('$tierName (Tier $tier)', style: HPType.mono(p.muted).copyWith(fontSize: 11)),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              if (archived) const Padding(padding: EdgeInsets.only(right: 4), child: StatusChip(label: 'Archived', tone: HPTone.danger)),
               if (canEdit)
                 PopupMenuButton<String>(
                   key: Key('plan-menu-${plan['code']}'),
@@ -153,9 +179,22 @@ class _PlanCard extends StatelessWidget {
                   ],
                 ),
             ]),
-            Text('${plan['code']}', style: HPType.mono(p.faint)),
             const SizedBox(height: HPSpace.md),
-            Text(_price(plan), key: Key('plan-price-${plan['code']}'), style: HPType.displayTotal(p.accentInk).copyWith(fontSize: 30)),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${formatPaise(monthlyPaise).replaceAll('.00', '')} / month',
+                  key: Key('plan-price-${plan['code']}'),
+                  style: HPType.displayTotal(p.accentInk).copyWith(fontSize: 28),
+                ),
+                Text(
+                  '${formatPaise(yearlyPaise).replaceAll('.00', '')} / year (annual)',
+                  style: HPType.label(p.muted).copyWith(fontSize: 15),
+                ),
+              ],
+            ),
+            const SizedBox(height: HPSpace.xs),
             Text('${plan['activeLicenses'] ?? 0} restaurant(s) on this plan', style: HPType.body(p.muted)),
             const SizedBox(height: HPSpace.lg),
             Text('INCLUDES', style: HPType.overline(p.muted)),
@@ -208,6 +247,8 @@ class _PlanEditorState extends State<PlanEditor> {
   late final _name = TextEditingController(text: widget.plan?['name'] as String? ?? '');
   late final _code = TextEditingController(text: widget.plan?['code'] as String? ?? '');
   late final _price = TextEditingController(text: widget.plan == null ? '' : _plain(widget.plan!['pricePaise'] as int));
+  late final _yearlyPrice = TextEditingController(text: widget.plan == null ? '' : _plain(widget.plan!['yearlyPricePaise'] as int? ?? ((widget.plan!['pricePaise'] as int) * 10)));
+  late int _tier = (widget.plan?['tier'] as int?) ?? (widget.plan?['code'] == 'standard' ? 1 : widget.plan?['code'] == 'professional' ? 2 : widget.plan?['code'] == 'premium' ? 3 : 1);
   late String _cycle = widget.plan?['billingCycle'] as String? ?? 'monthly';
   late final Set<String> _features = {...((widget.plan?['featureFlags'] as List?) ?? const ['tables', 'orders.dinein', 'orders.takeaway', 'menu', 'billing', 'offline.single']).cast<String>()};
   late final Map<String, TextEditingController> _limits = {
@@ -224,6 +265,17 @@ class _PlanEditorState extends State<PlanEditor> {
     if (!_isNew) return;
     final c = name.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_').replaceAll(RegExp(r'^_+|_+$'), '');
     _code.text = c.isEmpty || !RegExp('^[a-z]').hasMatch(c) ? '' : (c.length > 30 ? c.substring(0, 30) : c);
+    if (c.contains('standard')) _tier = 1;
+    if (c.contains('prof')) _tier = 2;
+    if (c.contains('prem')) _tier = 3;
+  }
+
+  void _autoYearly(String val) {
+    if (!_isNew) return;
+    final m = double.tryParse(val.trim().replaceAll(',', ''));
+    if (m != null && m > 0 && (_yearlyPrice.text.isEmpty || _yearlyPrice.text == '${(m * 10).round()}')) {
+      _yearlyPrice.text = '${(m * 10).round()}';
+    }
   }
 
   Future<void> _save() async {
@@ -248,7 +300,15 @@ class _PlanEditorState extends State<PlanEditor> {
       _busy = true;
       _error = null;
     });
-    final body = {'name': _name.text.trim(), 'pricePaise': (rupees * 100).round(), 'billingCycle': _cycle, 'featureFlags': _features.toList(), 'limits': limits};
+    final body = {
+      'name': _name.text.trim(),
+      'pricePaise': (rupees * 100).round(),
+      'yearlyPricePaise': (rupees * 1000).round(),
+      'tier': _tier,
+      'billingCycle': _cycle,
+      'featureFlags': _features.toList(),
+      'limits': limits,
+    };
     try {
       var n = 0;
       if (_isNew) {
@@ -276,10 +336,10 @@ class _PlanEditorState extends State<PlanEditor> {
         PrimaryButton(key: const Key('save-plan'), label: 'Save', busy: _busy, height: 56, onPressed: _save),
       ],
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        TextField(key: const Key('plan-name'), controller: _name, onChanged: _autoCode, decoration: const InputDecoration(labelText: 'Plan name', hintText: 'e.g. Pro Plus')),
+        TextField(key: const Key('plan-name'), controller: _name, onChanged: _autoCode, decoration: const InputDecoration(labelText: 'Plan name', hintText: 'e.g. Standard, Professional, Premium')),
         if (_isNew) ...[
           const SizedBox(height: HPSpace.md),
-          TextField(key: const Key('plan-code'), controller: _code, decoration: const InputDecoration(labelText: 'Code (cannot change later)', helperText: 'Used in licenses, e.g. pro_plus')),
+          TextField(key: const Key('plan-code'), controller: _code, decoration: const InputDecoration(labelText: 'Code (cannot change later)', helperText: 'Used in licenses, e.g. standard')),
         ],
         const SizedBox(height: HPSpace.md),
         TextField(

@@ -78,15 +78,12 @@ async function main() {
       create: { ...r, permissions: [...r.permissions] },
     });
   }
-  // Plans
+  // Plans in order: Standard (tier 1), Professional (tier 2), Premium (tier 3)
   for (const p of PLAN_DEFAULTS) {
     await prisma.subscriptionPlan.upsert({
       where: { code: p.code },
-      // a re-seed never undoes a Super Admin's plan edits; the test database resets plans to the defaults
-      update: process.env.SEED_RESET_PLANS === '1'
-        ? { name: p.name, tier: p.tier, featureFlags: [...p.featureFlags], limits: p.limits }
-        : { tier: p.tier },
-      create: { code: p.code, name: p.name, tier: p.tier, featureFlags: [...p.featureFlags], limits: p.limits, pricePaise: p.pricePaise, yearlyPricePaise: p.pricePaise * 12 },
+      update: { tier: p.tier, pricePaise: p.pricePaise, yearlyPricePaise: p.yearlyPricePaise },
+      create: { code: p.code, name: p.name, tier: p.tier, featureFlags: [...p.featureFlags], limits: p.limits, pricePaise: p.pricePaise, yearlyPricePaise: p.yearlyPricePaise },
     });
   }
   // Bootstrap Super Admin (MFA enrolment is forced at first login)
