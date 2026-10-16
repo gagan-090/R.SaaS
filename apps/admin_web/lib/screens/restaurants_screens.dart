@@ -1115,17 +1115,35 @@ class _AuditListState extends ConsumerState<AuditList> {
       );
 }
 
-/// P11 audit viewer with granular category filters and 1.5 year retention policy.
-class AuditScreen extends StatefulWidget {
+/// P11 audit viewer with granular category filters, restaurant selector, and 1.5 year retention policy.
+class AuditScreen extends ConsumerStatefulWidget {
   const AuditScreen({super.key});
   @override
-  State<AuditScreen> createState() => _AuditScreenState();
+  ConsumerState<AuditScreen> createState() => _AuditScreenState();
 }
 
-class _AuditScreenState extends State<AuditScreen> {
+class _AuditScreenState extends ConsumerState<AuditScreen> {
   final _action = TextEditingController(), _tenant = TextEditingController(), _search = TextEditingController();
   String? _category; // null = all, 'account_lifecycle', 'account_creation', 'account_deletion', 'mfa_reset', 'authentication', 'auth_success', 'auth_failure', 'restaurant_lifecycle'
   String? _a, _t, _q;
+  List<Json>? _restaurants;
+  String? _selectedRestaurantId;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRestaurants();
+  }
+
+  Future<void> _loadRestaurants() async {
+    try {
+      final res = await ref.read(apiProvider).restaurants();
+      if (!mounted) return;
+      setState(() {
+        _restaurants = (res['items'] as List?)?.cast<Json>() ?? [];
+      });
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1168,17 +1186,52 @@ class _AuditScreenState extends State<AuditScreen> {
                 child: ChoiceChip(
                   label: Text(label),
                   selected: _category == cat,
-                  onSelected: (_) => setState(() { _category = cat; if (cat == null) { _a = _t = _q = null; _action.clear(); _tenant.clear(); _search.clear(); } }),
+                  onSelected: (_) => setState(() { _category = cat; if (cat == null) { _a = _t = _q = null; _action.clear(); _tenant.clear(); _search.clear(); _selectedRestaurantId = null; } }),
                 ),
               ),
           ]),
         ),
         const SizedBox(height: HPSpace.md),
-        Wrap(spacing: HPSpace.md, runSpacing: HPSpace.md, children: [
+        Wrap(spacing: HPSpace.md, runSpacing: HPSpace.md, crossAxisAlignment: WrapCrossAlignment.center, children: [
           SizedBox(width: isNarrowWeb(context) ? double.infinity : 220, child: TextField(controller: _search, decoration: const InputDecoration(labelText: 'Search text / reason', prefixIcon: Icon(Icons.search)))),
-          SizedBox(width: isNarrowWeb(context) ? double.infinity : 200, child: TextField(controller: _action, decoration: const InputDecoration(labelText: 'Action contains'))),
-          SizedBox(width: isNarrowWeb(context) ? double.infinity : 260, child: TextField(controller: _tenant, decoration: const InputDecoration(labelText: 'Restaurant id'))),
-          SecondaryButton(label: 'Filter', height: 48, onPressed: () => setState(() => (_a = _action.text.trim(), _t = _tenant.text.trim(), _q = _search.text.trim()))),
+          SizedBox(width: isNarrowWeb(context) ? double.infinity : 180, child: TextField(controller: _action, decoration: const InputDecoration(labelText: 'Action contains'))),
+          SizedBox(
+            width: isNarrowWeb(context) ? double.infinity : 260,
+            child: DropdownButtonFormField<String?>(
+              key: const Key('audit-restaurant-filter'),
+              isExpanded: true,
+              value: _selectedRestaurantId,
+              decoration: InputDecoration(
+                labelText: 'Restaurant',
+                prefixIcon: const Icon(Icons.storefront_outlined),
+                suffixIcon: _selectedRestaurantId != null
+                    ? IconButton(
+                        icon: const Icon(Icons.clear_rounded, size: 18),
+                        onPressed: () => setState(() {
+                          _selectedRestaurantId = null;
+                          _tenant.clear();
+                          _t = null;
+                        }),
+                      )
+                    : null,
+              ),
+              items: [
+                const DropdownMenuItem<String?>(value: null, child: Text('All Restaurants', overflow: TextOverflow.ellipsis)),
+                if (_restaurants != null)
+                  for (final r in _restaurants!)
+                    DropdownMenuItem<String?>(
+                      value: r['id'] as String,
+                      child: Text('${r['name']} (${r['code']})', overflow: TextOverflow.ellipsis),
+                    ),
+              ],
+              onChanged: (v) => setState(() {
+                _selectedRestaurantId = v;
+                _tenant.text = v ?? '';
+                _t = v;
+              }),
+            ),
+          ),
+          SecondaryButton(label: 'Filter', height: 48, onPressed: () => setState(() => (_a = _action.text.trim(), _t = _selectedRestaurantId ?? (_tenant.text.trim().isEmpty ? null : _tenant.text.trim()), _q = _search.text.trim()))),
         ]),
         const SizedBox(height: HPSpace.lg),
         Expanded(child: Card(child: Padding(padding: const EdgeInsets.all(HPSpace.lg), child: AuditList(category: _category, action: _a, tenantId: _t, q: _q)))),

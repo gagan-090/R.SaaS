@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 
@@ -12,6 +13,29 @@ import 'import_dialog.dart';
 import 'purchase_dialog.dart';
 
 const stockUnits = ['g', 'kg', 'mg', 'ml', 'l', 'piece', 'dozen', 'bottle', 'can', 'packet', 'box', 'case', 'plate', 'portion'];
+
+const standardInvCategories = [
+  'Grains & Flour',
+  'Dairy & Eggs',
+  'Produce & Veg',
+  'Meat & Seafood',
+  'Oils & Condiments',
+  'Spices & Seasoning',
+  'Beverages',
+  'Packaging & Disposables',
+];
+
+const unitPresets = <(String, String, String, double, String)>[
+  ('Grains & Flour', 'g', 'kg', 1000, '🌾 Grains: 1 kg = 1000 g'),
+  ('Liquids & Dairy', 'ml', 'l', 1000, '🥛 Liquids: 1 L = 1000 ml'),
+  ('Packaged Drinks', 'can', 'case', 24, '🥫 Drinks: 1 case = 24 cans'),
+  ('Bottles', 'bottle', 'box', 12, '🍾 Bottles: 1 box = 12 btl'),
+  ('Eggs', 'piece', 'dozen', 12, '🥚 Eggs: 1 doz = 12 pcs'),
+  ('Spices & Herbs', 'g', 'packet', 500, '🌿 Spices: 1 pkt = 500 g'),
+  ('Meat & Fish', 'g', 'kg', 1000, '🥩 Meat: 1 kg = 1000 g'),
+  ('Packaging', 'piece', 'box', 100, '📦 Pack: 1 box = 100 pcs'),
+  ('Single Portion', 'portion', 'portion', 1, '🍽️ Portion: 1 = 1'),
+];
 
 /// Movement types a person can post, with the words staff see and the permission each needs.
 const movementTypes = <(String, String, String, IconData)>[
@@ -47,6 +71,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   Json? _alerts;
   Object? _error;
   String _q = '';
+  String? _stockCat;
   int _tab = 0;
   int _reload = 0;
 
@@ -55,6 +80,16 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   bool _can(String p) {
     final a = ref.read(authProvider);
     return a is SignedIn && a.can(p);
+  }
+
+  String get _restaurantPrefix {
+    final a = ref.read(authProvider);
+    if (a is SignedIn) {
+      final t = a.me['tenant'] as Map?;
+      final code = t?['code'] as String?;
+      if (code != null && code.isNotEmpty) return '$code-';
+    }
+    return '';
   }
 
   @override
@@ -86,11 +121,59 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     if (saved == true) { await _load(); if (mounted) showDone(context, 'Purchase received. Stock and cost updated.'); }
   }
 
-  Future<void> _editProduct([Json? p]) async {
-    final saved = await showDialog<String>(context: context, builder: (_) => _ProductEditor(api: _api, product: p, locations: _locations!, suppliers: _suppliers!));
+  Future<void> _editProduct([Json? p, String? initialCategory]) async {
+    final knownCats = _products?.map((x) => x['category'] as String?).whereType<String>().where((c) => c.isNotEmpty).toSet().toList() ?? [];
+    final saved = await showDialog<String>(
+      context: context,
+      builder: (_) => _ProductEditor(
+        api: _api,
+        product: p,
+        locations: _locations!,
+        suppliers: _suppliers!,
+        initialCategory: initialCategory,
+        restaurantPrefix: _restaurantPrefix,
+        knownCategories: knownCats,
+      ),
+    );
     if (saved != null) {
       await _load();
       if (mounted) showDone(context, saved);
+    }
+  }
+
+  Future<void> _addCategoryPrompt() async {
+    final catController = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (d) => HPDialog(
+        title: 'New inventory category',
+        actions: [
+          SecondaryButton(label: 'Cancel', onPressed: () => Navigator.pop(d)),
+          PrimaryButton(label: 'Add & create product', height: 52, onPressed: () => Navigator.pop(d, true)),
+        ],
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              key: const Key('new-inv-cat-input'),
+              controller: catController,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Category name', hintText: 'e.g. Dairy & Eggs, Spices, Oils'),
+            ),
+            const SizedBox(height: HPSpace.sm),
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              for (final def in standardInvCategories)
+                ActionChip(label: Text(def, style: const TextStyle(fontSize: 12)), onPressed: () => catController.text = def),
+            ]),
+          ],
+        ),
+      ),
+    );
+    if (ok == true && catController.text.trim().isNotEmpty) {
+      final newCat = catController.text.trim();
+      setState(() => _stockCat = newCat);
+      await _editProduct(null, newCat);
     }
   }
 
@@ -153,13 +236,69 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   }
 
   Widget _stockTab(HPPalette p) {
-    final shown = _products!.where((x) => _q.isEmpty || '${x['name']} ${x['sku']} ${x['category'] ?? ''}'.toLowerCase().contains(_q.toLowerCase())).toList();
+    final existingCats = <String>{
+      for (final x in _products!)
+        if (x['category'] != null && '${x['category']}'.trim().isNotEmpty)
+          '${x['category']}'.trim()
+    }.toList()..sort();
+    final shown = _products!.where((x) {
+      if (_stockCat != null && x['category'] != _stockCat) return false;
+      if (_q.isNotEmpty && !'${x['name']} ${x['sku']} ${x['category'] ?? ''}'.toLowerCase().contains(_q.toLowerCase())) return false;
+      return true;
+    }).toList();
     final allowed = movementTypes.where((m) => _can(m.$3)).toList();
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      HPSearchField(hint: 'Search name, SKU or category', onChanged: (v) => setState(() => _q = v.trim())),
+      Row(children: [
+        Expanded(child: HPSearchField(hint: 'Search name, SKU or category', onChanged: (v) => setState(() => _q = v.trim()))),
+        if (_can('inventory.manage')) ...[
+          const SizedBox(width: HPSpace.sm),
+          SecondaryButton(
+            key: const Key('inv-category-plus'),
+            label: 'Category ++',
+            icon: Icons.add_rounded,
+            height: 48,
+            onPressed: _addCategoryPrompt,
+          ),
+        ],
+      ]),
+      const SizedBox(height: HPSpace.sm),
+      SizedBox(
+        height: 38,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: CategoryChip(
+                key: const Key('inv-cat-all'),
+                label: 'All (${_products!.length})',
+                selected: _stockCat == null,
+                onTap: () => setState(() => _stockCat = null),
+              ),
+            ),
+            for (final c in existingCats)
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: CategoryChip(
+                  key: Key('inv-cat-$c'),
+                  label: '$c (${_products!.where((x) => x['category'] == c).length})',
+                  selected: _stockCat == c,
+                  onTap: () => setState(() => _stockCat = c),
+                ),
+              ),
+            if (_can('inventory.manage'))
+              ActionChip(
+                key: const Key('inv-cat-chip-add'),
+                avatar: const Icon(Icons.add_rounded, size: 16),
+                label: const Text('Category ++'),
+                onPressed: _addCategoryPrompt,
+              ),
+          ],
+        ),
+      ),
       const SizedBox(height: HPSpace.md),
       if (shown.isEmpty)
-        EmptyState(icon: Icons.inventory_2_outlined, title: _products!.isEmpty ? 'No products yet' : 'Nothing matches', message: _products!.isEmpty ? 'Add ingredients and packaged drinks, or import them from Excel.' : 'Try another search.')
+        EmptyState(icon: Icons.inventory_2_outlined, title: _products!.isEmpty ? 'No products yet' : 'Nothing matches', message: _products!.isEmpty ? 'Add ingredients and packaged drinks, or import them from Excel.' : 'Try another search or select another category.')
       else
         Card(
           child: Column(children: [
@@ -169,7 +308,34 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                 key: Key('product-${x['sku']}'),
                 contentPadding: const EdgeInsets.symmetric(horizontal: HPSpace.lg, vertical: HPSpace.xs),
                 title: Text('${x['name']}', style: HPType.label(x['active'] == true ? p.text : p.faint)),
-                subtitle: Text([x['sku'], if (x['category'] != null) x['category'], 'avg ${rupees(((x['avgCostPaise'] as num) * 1).round())}/${x['baseUnit']}'].join(' · '), style: HPType.body(p.muted)),
+                subtitle: Wrap(
+                  spacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Tooltip(
+                      message: 'Click to copy SKU: ${x['sku']}',
+                      child: InkWell(
+                        key: Key('copy-sku-${x['sku']}'),
+                        borderRadius: BorderRadius.circular(4),
+                        onTap: () {
+                          Clipboard.setData(ClipboardData(text: '${x['sku']}'));
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Copied SKU ${x['sku']}'), duration: const Duration(milliseconds: 1500)));
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                          decoration: BoxDecoration(color: p.raised, borderRadius: BorderRadius.circular(4), border: Border.all(color: p.faint.withValues(alpha: .4))),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Text('${x['sku']}', style: HPType.mono(p.muted).copyWith(fontSize: 11, fontWeight: FontWeight.w600)),
+                            const SizedBox(width: 4),
+                            Icon(Icons.copy_rounded, size: 11, color: p.muted),
+                          ]),
+                        ),
+                      ),
+                    ),
+                    if (x['category'] != null) Text('·  ${x['category']}', style: HPType.body(p.muted)),
+                    Text('·  avg ${rupees(((x['avgCostPaise'] as num) * 1).round())}/${x['baseUnit']}', style: HPType.body(p.muted)),
+                  ],
+                ),
                 trailing: Wrap(spacing: HPSpace.sm, crossAxisAlignment: WrapCrossAlignment.center, children: [
                   if (x['negative'] == true) const StatusChip(label: 'Below zero', tone: HPTone.danger)
                   else if (x['low'] == true) const StatusChip(label: 'Low', tone: HPTone.saffron),
@@ -179,9 +345,19 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                     PopupMenuButton<String>(
                       key: Key('actions-${x['sku']}'),
                       tooltip: 'Record a movement',
-                      onSelected: (v) => v == 'edit' ? _editProduct(x) : _move(x, v),
+                      onSelected: (v) {
+                        if (v == 'edit') {
+                          _editProduct(x);
+                        } else if (v == 'copy_sku') {
+                          Clipboard.setData(ClipboardData(text: '${x['sku']}'));
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Copied SKU ${x['sku']}'), duration: const Duration(milliseconds: 1500)));
+                        } else {
+                          _move(x, v);
+                        }
+                      },
                       itemBuilder: (_) => [
                         for (final m in allowed) PopupMenuItem(value: m.$1, child: ListTile(dense: true, leading: Icon(m.$4), title: Text(m.$2))),
+                        const PopupMenuItem(value: 'copy_sku', child: ListTile(dense: true, leading: Icon(Icons.copy_rounded), title: Text('Copy SKU'))),
                         if (_can('inventory.manage')) const PopupMenuItem(value: 'edit', child: ListTile(dense: true, leading: Icon(Icons.edit_outlined), title: Text('Edit product'))),
                       ],
                     ),
@@ -197,10 +373,21 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
 // ---------------------------------------------------------------- product editor
 
 class _ProductEditor extends StatefulWidget {
-  const _ProductEditor({required this.api, required this.product, required this.locations, required this.suppliers});
+  const _ProductEditor({
+    required this.api,
+    required this.product,
+    required this.locations,
+    required this.suppliers,
+    this.initialCategory,
+    this.restaurantPrefix = '',
+    this.knownCategories = const [],
+  });
   final ApiClient api;
   final Json? product;
   final List<Json> locations, suppliers;
+  final String? initialCategory;
+  final String restaurantPrefix;
+  final List<String> knownCategories;
   @override
   State<_ProductEditor> createState() => _ProductEditorState();
 }
@@ -221,6 +408,27 @@ class _ProductEditorState extends State<_ProductEditor> {
   String? _error;
 
   bool get _isNew => widget.product == null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isNew) {
+      if (_cat.text.isEmpty && widget.initialCategory != null) {
+        _cat.text = widget.initialCategory!;
+      }
+      if (_sku.text.isEmpty && widget.restaurantPrefix.isNotEmpty) {
+        _sku.text = '${widget.restaurantPrefix}INV-';
+      }
+    }
+  }
+
+  void _applyUnitPreset((String, String, String, double, String) u) {
+    setState(() {
+      _base = u.$2;
+      _purchase = u.$3;
+      _factor.text = '${u.$4}'.replaceAll(RegExp(r'\.0+$'), '');
+    });
+  }
 
   Future<void> _save() async {
     final factor = double.tryParse(_factor.text.trim());
@@ -272,13 +480,85 @@ class _ProductEditorState extends State<_ProductEditor> {
       ],
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
-          Expanded(child: TextField(key: const Key('product-sku'), controller: _sku, enabled: _isNew, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(labelText: 'SKU (stable code)', hintText: 'RICE-BAS'))),
+          Expanded(
+            child: TextField(
+              key: const Key('product-sku'),
+              controller: _sku,
+              enabled: _isNew,
+              textCapitalization: TextCapitalization.characters,
+              decoration: InputDecoration(
+                labelText: 'SKU (stable code)',
+                hintText: 'RICE-BAS',
+                suffixIcon: _isNew
+                    ? Tooltip(
+                        message: 'Generate SKU',
+                        child: IconButton(
+                          icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+                          onPressed: () {
+                            final clean = _name.text.trim().toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+                            final pfx = widget.restaurantPrefix.isNotEmpty ? widget.restaurantPrefix : 'INV-';
+                            final sfx = clean.length >= 4 ? clean.substring(0, 4) : '${clean}101';
+                            setState(() => _sku.text = '$pfx$sfx');
+                          },
+                        ),
+                      )
+                    : null,
+              ),
+            ),
+          ),
           const SizedBox(width: HPSpace.sm),
           Expanded(flex: 2, child: TextField(key: const Key('product-name'), controller: _name, decoration: const InputDecoration(labelText: 'Product name'))),
         ]),
         const SizedBox(height: HPSpace.md),
-        TextField(controller: _cat, decoration: const InputDecoration(labelText: 'Category (optional)', hintText: 'Grains, Dairy, Packaged drinks')),
+        Row(children: [
+          Expanded(child: TextField(key: const Key('product-cat'), controller: _cat, decoration: const InputDecoration(labelText: 'Category', hintText: 'Grains, Dairy, Packaged drinks'))),
+          const SizedBox(width: HPSpace.sm),
+          ActionChip(
+            key: const Key('editor-cat-plus'),
+            avatar: const Icon(Icons.add_rounded, size: 16),
+            label: const Text('Category ++'),
+            onPressed: () async {
+              final c = TextEditingController();
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (d) => HPDialog(
+                  title: 'Quick Category',
+                  actions: [
+                    SecondaryButton(label: 'Cancel', onPressed: () => Navigator.pop(d)),
+                    PrimaryButton(label: 'Use', height: 48, onPressed: () => Navigator.pop(d, true)),
+                  ],
+                  child: TextField(controller: c, autofocus: true, decoration: const InputDecoration(labelText: 'Category name')),
+                ),
+              );
+              if (ok == true && c.text.trim().isNotEmpty) {
+                setState(() => _cat.text = c.text.trim());
+              }
+            },
+          ),
+        ]),
+        const SizedBox(height: HPSpace.xs),
+        Wrap(spacing: 6, runSpacing: 4, children: [
+          for (final catName in {...widget.knownCategories, ...standardInvCategories}.take(8))
+            ActionChip(
+              label: Text(catName, style: const TextStyle(fontSize: 11)),
+              onPressed: () {
+                setState(() => _cat.text = catName);
+                final match = unitPresets.where((u) => u.$1.toLowerCase().contains(catName.toLowerCase()) || catName.toLowerCase().contains(u.$1.toLowerCase())).firstOrNull;
+                if (match != null) _applyUnitPreset(match);
+              },
+            ),
+        ]),
         const SizedBox(height: HPSpace.md),
+        Text('Specialize unit according to product:', style: HPType.overline(p.muted)),
+        const SizedBox(height: 4),
+        Wrap(spacing: 6, runSpacing: 6, children: [
+          for (final u in unitPresets)
+            ActionChip(
+              label: Text(u.$5, style: const TextStyle(fontSize: 12)),
+              onPressed: () => _applyUnitPreset(u),
+            ),
+        ]),
+        const SizedBox(height: HPSpace.sm),
         Text('Stock is counted in the base unit. You buy in the purchase unit; "1 purchase unit = N base units".', style: HPType.body(p.muted).copyWith(fontSize: 12)),
         const SizedBox(height: HPSpace.sm),
         Row(children: [

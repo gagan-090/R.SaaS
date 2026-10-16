@@ -271,12 +271,46 @@ class _PlanEditorState extends State<PlanEditor> {
     if (c.contains('prem')) _tier = 3;
   }
 
-  void _autoYearly(String val) {
-    if (!_isNew) return;
+  int _discountPreset = 17; // 17% ~ 10 months / 2 mo free
+
+  void _applyDiscountPreset(int percent) {
+    setState(() => _discountPreset = percent);
+    final m = parseRupees(_price.text);
+    if (m == null || m <= 0) return;
+    final monthly = m / 100.0;
+    final yearly = percent == 17
+        ? (monthly * 10).round()
+        : (monthly * 12 * (1 - percent / 100.0)).round();
+    _yearlyPrice.text = '$yearly';
+    setState(() {});
+  }
+
+  void _onMonthlyChanged(String val) {
     final m = double.tryParse(val.trim().replaceAll(',', ''));
-    if (m != null && m > 0 && (_yearlyPrice.text.isEmpty || _yearlyPrice.text == '${(m * 10).round()}')) {
-      _yearlyPrice.text = '${(m * 10).round()}';
+    if (m != null && m > 0) {
+      if (_discountPreset == 17) {
+        _yearlyPrice.text = '${(m * 10).round()}';
+      } else {
+        _yearlyPrice.text = '${(m * 12 * (1 - _discountPreset / 100.0)).round()}';
+      }
+      setState(() {});
     }
+  }
+
+  void _onYearlyChanged(String val) {
+    setState(() => _discountPreset = -1);
+  }
+
+  (double savings, double discountPct, double effectiveMo)? _calcDiscount() {
+    final m = parseRupees(_price.text);
+    final y = parseRupees(_yearlyPrice.text);
+    if (m == null || y == null || m <= 0 || y <= 0) return null;
+    final fullYear = (m / 100.0) * 12;
+    final actualYear = y / 100.0;
+    final savings = fullYear - actualYear;
+    final pct = (savings / fullYear) * 100.0;
+    final effMo = actualYear / 12.0;
+    return (savings, pct, effMo);
   }
 
   Future<void> _save() async {
@@ -332,29 +366,92 @@ class _PlanEditorState extends State<PlanEditor> {
   @override
   Widget build(BuildContext context) {
     final p = context.hp;
+    final discountInfo = _calcDiscount();
     return HPDialog(
       title: _isNew ? 'Add a plan' : 'Edit ${widget.plan!['name']}',
       actions: [
         SecondaryButton(label: 'Cancel', onPressed: _busy ? null : () => Navigator.pop(context)),
         PrimaryButton(key: const Key('save-plan'), label: 'Save', busy: _busy, height: 56, onPressed: _save),
       ],
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        TextField(key: const Key('plan-name'), controller: _name, onChanged: _autoCode, decoration: const InputDecoration(labelText: 'Plan name', hintText: 'e.g. Standard, Professional, Premium')),
-        if (_isNew) ...[
+      child: Focus(
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent &&
+              (event.logicalKey == LogicalKeyboardKey.enter || event.logicalKey == LogicalKeyboardKey.numpadEnter)) {
+            _save();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          TextField(key: const Key('plan-name'), controller: _name, onChanged: _autoCode, decoration: const InputDecoration(labelText: 'Plan name', hintText: 'e.g. Standard, Professional, Premium')),
+          if (_isNew) ...[
+            const SizedBox(height: HPSpace.md),
+            TextField(key: const Key('plan-code'), controller: _code, decoration: const InputDecoration(labelText: 'Code (cannot change later)', helperText: 'Used in licenses, e.g. standard')),
+          ],
           const SizedBox(height: HPSpace.md),
-          TextField(key: const Key('plan-code'), controller: _code, decoration: const InputDecoration(labelText: 'Code (cannot change later)', helperText: 'Used in licenses, e.g. standard')),
-        ],
-        const SizedBox(height: HPSpace.md),
-        TextField(
-          key: const Key('plan-price'),
-          controller: _price,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
-          onChanged: _autoYearly,
-          decoration: const InputDecoration(labelText: 'Monthly price', prefixText: '₹ ', helperText: 'Before GST'),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(
+              child: TextField(
+                key: const Key('plan-price'),
+                controller: _price,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+                onChanged: _onMonthlyChanged,
+                decoration: const InputDecoration(labelText: 'Monthly amount (₹)', prefixText: '₹ ', helperText: 'Per month before GST'),
+              ),
+            ),
+            const SizedBox(width: HPSpace.md),
+            Expanded(
+              child: TextField(
+                key: const Key('plan-yearly-price'),
+                controller: _yearlyPrice,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+                onChanged: _onYearlyChanged,
+                decoration: const InputDecoration(labelText: 'Annual amount (₹)', prefixText: '₹ ', helperText: 'Full year total with discount'),
+              ),
+            ),
+          ]),
+          const SizedBox(height: HPSpace.xs),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+            Text('Yearly discount:', style: HPType.body(p.muted).copyWith(fontSize: 12)),
+            for (final (pct, label) in const [
+              (17, '17% (2 mo free)'),
+              (20, '20% off'),
+              (10, '10% off'),
+              (0, 'No discount (12x)'),
+            ])
+              ActionChip(
+                visualDensity: VisualDensity.compact,
+                label: Text(label, style: TextStyle(fontSize: 12, fontWeight: _discountPreset == pct ? FontWeight.bold : FontWeight.normal)),
+                backgroundColor: _discountPreset == pct ? HPColors.saffron.withValues(alpha: .2) : null,
+                onPressed: () => _applyDiscountPreset(pct),
+              ),
+          ],
         ),
-        const SizedBox(height: HPSpace.md),
-        TextField(key: const Key('plan-yearly-price'), controller: _yearlyPrice, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Annual price', prefixText: '₹ ', helperText: 'Full year total; set your own discount')),
+        if (discountInfo != null) ...[
+          const SizedBox(height: HPSpace.xs),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(color: (discountInfo.$1 > 0 ? p.success : HPColors.amber).withValues(alpha: .12), borderRadius: BorderRadius.circular(8)),
+            child: Row(children: [
+              Icon(discountInfo.$1 > 0 ? Icons.local_offer_outlined : Icons.info_outline_rounded, size: 16, color: discountInfo.$1 > 0 ? p.success : p.muted),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  discountInfo.$1 > 0
+                      ? '${discountInfo.$2.toStringAsFixed(1)}% annual discount · Saves ₹${discountInfo.$1.toStringAsFixed(0)}/yr · Effective ₹${discountInfo.$3.toStringAsFixed(1)}/mo'
+                      : 'Effective ₹${discountInfo.$3.toStringAsFixed(1)}/month',
+                  style: HPType.label(discountInfo.$1 > 0 ? p.success : p.text).copyWith(fontSize: 12),
+                ),
+              ),
+            ]),
+          ),
+        ],
         const SizedBox(height: HPSpace.md),
         SegmentedButton<String>(
           showSelectedIcon: false,
@@ -387,6 +484,8 @@ class _PlanEditorState extends State<PlanEditor> {
         ]),
         if (_error != null) Padding(padding: const EdgeInsets.only(top: HPSpace.md), child: Text(_error!, key: const Key('plan-error'), style: HPType.body(p.danger))),
       ]),
-    );
+    ),
+  );
   }
 }
+

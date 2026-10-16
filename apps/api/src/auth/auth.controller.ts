@@ -92,9 +92,13 @@ export class AuthController {
         : tx.user.findUnique({ where: { id: a.id }, select: { id: true, email: true, name: true, tenantId: true, pinHash: true, webAccess: true, mfa: { select: { enrolledAt: true } }, roles: { select: { customRole: { select: { name: true } } } } } }),
     );
     const hasPin = profile && 'pinHash' in profile ? !!profile.pinHash : undefined;
+    const tenant = profile && 'tenantId' in profile && profile.tenantId
+      ? await this.db.platform((tx) => tx.restaurantTenant.findUnique({ where: { id: profile.tenantId }, select: { id: true, name: true, code: true } }))
+      : null;
     return {
       type: a.type, ...profile, mfaEnrolled: !!profile?.mfa?.enrolledAt, mfa: undefined, pinHash: undefined, ...(hasPin === undefined ? {} : { hasPin }),
       ...(profile && 'roles' in profile ? { roles: undefined, customRoleName: profile.roles.find((r) => r.customRole)?.customRole?.name ?? null } : {}),
+      tenant: tenant ? { id: tenant.id, name: tenant.name, code: tenant.code } : null,
       roles: a.roles, permissions: [...a.permissions].sort(), branchIds: a.branchIds,
     };
   }

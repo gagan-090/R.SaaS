@@ -108,22 +108,58 @@ class _FloorEditorState extends State<FloorEditor> {
     return '${(nums.isEmpty ? 0 : nums.reduce(math.max)) + 1}';
   }
 
-  /// Puts a new table in the visible centre of the canvas.
+  /// Finds an unoccupied, vacant position for a new table so tables don't stack or overlap.
+  Offset _findVacantSpot(double width, double height) {
+    if (_tables.isEmpty) {
+      return Offset(_snapTo(120), _snapTo(120));
+    }
+    const margin = 80.0;
+    const step = 60.0;
+    final clearW = width + 50.0;
+    final clearH = height + 50.0;
+
+    // Scan the canvas grid from top-left to bottom-right
+    for (double y = margin; y <= math.max(margin, _h - margin - height); y += step) {
+      for (double x = margin; x <= math.max(margin, _w - margin - width); x += step) {
+        final cx = x + width / 2;
+        final cy = y + height / 2;
+        final candidate = Rect.fromCenter(center: Offset(cx, cy), width: clearW, height: clearH);
+
+        bool collision = false;
+        for (final t in _tables) {
+          final tBox = Rect.fromCenter(center: Offset(t.x, t.y), width: t.width + 40, height: t.height + 40);
+          if (candidate.overlaps(tBox)) {
+            collision = true;
+            break;
+          }
+        }
+        if (!collision) {
+          return Offset(_snapTo(cx), _snapTo(cy));
+        }
+      }
+    }
+
+    // Fallback: staggered position if canvas is full
+    final offset = ((_tables.length * 40.0) % 240.0);
+    return Offset(_snapTo((100 + offset).clamp(60, _w - 60)), _snapTo((100 + offset).clamp(60, _h - 60)));
+  }
+
+  /// Puts a new table in the first vacant position on the canvas.
   void _add(String shape) {
-    final inv = Matrix4.inverted(_tc.value);
-    final box = context.size ?? const Size(800, 600);
-    final c = MatrixUtils.transformPoint(inv, Offset(box.width / 2, 200));
     final seats = shape == 'rect' ? 6 : (shape == 'round' ? 2 : 4);
+    final width = shape == 'rect' ? 140.0 : 80.0;
+    const height = 80.0;
+    final spot = _findVacantSpot(width, height);
     _change(() {
       _tables.add(
         HPFloorTable(
           name: _nextName(),
           seats: seats,
           shape: shape,
-          x: _snapTo(c.dx.clamp(60, _w - 60)),
-          y: _snapTo(c.dy.clamp(60, _h - 60)),
-          width: shape == 'rect' ? 140 : 80,
-          height: 80,
+          x: spot.dx,
+          y: spot.dy,
+          width: width,
+          height: height,
         ),
       );
       _sel = _tables.length - 1;
@@ -385,6 +421,21 @@ class _FloorEditorState extends State<FloorEditor> {
         if (_editable) ...[
           TextButton.icon(onPressed: _uploadBackground, icon: const Icon(Icons.add_photo_alternate_outlined), label: const Text('Upload floor image')),
           if (_background != null) TextButton(onPressed: () => _change(() => _background = null), child: const Text('Classic floor')),
+          FilledButton.tonalIcon(
+            onPressed: () => _add('square'),
+            icon: const Icon(Icons.crop_square_rounded, size: 18),
+            label: const Text('+ Square'),
+          ),
+          FilledButton.tonalIcon(
+            onPressed: () => _add('round'),
+            icon: const Icon(Icons.circle_outlined, size: 18),
+            label: const Text('+ Round'),
+          ),
+          FilledButton.tonalIcon(
+            onPressed: () => _add('rect'),
+            icon: const Icon(Icons.rectangle_outlined, size: 18),
+            label: const Text('+ Long'),
+          ),
           PopupMenuButton<String>(
             key: const Key('add-plan-table'),
             tooltip: 'Add a table',
@@ -392,18 +443,18 @@ class _FloorEditorState extends State<FloorEditor> {
             itemBuilder: (_) => const [
               PopupMenuItem(
                 value: 'round',
-                child: ListTile(leading: Icon(Icons.circle_outlined), title: Text('Round table')),
+                child: ListTile(leading: Icon(Icons.circle_outlined), title: Text('Round table (2-4 seats)')),
               ),
               PopupMenuItem(
                 value: 'square',
-                child: ListTile(leading: Icon(Icons.crop_square_rounded), title: Text('Square table')),
+                child: ListTile(leading: Icon(Icons.crop_square_rounded), title: Text('Square table (4 seats)')),
               ),
               PopupMenuItem(
                 value: 'rect',
-                child: ListTile(leading: Icon(Icons.rectangle_outlined), title: Text('Long table')),
+                child: ListTile(leading: Icon(Icons.rectangle_outlined), title: Text('Long table (6 seats)')),
               ),
             ],
-            child: const Chip(avatar: Icon(Icons.add_rounded, size: 18), label: Text('Add table')),
+            child: const Chip(avatar: Icon(Icons.add_rounded, size: 18), label: Text('More tables')),
           ),
           FilterChip(key: const Key('snap'), label: const Text('Snap to grid'), selected: _snap, onSelected: (v) => setState(() => _snap = v)),
           FilterChip(key: const Key('chair-mode'), label: const Text('Move chairs'), selected: _chairMode, onSelected: (v) => setState(() => _chairMode = v)),

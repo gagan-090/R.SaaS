@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 
@@ -53,6 +54,16 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   bool get _canEdit {
     final a = ref.read(authProvider);
     return a is SignedIn && a.can('menu.publish');
+  }
+
+  String get _restaurantPrefix {
+    final a = ref.read(authProvider);
+    if (a is SignedIn) {
+      final t = a.me['tenant'] as Map?;
+      final code = t?['code'] as String?;
+      if (code != null && code.isNotEmpty) return '$code-';
+    }
+    return '';
   }
 
   @override
@@ -284,6 +295,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       context: context,
       builder: (_) => _ItemEditor(
         api: _api, item: item, categories: _cats!, taxes: _taxes!, defaultCategory: _cat ?? _cats!.first['id'] as String, paletteIndex: _items!.length,
+        restaurantPrefix: _restaurantPrefix,
         canMapRecipes: ref.read(authProvider) is SignedIn && (ref.read(authProvider) as SignedIn).can('inventory.manage'),
       ),
     );
@@ -303,7 +315,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     final edit = _canEdit;
     final visible = _items!
         .where((i) => _cat == null || i['categoryId'] == _cat)
-        .where((i) => _q.isEmpty || '${i['name']}'.toLowerCase().contains(_q.toLowerCase()))
+        .where((i) => _q.isEmpty || '${i['name']} ${i['code'] ?? ''}'.toLowerCase().contains(_q.toLowerCase()))
         .toList();
     final catName = {for (final c in _cats!) c['id']: c['name']};
 
@@ -502,6 +514,7 @@ class _ItemTile extends StatelessWidget {
     final p = context.hp;
     final pc = item['plateColors'] as Map?;
     final available = item['available'] == true;
+    final code = '${item['code'] ?? ''}'.trim();
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -529,7 +542,32 @@ class _ItemTile extends StatelessWidget {
                   Expanded(child: Text('${item['name']}', style: HPType.titleCard(p.text).copyWith(fontSize: 17), overflow: TextOverflow.ellipsis)),
                 ]),
                 const SizedBox(height: 2),
-                Text(category, style: HPType.body(p.muted).copyWith(fontSize: 12), overflow: TextOverflow.ellipsis),
+                Row(children: [
+                  Expanded(child: Text(category, style: HPType.body(p.muted).copyWith(fontSize: 12), overflow: TextOverflow.ellipsis)),
+                  if (code.isNotEmpty) ...[
+                    const SizedBox(width: 6),
+                    Tooltip(
+                      message: 'Click to copy SKU: $code',
+                      child: InkWell(
+                        key: Key('copy-sku-$code'),
+                        borderRadius: BorderRadius.circular(4),
+                        onTap: () {
+                          Clipboard.setData(ClipboardData(text: code));
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Copied SKU $code to clipboard'), duration: const Duration(milliseconds: 1500)));
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(color: p.raised, borderRadius: BorderRadius.circular(4), border: Border.all(color: p.faint.withValues(alpha: .4))),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Text(code, style: HPType.mono(p.muted).copyWith(fontSize: 11, fontWeight: FontWeight.w600)),
+                            const SizedBox(width: 4),
+                            Icon(Icons.copy_rounded, size: 11, color: p.muted),
+                          ]),
+                        ),
+                      ),
+                    ),
+                  ],
+                ]),
                 const SizedBox(height: 4),
                 Text(_tilePrice(item), style: HPType.label(p.text)),
               ]),
@@ -543,8 +581,21 @@ class _ItemTile extends StatelessWidget {
                 PopupMenuButton<String>(
                   tooltip: 'Dish actions',
                   icon: Icon(Icons.more_horiz_rounded, color: p.muted),
-                  onSelected: (v) => v == 'edit' ? onEdit() : onDelete(),
-                  itemBuilder: (_) => const [PopupMenuItem(value: 'edit', child: Text('Edit & photo')), PopupMenuItem(value: 'delete', child: Text('Delete'))],
+                  onSelected: (v) {
+                    if (v == 'edit') {
+                      onEdit();
+                    } else if (v == 'copy_sku' && code.isNotEmpty) {
+                      Clipboard.setData(ClipboardData(text: code));
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Copied SKU $code to clipboard'), duration: const Duration(milliseconds: 1500)));
+                    } else if (v == 'delete') {
+                      onDelete();
+                    }
+                  },
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(value: 'edit', child: Text('Edit & photo')),
+                    if (code.isNotEmpty) const PopupMenuItem(value: 'copy_sku', child: Text('Copy SKU / Code')),
+                    const PopupMenuItem(value: 'delete', child: Text('Delete')),
+                  ],
                 ),
             ]),
           ]),
@@ -556,19 +607,30 @@ class _ItemTile extends StatelessWidget {
 
 /// Add / edit a dish, with photo upload (cropped and compressed in the browser) or the illustrated plate.
 class _ItemEditor extends StatefulWidget {
-  const _ItemEditor({required this.api, required this.item, required this.categories, required this.taxes, required this.defaultCategory, required this.paletteIndex, this.canMapRecipes = false});
+  const _ItemEditor({
+    required this.api,
+    required this.item,
+    required this.categories,
+    required this.taxes,
+    required this.defaultCategory,
+    required this.paletteIndex,
+    this.restaurantPrefix = '',
+    this.canMapRecipes = false,
+  });
   final ApiClient api;
   final bool canMapRecipes;
   final Json? item;
   final List<Json> categories, taxes;
   final String defaultCategory;
   final int paletteIndex;
+  final String restaurantPrefix;
   @override
   State<_ItemEditor> createState() => _ItemEditorState();
 }
 
 class _ItemEditorState extends State<_ItemEditor> {
   late final _name = TextEditingController(text: widget.item?['name'] as String? ?? '');
+  late final _code = TextEditingController(text: widget.item?['code'] as String? ?? '');
   late final List<_SizeDraft> _sizes = [
     for (final v in ((widget.item?['variants'] as List?) ?? const []).cast<Json>()) _SizeDraft.from(v),
     if (((widget.item?['variants'] as List?) ?? const []).isEmpty) _SizeDraft.blank(isDefault: true),
@@ -583,6 +645,13 @@ class _ItemEditorState extends State<_ItemEditor> {
   bool _removePhoto = false, _busy = false;
   String? _error;
 
+  @override
+  void initState() {
+    super.initState();
+    if (widget.item == null && _code.text.isEmpty && widget.restaurantPrefix.isNotEmpty) {
+      _code.text = '${widget.restaurantPrefix}DISH-';
+    }
+  }
 
   Future<void> _pick() async {
     try {
@@ -613,7 +682,12 @@ class _ItemEditorState extends State<_ItemEditor> {
     try {
       final variants = [for (final s in _sizes) s.toJson()];
       final body = {
-        'name': _name.text.trim(), 'categoryId': _category, 'taxRuleId': _tax, 'isVeg': _veg, 'available': _available,
+        'name': _name.text.trim(),
+        'categoryId': _category,
+        'taxRuleId': _tax,
+        'isVeg': _veg,
+        'available': _available,
+        if (_code.text.trim().isNotEmpty) 'code': _code.text.trim().toUpperCase(),
         if (_desc.text.trim().isNotEmpty) 'description': _desc.text.trim(),
       };
       final Json saved;
@@ -675,9 +749,33 @@ class _ItemEditorState extends State<_ItemEditor> {
             ]),
           ),
         ]),
-        const SizedBox(height: HPSpace.lg),
-        TextField(key: const Key('dish-name'), controller: _name, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Dish name')),
-        const SizedBox(height: HPSpace.md),
+        Row(children: [
+          Expanded(flex: 2, child: TextField(key: const Key('dish-name'), controller: _name, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Dish name'))),
+          const SizedBox(width: HPSpace.sm),
+          Expanded(
+            child: TextField(
+              key: const Key('dish-code'),
+              controller: _code,
+              textCapitalization: TextCapitalization.characters,
+              decoration: InputDecoration(
+                labelText: 'SKU / Code',
+                hintText: 'e.g. RST-001',
+                suffixIcon: Tooltip(
+                  message: 'Auto-generate SKU',
+                  child: IconButton(
+                    icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+                    onPressed: () {
+                      final clean = _name.text.trim().toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+                      final pfx = widget.restaurantPrefix.isNotEmpty ? widget.restaurantPrefix : 'DISH-';
+                      final sfx = clean.length >= 4 ? clean.substring(0, 4) : '${clean}101';
+                      setState(() => _code.text = '$pfx$sfx');
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ]),
         Flex(
           direction: MediaQuery.sizeOf(context).width < 600 ? Axis.vertical : Axis.horizontal,
           crossAxisAlignment: MediaQuery.sizeOf(context).width < 600 ? CrossAxisAlignment.stretch : CrossAxisAlignment.start,

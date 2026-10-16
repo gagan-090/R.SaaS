@@ -85,6 +85,7 @@ const QuickMenuBody = z.object({
   items: z.array(QuickMenuItem).min(1).max(200),
 });
 const ItemPatch = z.object({
+  code: CODE.optional(),
   categoryId: z.string().uuid().optional(),
   name: z.string().trim().min(1).max(120).optional(),
   description: z.string().max(500).nullable().optional(),
@@ -370,11 +371,16 @@ export class MenuController {
       if (!before || before.deleted) throw notFound('Menu item');
       if (b.categoryId && !(await tx.menuCategory.findFirst({ where: { id: b.categoryId, deleted: false } }))) throw notFound('Category');
       if (b.taxRuleId && !(await tx.taxRule.findFirst({ where: { id: b.taxRuleId, deleted: false } }))) throw notFound('Tax rule');
-      const { pricePaise, ...rest } = b;
-      const after = await tx.menuItem.update({ where: { id }, data: { ...rest, ...(pricePaise !== undefined ? { pricePaise } : {}) } });
+      if (b.code) {
+        const code = b.code.toUpperCase();
+        const existing = await tx.menuItem.findFirst({ where: { tenantId: a.tenantId!, code, id: { not: id }, deleted: false } });
+        if (existing) throw conflict('duplicate_code', `Item code ${code} is already used`);
+      }
+      const { pricePaise, code, ...rest } = b;
+      const after = await tx.menuItem.update({ where: { id }, data: { ...rest, ...(code ? { code: code.toUpperCase() } : {}), ...(pricePaise !== undefined ? { pricePaise } : {}) } });
       if (pricePaise !== undefined) await tx.menuVariant.updateMany({ where: { itemId: id, isDefault: true, deleted: false }, data: { pricePaise } });
       await this.bump(tx, a);
-      const pick = (x: typeof before) => ({ name: x.name, categoryId: x.categoryId, taxRuleId: x.taxRuleId, available: x.available, active: x.active, pricePaise: x.pricePaise, description: x.description });
+      const pick = (x: typeof before) => ({ code: x.code, name: x.name, categoryId: x.categoryId, taxRuleId: x.taxRuleId, available: x.available, active: x.active, pricePaise: x.pricePaise, description: x.description });
       return { before: pick(before), after: pick(after) };
     });
     Object.assign(audit, { objectType: 'menu_item', objectId: id, before: r.before, after: r.after });

@@ -132,71 +132,85 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) => _AuthFrame(
         title: 'Sign in',
         subtitle: _usePin ? 'Employees: your work email and PIN' : 'Restaurant owners and platform admins',
-        child: Form(
-          key: _form,
-          child: AutofillGroup(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              SegmentedButton<bool>(
-                key: const Key('login-mode'),
-                showSelectedIcon: false,
-                segments: const [
-                  ButtonSegment(value: false, label: Text('Password'), icon: Icon(Icons.lock_outline_rounded)),
-                  ButtonSegment(value: true, label: Text('Employee PIN'), icon: Icon(Icons.pin_outlined)),
-                ],
-                selected: {_usePin},
-                onSelectionChanged: (v) => setState(() {
-                  _usePin = v.first;
-                  _error = null;
-                }),
-              ),
-              const SizedBox(height: HPSpace.lg),
-              TextFormField(
-                key: const Key('login-email'),
-                controller: _email,
-                autofillHints: const [AutofillHints.email],
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(labelText: 'Email'),
-                validator: (v) => (v == null || !v.contains('@')) ? 'Enter your email' : null,
-              ),
-              const SizedBox(height: HPSpace.md),
-              if (_usePin)
-                TextFormField(
-                  key: const Key('login-pin'),
-                  controller: _pin,
-                  obscureText: true,
-                  maxLength: 8,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: const InputDecoration(labelText: 'PIN', counterText: ''),
-                  validator: (v) => (v == null || v.length < 4) ? 'Enter your PIN' : null,
-                  onFieldSubmitted: (_) => _submit(),
-                )
-              else
-                TextFormField(
-                  key: const Key('login-password'),
-                  controller: _password,
-                  obscureText: true,
-                  autofillHints: const [AutofillHints.password],
-                  decoration: const InputDecoration(labelText: 'Password'),
-                  validator: (v) => (v == null || v.isEmpty) ? 'Enter your password' : null,
-                  onFieldSubmitted: (_) => _submit(),
+        child: Focus(
+          onKeyEvent: (node, event) {
+            if (event is KeyDownEvent &&
+                (event.logicalKey == LogicalKeyboardKey.enter || event.logicalKey == LogicalKeyboardKey.numpadEnter)) {
+              _submit();
+              return KeyEventResult.handled;
+            }
+            return KeyEventResult.ignored;
+          },
+          child: Form(
+            key: _form,
+            child: AutofillGroup(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                SegmentedButton<bool>(
+                  key: const Key('login-mode'),
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(value: false, label: Text('Password'), icon: Icon(Icons.lock_outline_rounded)),
+                    ButtonSegment(value: true, label: Text('Employee PIN'), icon: Icon(Icons.pin_outlined)),
+                  ],
+                  selected: {_usePin},
+                  onSelectionChanged: (v) => setState(() {
+                    _usePin = v.first;
+                    _error = null;
+                  }),
                 ),
-              if (_error != null) ...[
+                const SizedBox(height: HPSpace.lg),
+                TextFormField(
+                  key: const Key('login-email'),
+                  controller: _email,
+                  autofillHints: const [AutofillHints.email],
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(labelText: 'Email'),
+                  validator: (v) => (v == null || !v.contains('@')) ? 'Enter your email' : null,
+                  onFieldSubmitted: (_) => FocusScope.of(context).nextFocus(),
+                ),
                 const SizedBox(height: HPSpace.md),
-                Text(_error!, key: const Key('login-error'), style: HPType.body(context.hp.danger)),
-                const SizedBox(height: HPSpace.xs),
-                if (!_usePin)
-                  // generic on purpose (no hint whether the email exists), but tells new owners what to do
-                  Text('New restaurant? Activate it first with the link in your email, or ask your platform admin to resend it.',
-                      key: const Key('login-hint'), style: HPType.body(context.hp.muted).copyWith(fontSize: 13)),
-              ],
-              const SizedBox(height: HPSpace.x2),
-              PrimaryButton(label: 'Sign in', busy: _busy, onPressed: _submit),
-              if (_usePin) ...[
-                const SizedBox(height: HPSpace.sm),
-                TextButton(key: const Key('forgot-pin'), onPressed: _forgotPin, child: const Text('Forgot PIN?')),
-              ],
-            ]),
+                if (_usePin)
+                  TextFormField(
+                    key: const Key('login-pin'),
+                    controller: _pin,
+                    obscureText: true,
+                    maxLength: 8,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    textInputAction: TextInputAction.done,
+                    decoration: const InputDecoration(labelText: 'PIN', counterText: ''),
+                    validator: (v) => (v == null || v.length < 4) ? 'Enter your PIN' : null,
+                    onFieldSubmitted: (_) => _submit(),
+                  )
+                else
+                  TextFormField(
+                    key: const Key('login-password'),
+                    controller: _password,
+                    obscureText: true,
+                    autofillHints: const [AutofillHints.password],
+                    textInputAction: TextInputAction.done,
+                    decoration: const InputDecoration(labelText: 'Password'),
+                    validator: (v) => (v == null || v.isEmpty) ? 'Enter your password' : null,
+                    onFieldSubmitted: (_) => _submit(),
+                  ),
+                if (_error != null) ...[
+                  const SizedBox(height: HPSpace.md),
+                  Text(_error!, key: const Key('login-error'), style: HPType.body(context.hp.danger)),
+                  const SizedBox(height: HPSpace.xs),
+                  if (!_usePin)
+                    // generic on purpose (no hint whether the email exists), but tells new owners what to do
+                    Text('New restaurant? Activate it first with the link in your email, or ask your platform admin to resend it.',
+                        key: const Key('login-hint'), style: HPType.body(context.hp.muted).copyWith(fontSize: 13)),
+                ],
+                const SizedBox(height: HPSpace.x2),
+                PrimaryButton(label: 'Sign in', busy: _busy, onPressed: _submit),
+                if (_usePin) ...[
+                  const SizedBox(height: HPSpace.sm),
+                  TextButton(key: const Key('forgot-pin'), onPressed: _forgotPin, child: const Text('Forgot PIN?')),
+                ],
+              ]),
+            ),
           ),
         ),
       );
@@ -316,6 +330,16 @@ class _MfaScreenState extends ConsumerState<MfaScreen> {
     }
   }
 
+  void _verify() {
+    if (_busy) return;
+    final text = _code.text.trim();
+    if (text.isEmpty) return;
+    _run(() => ref.read(authProvider.notifier).verify(
+          code: _recovery ? null : text,
+          recoveryCode: _recovery ? text : null,
+        ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = ref.watch(authProvider);
@@ -323,28 +347,39 @@ class _MfaScreenState extends ConsumerState<MfaScreen> {
     return _AuthFrame(
       title: 'Two-step verification',
       subtitle: _recovery ? 'Enter one of your saved recovery codes.' : 'Enter the 6-digit code from your authenticator app.',
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        TextField(
-          key: const Key('mfa-code'),
-          controller: _code,
-          autofocus: true,
-          keyboardType: _recovery ? TextInputType.text : TextInputType.number,
-          maxLength: _recovery ? 12 : 6,
-          style: HPType.titleCard(context.hp.text).copyWith(letterSpacing: 6),
-          decoration: InputDecoration(labelText: _recovery ? 'Recovery code' : 'Code'),
-        ),
-        if (_error != null) Text(_error!, style: HPType.body(context.hp.danger)),
-        const SizedBox(height: HPSpace.lg),
-        PrimaryButton(
-          label: 'Verify',
-          busy: _busy,
-          onPressed: () => _run(() => ref.read(authProvider.notifier).verify(
-                code: _recovery ? null : _code.text.trim(),
-                recoveryCode: _recovery ? _code.text.trim() : null,
-              )),
-        ),
-        TextButton(onPressed: () => setState(() => _recovery = !_recovery), child: Text(_recovery ? 'Use authenticator code' : 'Use a recovery code')),
-      ]),
+      child: Focus(
+        autofocus: true,
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent &&
+              (event.logicalKey == LogicalKeyboardKey.enter || event.logicalKey == LogicalKeyboardKey.numpadEnter)) {
+            _verify();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          TextField(
+            key: const Key('mfa-code'),
+            controller: _code,
+            autofocus: true,
+            textInputAction: TextInputAction.done,
+            keyboardType: _recovery ? TextInputType.text : TextInputType.number,
+            maxLength: _recovery ? 12 : 6,
+            style: HPType.titleCard(context.hp.text).copyWith(letterSpacing: 6),
+            decoration: InputDecoration(labelText: _recovery ? 'Recovery code' : 'Code', counterText: ''),
+            onSubmitted: (_) => _verify(),
+          ),
+          if (_error != null) ...[const SizedBox(height: HPSpace.sm), Text(_error!, style: HPType.body(context.hp.danger))],
+          const SizedBox(height: HPSpace.lg),
+          PrimaryButton(
+            label: 'Verify',
+            busy: _busy,
+            onPressed: _verify,
+          ),
+          const SizedBox(height: HPSpace.sm),
+          TextButton(onPressed: () => setState(() => _recovery = !_recovery), child: Text(_recovery ? 'Use authenticator code' : 'Use a recovery code')),
+        ]),
+      ),
     );
   }
 
@@ -376,7 +411,17 @@ class _MfaScreenState extends ConsumerState<MfaScreen> {
           const SizedBox(height: HPSpace.sm),
           SelectableText('Key: ${_enroll!['secret']}', textAlign: TextAlign.center, style: HPType.mono(context.hp.muted)),
           const SizedBox(height: HPSpace.lg),
-          TextField(controller: _code, keyboardType: TextInputType.number, maxLength: 6, decoration: const InputDecoration(labelText: 'Code from the app')),
+          TextField(
+            controller: _code,
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            textInputAction: TextInputAction.done,
+            decoration: const InputDecoration(labelText: 'Code from the app', counterText: ''),
+            onSubmitted: (_) => _run(() async {
+              final codes = await api.enrollConfirm(s.enrollmentToken, _code.text.trim());
+              setState(() => _codes = codes);
+            }),
+          ),
           if (_error != null) Text(_error!, style: HPType.body(context.hp.danger)),
           const SizedBox(height: HPSpace.md),
           PrimaryButton(label: 'Confirm', busy: _busy, onPressed: () => _run(() async {
