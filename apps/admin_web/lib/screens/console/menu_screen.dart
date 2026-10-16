@@ -21,6 +21,20 @@ const _palettes = [
   ['#D99A2B', '#8B4A2B', '#F2E4C2'], ['#F2B33D', '#F7D27A', '#E07A2E'], ['#EFE8D6', '#CFE3C2', '#6E9B4E'], ['#6E2A12', '#9C4520', '#E9C46A'],
 ];
 
+/// Standard 40 professional categories from Restaurant_POS_Menu_With_Serving_Sizes.xlsx
+const standardMenuCategories = [
+  'Soups', 'Veg Starters', 'Non-Veg Starters', 'Tandoori Items',
+  'Veg Main Course', 'Paneer Special', 'Dal Special', 'Non-Veg Main Course',
+  'Seafood', 'Indian Breads', 'Rice', 'Biryani', 'Pulao',
+  'Chinese Starters', 'Chinese Main Course', 'South Indian', 'North Indian',
+  'Continental', 'Italian', 'Fast Food', 'Street Food / Chaat',
+  'Breakfast', 'Snacks', 'Rolls & Wraps', 'Thali / Combos',
+  'Salads', 'Raita & Curd', 'Papad & Accompaniments', 'Desserts',
+  'Ice Cream', 'Cakes & Bakery', 'Hot Beverages', 'Cold Beverages',
+  'Shakes & Smoothies', 'Fresh Juices', 'Mocktails', 'Packaged Beverages',
+  'Kids Menu', 'Jain Food', 'Chef Specials',
+];
+
 /// O3 Menu: categories, dishes with price / GST / veg / availability, and photos. Changes reach the hub on its next pull.
 class MenuScreen extends ConsumerStatefulWidget {
   const MenuScreen({super.key});
@@ -124,32 +138,132 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     _taxes = (await _api.taxRules()).cast<Json>();
   }
 
+  Future<void> _seedCategories() async {
+    if (!await confirm(context, title: 'Seed 40 standard categories?', message: 'This adds the full catalog of professional restaurant categories (Soups, Starters, Main Course, Biryani, Breads, Desserts, Beverages, etc.) to your menu.')) return;
+    await _run(() async {
+      final r = await _api.seedCategories();
+      final created = r['created'] ?? 0;
+      if (mounted) showDone(context, 'Added $created standard categories');
+    });
+  }
+
   Future<void> _quickAdd() async {
     await _ensureTax();
     if (!mounted) return;
-    final category = TextEditingController(text: _cats!.where((c) => c['id'] == _cat).firstOrNull?['name'] as String? ?? 'Main course');
+    final defaultCat = _cats!.where((c) => c['id'] == _cat).firstOrNull?['name'] as String? ?? 'Main course';
+    final category = TextEditingController(text: defaultCat);
     final rows = TextEditingController();
     String? error;
     bool busy = false;
-    final saved = await showDialog<bool>(context: context, builder: (d) => StatefulBuilder(builder: (d, update) => HPDialog(title: 'Quick menu entry', actions: [SecondaryButton(label: 'Cancel', onPressed: busy ? null : () => Navigator.pop(d)), PrimaryButton(label: 'Create dishes', busy: busy, onPressed: busy ? null : () async {
-      final items = <Json>[];
-      for (final line in rows.text.split('\n').where((l) => l.trim().isNotEmpty)) {
-        final fields = line.trim().split(RegExp(r'\t|\s*\|\s*'));
-        final price = fields.length == 2 ? parseRupees(fields[1]) : null;
-        if (price == null || price < 0 || fields.first.trim().isEmpty) { update(() => error = 'Use one dish per line: Name | Price in rupees'); return; }
-        items.add({'name': fields.first.trim(), 'pricePaise': price});
-      }
-      if (items.isEmpty || items.length > 100 || category.text.trim().isEmpty) { update(() => error = 'Enter a category and 1–100 dishes.'); return; }
-      update(() { busy = true; error = null; });
-      try { await _api.quickMenu({'categoryName': category.text.trim(), 'taxRuleId': _taxes!.first['id'], 'items': items}); if (d.mounted) Navigator.pop(d, true); }
-      catch (e) { if (d.mounted) update(() { busy = false; error = '$e'; }); }
-    })], child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      TextField(controller: category, decoration: const InputDecoration(labelText: 'Category (created automatically if new)')),
-      const SizedBox(height: 16),
-      TextField(controller: rows, minLines: 6, maxLines: 12, decoration: const InputDecoration(labelText: 'Paste names and prices from Excel, or type', hintText: 'Paneer Tikka | 240\nDal Makhani | 180\nButter Naan | 50')),
-      const SizedBox(height: 8), Text('Prices in rupees, before ${_taxes!.first['name']}. Dishes start as vegetarian; edit each dish for portions or non-veg. For full menus with sizes, use Excel import.'),
-      if (error != null) Text(error!, style: TextStyle(color: d.hp.danger)),
-    ]))));
+    final saved = await showDialog<bool>(context: context, builder: (d) => StatefulBuilder(builder: (d, update) => HPDialog(
+      title: 'Quick menu entry',
+      actions: [
+        SecondaryButton(label: 'Cancel', onPressed: busy ? null : () => Navigator.pop(d)),
+        PrimaryButton(label: 'Create dishes', busy: busy, onPressed: busy ? null : () async {
+          final items = <Json>[];
+          for (final line in rows.text.split('\n').where((l) => l.trim().isNotEmpty)) {
+            final rawParts = line.trim().split(RegExp(r'\t|\s*\|\s*')).map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+            if (rawParts.isEmpty) continue;
+
+            String dishName = rawParts[0];
+            String? dishCat;
+            bool isVeg = true;
+            final variants = <Json>[];
+            int? singlePrice;
+
+            var parts = [...rawParts];
+            final matchCat = standardMenuCategories.firstWhere((sc) => sc.toLowerCase() == parts[0].toLowerCase(), orElse: () => '');
+            if (matchCat.isNotEmpty && parts.length >= 3) {
+              dishCat = matchCat;
+              parts.removeAt(0);
+              dishName = parts[0];
+            }
+
+            final vegIdx = parts.indexWhere((p) => RegExp(r'^(veg|vegetarian|non-?veg|non-vegetarian|egg)$', caseSensitive: false).hasMatch(p));
+            if (vegIdx >= 0) {
+              isVeg = !parts[vegIdx].toLowerCase().contains('non');
+              parts.removeAt(vegIdx);
+            }
+
+            final valParts = parts.length > 1 ? parts.sublist(1) : <String>[];
+            if (valParts.length == 1) {
+              singlePrice = parseRupees(valParts[0]);
+            } else if (valParts.length == 2 && parseRupees(valParts[0]) != null && parseRupees(valParts[1]) != null) {
+              variants.add({'name': 'Half Plate', 'pricePaise': parseRupees(valParts[0])!, 'portionLabel': 'half', 'portionRatio': 0.5, 'isDefault': false});
+              variants.add({'name': 'Full Plate', 'pricePaise': parseRupees(valParts[1])!, 'portionLabel': 'full', 'portionRatio': 1.0, 'isDefault': true});
+            } else if (valParts.isNotEmpty) {
+              for (final vp in valParts) {
+                final subMatch = RegExp(r'^(.*?)\s*[:=]?\s*(\d+(?:\.\d+)?)$').firstMatch(vp);
+                if (subMatch != null) {
+                  final vName = subMatch.group(1)?.trim() ?? 'Regular';
+                  final vPrice = parseRupees(subMatch.group(2)!);
+                  if (vPrice != null) {
+                    variants.add({'name': vName.isEmpty ? 'Regular' : vName, 'pricePaise': vPrice, 'isDefault': variants.isEmpty});
+                  }
+                } else {
+                  final p = parseRupees(vp);
+                  if (p != null) {
+                    variants.add({'name': 'Size ${variants.length + 1}', 'pricePaise': p, 'isDefault': variants.isEmpty});
+                  }
+                }
+              }
+            }
+
+            if (variants.isEmpty && singlePrice == null) {
+              update(() => error = 'Could not parse price in: "$line".\nUse: Name | Price or Name | Veg/Non-Veg | HalfPrice | FullPrice');
+              return;
+            }
+
+            items.add({
+              'name': dishName,
+              if (dishCat != null) 'categoryName': dishCat,
+              'isVeg': isVeg,
+              if (singlePrice != null && variants.isEmpty) 'pricePaise': singlePrice,
+              if (variants.isNotEmpty) 'variants': variants,
+            });
+          }
+
+          if (items.isEmpty || items.length > 200 || (category.text.trim().isEmpty && !items.any((i) => i.containsKey('categoryName')))) {
+            update(() => error = 'Enter a category and 1–200 dishes.');
+            return;
+          }
+          update(() { busy = true; error = null; });
+          try {
+            await _api.quickMenu({'categoryName': category.text.trim().isEmpty ? 'Main course' : category.text.trim(), 'taxRuleId': _taxes!.first['id'], 'items': items});
+            if (d.mounted) Navigator.pop(d, true);
+          } catch (e) {
+            if (d.mounted) update(() { busy = false; error = '$e'; });
+          }
+        }),
+      ],
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        TextField(controller: category, decoration: const InputDecoration(labelText: 'Default category (created automatically if new)')),
+        const SizedBox(height: 8),
+        Text('QUICK CATEGORY SUGGESTIONS', style: HPType.overline(context.hp.muted)),
+        const SizedBox(height: 4),
+        Wrap(spacing: 6, runSpacing: 4, children: [
+          for (final c in ['Soups', 'Veg Starters', 'Non-Veg Starters', 'Tandoori Items', 'Veg Main Course', 'Biryani', 'Indian Breads', 'Desserts', 'Hot Beverages', 'Cold Beverages'])
+            ActionChip(
+              visualDensity: VisualDensity.compact,
+              label: Text(c, style: const TextStyle(fontSize: 12)),
+              onPressed: () => update(() => category.text = c),
+            ),
+        ]),
+        const SizedBox(height: 16),
+        TextField(
+          controller: rows,
+          minLines: 6,
+          maxLines: 12,
+          decoration: const InputDecoration(
+            labelText: 'Paste names and prices from Excel, or type',
+            hintText: 'Tomato Soup | Veg | 145 | 210\nPaneer Tikka | Veg | 240\nChicken Biryani | Non-Veg | Half 180 | Full 320\nButter Naan | 50',
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text('Supports copying columns from Excel or typing. Single price creates Regular; 2 prices create Half & Full plate. Optional Veg/Non-Veg tag supported.', style: HPType.body(context.hp.muted).copyWith(fontSize: 12)),
+        if (error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(error!, style: TextStyle(color: d.hp.danger))),
+      ]),
+    )));
     category.dispose(); rows.dispose();
     if (saved == true) { await _load(); if (mounted) showDone(context, 'Menu created'); }
   }
@@ -255,8 +369,11 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
             final done = await showDialog<bool>(context: context, builder: (_) => ImportDialog(api: _api, kind: 'menu'));
             if (done == true) await _load();
           }),
-        if (edit) SecondaryButton(label: 'Quick add / paste', onPressed: _quickAdd),
-              PrimaryButton(key: const Key('add-dish'), label: 'Add dish', icon: Icons.add_rounded, height: 48, onPressed: () => _editItem()),
+        if (edit) ...[
+          SecondaryButton(label: 'Seed 40 categories', icon: Icons.playlist_add_check_rounded, onPressed: _seedCategories),
+          SecondaryButton(label: 'Quick add / paste', onPressed: _quickAdd),
+        ],
+        PrimaryButton(key: const Key('add-dish'), label: 'Add dish', icon: Icons.add_rounded, height: 48, onPressed: () => _editItem()),
       ],
       child: narrow
           ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [categoryRail, const SizedBox(height: HPSpace.lg), grid])
@@ -588,9 +705,15 @@ class _ItemEditorState extends State<_ItemEditor> {
           Expanded(child: Text('SIZES & PORTIONS', style: HPType.overline(p.muted))),
           TextButton.icon(key: const Key('add-size'), onPressed: _sizes.length >= 20 ? null : () => setState(() => _sizes.add(_SizeDraft.blank())), icon: const Icon(Icons.add_rounded, size: 18), label: const Text('Add size')),
         ]),
-        Wrap(spacing: 8, children: [
+        Wrap(spacing: 8, runSpacing: 6, children: [
+          TextButton(onPressed: () => setState(() { _sizes.clear(); for (final (name, ratio) in [('Half', .5), ('Full', 1.0)]) { _sizes.add(_SizeDraft(name: '$name plate', portion: name.toLowerCase(), ratio: '$ratio', qty: '$ratio', unit: 'plate', isDefault: ratio == 1)); } }), child: const Text('Half / Full Plate')),
           TextButton(onPressed: () => setState(() { _sizes.clear(); for (final (name, ratio) in [('Quarter', .25), ('Half', .5), ('Full', 1.0)]) { _sizes.add(_SizeDraft(name: '$name plate', portion: name.toLowerCase(), ratio: '$ratio', qty: '$ratio', unit: 'plate', isDefault: ratio == 1)); } }), child: const Text('Quarter / Half / Full')),
-          TextButton(onPressed: () => setState(() { _sizes.clear(); for (final quantity in [250, 500, 1000]) { _sizes.add(_SizeDraft(name: '$quantity ml', qty: '$quantity', unit: 'ml', isDefault: quantity == 250)); } }), child: const Text('Drink sizes: 250 / 500 / 1000 ml')),
+          TextButton(onPressed: () => setState(() { _sizes.clear(); _sizes.add(_SizeDraft(name: 'Cup 150 ml', qty: '150', unit: 'ml', isDefault: false)); _sizes.add(_SizeDraft(name: 'Bowl 250 ml', qty: '250', unit: 'ml', isDefault: true)); }), child: const Text('Cup 150 ml / Bowl 250 ml')),
+          TextButton(onPressed: () => setState(() { _sizes.clear(); for (final s in ['Small 7"', 'Medium 10"', 'Large 12"']) { _sizes.add(_SizeDraft(name: s, unit: 'piece', isDefault: s.startsWith('Medium'))); } }), child: const Text('Pizza 7" / 10" / 12"')),
+          TextButton(onPressed: () => setState(() { _sizes.clear(); for (final s in ['1 Scoop', '2 Scoops', '3 Scoops']) { _sizes.add(_SizeDraft(name: s, unit: 'scoop', isDefault: s.startsWith('1'))); } }), child: const Text('Ice cream: 1 / 2 / 3 scoops')),
+          TextButton(onPressed: () => setState(() { _sizes.clear(); for (final quantity in [200, 300, 500, 1000]) { _sizes.add(_SizeDraft(name: '$quantity ml', qty: '$quantity', unit: 'ml', isDefault: quantity == 300)); } }), child: const Text('Drinks: 200 / 300 / 500 ml / 1 L')),
+          TextButton(onPressed: () => setState(() { _sizes.clear(); for (final p in ['1 Piece', '2 Pieces', '4 Pieces']) { _sizes.add(_SizeDraft(name: p, unit: 'piece', isDefault: p.startsWith('2'))); } }), child: const Text('Pieces: 1 / 2 / 4')),
+          TextButton(onPressed: () => setState(() { _sizes.clear(); _sizes.add(_SizeDraft(name: '1 Thali / Combo', unit: 'combo', isDefault: true)); }), child: const Text('1 Thali / Combo')),
         ]),
         Text('Each size has its own price (before GST). A half plate does not have to cost half.', style: HPType.body(p.muted).copyWith(fontSize: 12)),
         const SizedBox(height: HPSpace.sm),

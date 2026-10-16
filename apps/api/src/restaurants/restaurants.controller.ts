@@ -30,6 +30,7 @@ const RegisterBody = z.object({
   address: z.string().max(500).optional(),
   planCode: z.string().regex(/^[a-z][a-z0-9_]{2,30}$/),
   billingCycle: z.enum(['monthly', 'yearly']).default('monthly'), // the customer pays monthly or yearly
+  password: z.string().min(8, 'Use at least 8 characters').max(256).optional(),
 });
 const RegistrationQuery = z.object({ state: z.enum(['awaiting', 'expired', 'cancelled', 'all']).default('awaiting'), q: z.string().optional() });
 const CancelBody = z.object({ reason: z.string().trim().min(3).max(500) });
@@ -112,6 +113,49 @@ export class RestaurantsController {
   async register(@Body(zbody(RegisterBody)) b: z.infer<typeof RegisterBody>, @CurrentActor() actor: Actor, @AuditCtx() audit: AuditDetails) {
     const ownerEmail = b.ownerEmail.toLowerCase();
     const token = randomToken(32);
+
+    if (b.password) {
+      const passwordHash = await hashPassword(b.password);
+      const created = await this.db.platform(async (tx) => {
+        await this.assertEmailFree(tx, ownerEmail);
+        const plan = await tx.subscriptionPlan.findUnique({ where: { code: b.planCode } });
+        if (!plan || plan.archived) throw badRequest('unknown_plan', 'Choose an active plan');
+
+        const seqRow = await tx.$queryRaw<{ n: bigint }[]>`SELECT nextval('tenant_code_seq') AS n`;
+        const code = `R${String(seqRow[0].n).padStart(6, '0')}`;
+        const tenant = await tx.restaurantTenant.create({
+          data: { code, name: b.restaurantName, ownerEmail, gstin: b.gstin, address: b.address, status: 'active', statusChangedAt: new Date() },
+        });
+        const branch = await tx.branch.create({
+          data: { tenantId: tenant.id, code: 'BR01', name: b.restaurantName, gstin: b.gstin, address: b.address },
+        });
+        const owner = await tx.user.create({
+          data: {
+            tenantId: tenant.id, name: b.ownerName, email: ownerEmail, passwordHash,
+            roles: { create: { tenantId: tenant.id, role: 'owner', branchIds: [] } },
+          },
+        });
+        const license = await this.createLicense(tx, tenant.id, plan, new Date(), addCycle(new Date(), b.billingCycle), actor.id, 'direct creation by super admin', b.billingCycle);
+        const reg = await tx.restaurantRegistration.create({
+          data: {
+            ownerEmail, ownerName: b.ownerName, restaurantName: b.restaurantName, gstin: b.gstin, address: b.address,
+            planCode: b.planCode, billingCycle: b.billingCycle, tokenHash: sha256(token), expiresAt: new Date(Date.now() + 72 * 3600_000), createdById: actor.id,
+            verifiedAt: new Date(), tenantId: tenant.id,
+          },
+        });
+        return { tenantId: tenant.id, restaurantCode: code, restaurantName: tenant.name, ownerEmail: owner.email, licenseId: license.id, registrationId: reg.id };
+      });
+
+      try {
+        await this.mailer.send({ to: ownerEmail, subject: `Welcome to ${b.restaurantName} - Account Active`, text: `Your restaurant ${b.restaurantName} (${created.restaurantCode}) is active. Sign in with ${ownerEmail} and the password set by your admin.` });
+      } catch {
+        // Mailer failure does not block direct activation
+      }
+
+      Object.assign(audit, { objectType: 'restaurant', objectId: created.tenantId, after: { ...b, ownerEmail, status: 'active', restaurantCode: created.restaurantCode } });
+      return { status: 'active' as const, ...created, emailSent: true as const };
+    }
+
     const reg = await this.db.platform(async (tx) => {
       await this.assertEmailFree(tx, ownerEmail);
       const pending = await tx.restaurantRegistration.findFirst({

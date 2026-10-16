@@ -34,6 +34,20 @@ class _FloorEditorState extends State<FloorEditor> {
   bool _dirty = false, _snap = true, _busy = false, _editing = false, _chairMode = false;
   final _tc = TransformationController();
   static const _grid = 10.0;
+  double _lastAvailW = 0, _lastTargetH = 0;
+  bool _hasFitted = false;
+
+  void _fitToView(double viewportW, double viewportH) {
+    if (viewportW <= 0 || viewportH <= 0 || _w <= 0 || _h <= 0) return;
+    _lastAvailW = viewportW;
+    _lastTargetH = viewportH;
+    final scale = math.min(viewportW / _w, viewportH / _h);
+    final dx = (viewportW - _w * scale) / 2;
+    final dy = (viewportH - _h * scale) / 2;
+    _tc.value = Matrix4.identity()
+      ..translateByDouble(math.max(0.0, dx), math.max(0.0, dy), 0, 1)
+      ..scaleByDouble(scale, scale, 1, 1);
+  }
 
   bool get _editable => widget.canEdit && widget.editorInPlan && _editing;
 
@@ -54,6 +68,7 @@ class _FloorEditorState extends State<FloorEditor> {
     super.didUpdateWidget(old);
     if (old.floorId != widget.floorId) {
       _editing = false;
+      _hasFitted = false;
       _load();
     }
   }
@@ -275,77 +290,91 @@ class _FloorEditorState extends State<FloorEditor> {
       for (final o in overlaps) ...[o.$1, o.$2],
     };
 
-    final canvas = ClipRRect(
-      borderRadius: BorderRadius.circular(HPRadius.card),
-      child: Container(
-        height: narrow ? 420 : 560,
-        color: p.raised,
-        child: InteractiveViewer(
-          key: const Key('floor-canvas'),
-          transformationController: _tc,
-          constrained: false,
-          minScale: .2,
-          maxScale: 3,
-          boundaryMargin: const EdgeInsets.all(600),
-          child: GestureDetector(
-            onTap: () => setState(() => _sel = null),
-            child: SizedBox(
-              width: _w,
-              height: _h,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: p.ground,
-                        image: DecorationImage(image: _background == null ? const AssetImage('assets/classic-floor.jpg') : MemoryImage(base64Decode(_background!.split(',').last)) as ImageProvider, fit: BoxFit.cover, opacity: .45),
-                        border: Border.all(color: p.outline),
-                      ),
-                      child: CustomPaint(painter: FloorGridPainter(p.line.withValues(alpha: .25))),
-                    ),
-                  ),
-                  for (final (i, t) in _tables.indexed)
-                    Positioned(
-                      left: t.x - t.box / 2,
-                      top: t.y - t.box / 2,
-                      child: _tableGestures(
-                        key: Key('table-${t.name}'),
-                        onTap: () => _editable ? setState(() => _sel = i) : _setStatus(t),
-                        onStart: _editable ? () => setState(() => _sel = i) : null,
-                        onMove: _editable
-                            ? (d) => _change(() {
-                                t.x = (t.x + d.dx).clamp(0, _w);
-                                t.y = (t.y + d.dy).clamp(0, _h);
-                              })
-                            : null,
-                        onEnd: _editable
-                            ? () => _change(() {
-                                t.x = _snapTo(t.x);
-                                t.y = _snapTo(t.y);
-                              })
-                            : null,
-                        child: FloorTableView(
-                          table: t,
-                          selected: _sel == i || (_search.isNotEmpty && t.name.toLowerCase().contains(_search.toLowerCase())),
-                          warn: warnNames.contains(t.name),
-                          highlightChairs: _editable && _chairMode && _sel == i,
-                          onChairDrag: _editable && _chairMode && _sel == i
-                              ? (ci, delta) => _change(() {
-                                  final cs = [...t.effectiveChairs];
-                                  cs[ci] = HPChair(cs[ci].x + delta.dx, cs[ci].y + delta.dy, cs[ci].rotation);
-                                  t.chairs = cs;
-                                })
-                              : null,
+    final canvas = LayoutBuilder(
+      builder: (context, constraints) {
+        final availW = constraints.maxWidth;
+        final targetH = (availW * (_h / _w)).clamp(380.0, narrow ? 480.0 : 620.0);
+        if (!_hasFitted && availW > 0) {
+          _fitToView(availW, targetH);
+          _hasFitted = true;
+        }
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(HPRadius.card),
+          child: Container(
+            height: targetH,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1E24),
+              border: Border.all(color: p.outline.withValues(alpha: .5), width: 1.5),
+              borderRadius: BorderRadius.circular(HPRadius.card),
+            ),
+            child: InteractiveViewer(
+              key: const Key('floor-canvas'),
+              transformationController: _tc,
+              constrained: false,
+              minScale: .2,
+              maxScale: 3,
+              boundaryMargin: const EdgeInsets.all(24),
+              child: GestureDetector(
+                onTap: () => setState(() => _sel = null),
+                child: SizedBox(
+                  width: _w,
+                  height: _h,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: p.ground,
+                            image: DecorationImage(image: _background == null ? const AssetImage('assets/classic-floor.jpg') : MemoryImage(base64Decode(_background!.split(',').last)) as ImageProvider, fit: BoxFit.cover, opacity: .45),
+                            border: Border.all(color: p.outline),
+                          ),
+                          child: CustomPaint(painter: FloorGridPainter(p.line.withValues(alpha: .25))),
                         ),
                       ),
-                    ),
-                ],
+                      for (final (i, t) in _tables.indexed)
+                        Positioned(
+                          left: t.x - t.box / 2,
+                          top: t.y - t.box / 2,
+                          child: _tableGestures(
+                            key: Key('table-${t.name}'),
+                            onTap: () => _editable ? setState(() => _sel = i) : _setStatus(t),
+                            onStart: _editable ? () => setState(() => _sel = i) : null,
+                            onMove: _editable
+                                ? (d) => _change(() {
+                                    t.x = (t.x + d.dx).clamp(0, _w);
+                                    t.y = (t.y + d.dy).clamp(0, _h);
+                                  })
+                                : null,
+                            onEnd: _editable
+                                ? () => _change(() {
+                                    t.x = _snapTo(t.x);
+                                    t.y = _snapTo(t.y);
+                                  })
+                                : null,
+                            child: FloorTableView(
+                              table: t,
+                              selected: _sel == i || (_search.isNotEmpty && t.name.toLowerCase().contains(_search.toLowerCase())),
+                              warn: warnNames.contains(t.name),
+                              highlightChairs: _editable && _chairMode && _sel == i,
+                              onChairDrag: _editable && _chairMode && _sel == i
+                                  ? (ci, delta) => _change(() {
+                                      final cs = [...t.effectiveChairs];
+                                      cs[ci] = HPChair(cs[ci].x + delta.dx, cs[ci].y + delta.dy, cs[ci].rotation);
+                                      t.chairs = cs;
+                                    })
+                                  : null,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
 
     final toolbar = Wrap(
@@ -381,7 +410,7 @@ class _FloorEditorState extends State<FloorEditor> {
         ],
         IconButton(tooltip: 'Zoom in', icon: const Icon(Icons.zoom_in_rounded), onPressed: () => _zoom(1.25)),
         IconButton(tooltip: 'Zoom out', icon: const Icon(Icons.zoom_out_rounded), onPressed: () => _zoom(.8)),
-        IconButton(tooltip: 'Reset view', icon: const Icon(Icons.fit_screen_rounded), onPressed: () => _tc.value = Matrix4.identity()),
+        IconButton(tooltip: 'Reset view', icon: const Icon(Icons.fit_screen_rounded), onPressed: () => setState(() => _fitToView(_lastAvailW, _lastTargetH))),
         IconButton(key: const Key('reload-plan'), tooltip: 'Reload', icon: const Icon(Icons.refresh_rounded), onPressed: _dirty ? _cancel : _load),
       ]);
     final actions = Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, children: [

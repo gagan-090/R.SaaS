@@ -42,7 +42,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       final loc = state.matchedLocation;
       if (loc == '/verify-email' || loc == '/set-pin') return null; // emailed links work whether or not someone is signed in
       return switch (s) {
-        RestoringSession() => loc == '/restoring' ? null : '/restoring',
+        RestoringSession() => null, // preserve current matched route during session restoration
         SignedOut() => loc == '/login' ? null : '/login',
         MfaChallenge() || MfaEnrollment() => loc == '/mfa' ? null : '/mfa',
         SignedIn(:final isRestaurant) when isRestaurant => loc.startsWith('/console') ? null : '/console',
@@ -92,6 +92,7 @@ class AdminApp extends ConsumerWidget {
     // a restaurant with the "branding" plan feature sees its own colour and text style; everyone else House Plating
     final brand = ref.watch(restaurantLookProvider).valueOrNull?.brand;
     HPBrand.activate(brand);
+    final authState = ref.watch(authProvider);
     return MaterialApp.router(
       title: 'House Plating',
       debugShowCheckedModeBanner: false,
@@ -99,9 +100,22 @@ class AdminApp extends ConsumerWidget {
       darkTheme: HPTheme.backOffice(brightness: Brightness.dark, brand: brand),
       themeMode: ref.watch(themeModeProvider), // white (Light) by default; Auto follows the device; Dark if chosen
       routerConfig: ref.watch(routerProvider),
-      builder: (c, child) => brand == null || brand.textScale == 1
-          ? child!
-          : MediaQuery(data: MediaQuery.of(c).copyWith(textScaler: TextScaler.linear(brand.textScale)), child: child!),
+      builder: (c, child) {
+        if (authState is RestoringSession) {
+          return const Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 36,
+                height: 36,
+                child: CircularProgressIndicator(strokeWidth: 3),
+              ),
+            ),
+          );
+        }
+        return brand == null || brand.textScale == 1
+            ? child!
+            : MediaQuery(data: MediaQuery.of(c).copyWith(textScaler: TextScaler.linear(brand.textScale)), child: child!);
+      },
     );
   }
 }

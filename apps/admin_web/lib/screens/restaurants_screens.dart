@@ -483,15 +483,24 @@ class RegisterRestaurantDialog extends ConsumerStatefulWidget {
 
 class _RegisterRestaurantDialogState extends ConsumerState<RegisterRestaurantDialog> {
   final _form = GlobalKey<FormState>();
-  final _c = {for (final k in ['ownerEmail', 'ownerName', 'restaurantName', 'gstin', 'address']) k: TextEditingController()};
+  final _c = {for (final k in ['ownerEmail', 'ownerName', 'restaurantName', 'gstin', 'address', 'password']) k: TextEditingController()};
   String _plan = 'standard';
   bool _busy = false;
   static final _gstin = RegExp(r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$');
+
+  @override
+  void dispose() {
+    for (final c in _c.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
 
   Future<void> _submit() async {
     if (!_form.currentState!.validate()) return;
     setState(() => _busy = true);
     try {
+      final pwd = _c['password']!.text.trim();
       final r = await ref.read(apiProvider).registerRestaurant({
         'ownerEmail': _c['ownerEmail']!.text.trim(),
         'ownerName': _c['ownerName']!.text.trim(),
@@ -499,8 +508,14 @@ class _RegisterRestaurantDialogState extends ConsumerState<RegisterRestaurantDia
         if (_c['gstin']!.text.trim().isNotEmpty) 'gstin': _c['gstin']!.text.trim().toUpperCase(),
         if (_c['address']!.text.trim().isNotEmpty) 'address': _c['address']!.text.trim(),
         'planCode': _plan,
+        if (pwd.isNotEmpty) 'password': pwd,
       });
       if (!mounted) return;
+      if (r['status'] == 'active') {
+        showDone(context, 'Restaurant ${r['restaurantCode'] ?? ''} created & activated! Owner can sign in immediately.');
+        Navigator.pop(context, true);
+        return;
+      }
       if (r['emailSent'] == false) {
         // e.g. Resend sandbox: only the account's own address receives mail until a domain is verified
         await showActivationLinkDialog(context, r);
@@ -517,41 +532,55 @@ class _RegisterRestaurantDialogState extends ConsumerState<RegisterRestaurantDia
   }
 
   @override
-  Widget build(BuildContext context) => HPDialog(
-        title: 'Register restaurant',
-        actions: [
-          SecondaryButton(label: 'Cancel', onPressed: () => Navigator.pop(context)),
-          PrimaryButton(label: 'Send verification', height: 56, busy: _busy, onPressed: _submit),
-        ],
-        child: Form(
-          key: _form,
-          child: Column(children: [
-            TextFormField(controller: _c['ownerEmail'], decoration: const InputDecoration(labelText: 'Owner email'), validator: (v) => v != null && v.contains('@') ? null : 'Valid email required'),
-            const SizedBox(height: HPSpace.md),
-            TextFormField(controller: _c['ownerName'], decoration: const InputDecoration(labelText: 'Owner name'), validator: (v) => (v ?? '').trim().isEmpty ? 'Required' : null),
-            const SizedBox(height: HPSpace.md),
-            TextFormField(controller: _c['restaurantName'], decoration: const InputDecoration(labelText: 'Restaurant name'), validator: (v) => (v ?? '').trim().isEmpty ? 'Required' : null),
-            const SizedBox(height: HPSpace.md),
-            TextFormField(controller: _c['gstin'], decoration: const InputDecoration(labelText: 'GSTIN (optional)'),
-                validator: (v) => (v ?? '').trim().isEmpty || _gstin.hasMatch(v!.trim().toUpperCase()) ? null : 'Not a valid GSTIN'),
-            const SizedBox(height: HPSpace.md),
-            TextFormField(controller: _c['address'], decoration: const InputDecoration(labelText: 'Address (optional)')),
-            const SizedBox(height: HPSpace.md),
-            Consumer(builder: (c, ref, _) {
-              final plans = ref.watch(activePlansProvider).valueOrNull ?? const <Json>[];
-              final codes = plans.map((p) => p['code'] as String).toList();
-              return DropdownButtonFormField<String>(
-                key: const Key('register-plan'),
-                initialValue: codes.contains(_plan) ? _plan : (codes.isEmpty ? null : codes.first),
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Plan'),
-                items: [for (final p in plans) DropdownMenuItem(value: p['code'] as String, child: Text('${p['name']} · ${formatPaise(p['pricePaise'] as int)}/${p['billingCycle'] == 'yearly' ? 'yr' : 'mo'}'))],
-                onChanged: (v) => setState(() => _plan = v!),
-              );
-            }),
-          ]),
-        ),
-      );
+  Widget build(BuildContext context) {
+    final hasPassword = _c['password']!.text.trim().isNotEmpty;
+    return HPDialog(
+      title: 'Register restaurant',
+      actions: [
+        SecondaryButton(label: 'Cancel', onPressed: () => Navigator.pop(context)),
+        PrimaryButton(label: hasPassword ? 'Create & activate' : 'Send verification', height: 56, busy: _busy, onPressed: _submit),
+      ],
+      child: Form(
+        key: _form,
+        child: Column(children: [
+          TextFormField(controller: _c['ownerEmail'], decoration: const InputDecoration(labelText: 'Owner email'), validator: (v) => v != null && v.contains('@') ? null : 'Valid email required'),
+          const SizedBox(height: HPSpace.md),
+          TextFormField(controller: _c['ownerName'], decoration: const InputDecoration(labelText: 'Owner name'), validator: (v) => (v ?? '').trim().isEmpty ? 'Required' : null),
+          const SizedBox(height: HPSpace.md),
+          TextFormField(controller: _c['restaurantName'], decoration: const InputDecoration(labelText: 'Restaurant name'), validator: (v) => (v ?? '').trim().isEmpty ? 'Required' : null),
+          const SizedBox(height: HPSpace.md),
+          TextFormField(
+            controller: _c['password'],
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: 'Owner password (optional)',
+              helperText: 'Set now to activate immediately without email verification',
+            ),
+            validator: (v) => (v != null && v.isNotEmpty && v.length < 8) ? 'Minimum 8 characters' : null,
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: HPSpace.md),
+          TextFormField(controller: _c['gstin'], decoration: const InputDecoration(labelText: 'GSTIN (optional)'),
+              validator: (v) => (v ?? '').trim().isEmpty || _gstin.hasMatch(v!.trim().toUpperCase()) ? null : 'Not a valid GSTIN'),
+          const SizedBox(height: HPSpace.md),
+          TextFormField(controller: _c['address'], decoration: const InputDecoration(labelText: 'Address (optional)')),
+          const SizedBox(height: HPSpace.md),
+          Consumer(builder: (c, ref, _) {
+            final plans = ref.watch(activePlansProvider).valueOrNull ?? const <Json>[];
+            final codes = plans.map((p) => p['code'] as String).toList();
+            return DropdownButtonFormField<String>(
+              key: const Key('register-plan'),
+              initialValue: codes.contains(_plan) ? _plan : (codes.isEmpty ? null : codes.first),
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Plan'),
+              items: [for (final p in plans) DropdownMenuItem(value: p['code'] as String, child: Text('${p['name']} · ${formatPaise(p['pricePaise'] as int)}/${p['billingCycle'] == 'yearly' ? 'yr' : 'mo'}'))],
+              onChanged: (v) => setState(() => _plan = v!),
+            );
+          }),
+        ]),
+      ),
+    );
+  }
 }
 
 /// P6 Restaurant detail + P7 license actions + payments.

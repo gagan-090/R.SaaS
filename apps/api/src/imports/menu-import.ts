@@ -21,13 +21,6 @@ export interface MenuPlan {
  * create mode: every code must be new. update mode: every code must exist; blank cells keep current values.
  */
 export async function validateMenu(tx: Tx, wb: ExcelJS.Workbook, mode: 'create' | 'update', features: string[], issues: CellIssue[]): Promise<MenuPlan> {
-  // in update mode only the code columns are mandatory in the header
-  const headerReq = (s: string) => (mode === 'create' ? reqCols(s) : cols(s).filter((c) => c.required === 'yes').map((c) => c.name));
-  const headerOpt = (s: string) => cols(s).map((c) => c.name).filter((c) => !headerReq(s).includes(c));
-  const itemRows = readSheet(wb, 'Items', headerReq('Items'), headerOpt('Items'), issues, mode === 'create') ?? [];
-  const varRows = readSheet(wb, 'Variants', headerReq('Variants'), headerOpt('Variants'), issues, mode === 'create') ?? [];
-  const recRows = readSheet(wb, 'Recipes', reqCols('Recipes'), optCols('Recipes'), issues, false) ?? [];
-
   const [items, variants, cats, taxes] = await Promise.all([
     tx.menuItem.findMany({ where: { deleted: false } }),
     tx.menuVariant.findMany({}),
@@ -44,6 +37,130 @@ export async function validateMenu(tx: Tx, wb: ExcelJS.Workbook, mode: 'create' 
 
   const plan: MenuPlan = { categoriesToCreate: [], items: [], variants: [], recipes: [] };
   const seenItems = new Map<string, number>();
+  const seenVars = new Map<string, number>();
+
+  const isPosTemplate = wb.worksheets.some((w) => w.name.trim().toLowerCase() === 'menu database');
+  if (isPosTemplate) {
+    const itemRows = readSheet(wb, 'Menu Database', ['item code', 'category', 'item name'], ['subcategory', 'food type', 'sample price', 'currency', 'tax rate (%)', 'availability', 'prep time (min)', 'unit', 'image url', 'notes', 'half plate price (inr)', 'full plate price (inr)', 'variant count', 'pricing note', 'variant pricing sheet'], issues, false) ?? [];
+    const varRows = readSheet(wb, 'Item Variants', ['item code', 'serving size', 'price (inr)'], ['variant sku', 'category', 'subcategory', 'item name', 'food type', 'quantity', 'unit', 'currency', 'tax rate (%)', 'availability', 'prep time (min)', 'notes'], issues, false) ?? [];
+
+    const defaultTax = taxes.find((x) => x.rateBp === 500) ?? taxes[0];
+    if (!defaultTax) {
+      issues.push({ sheet: 'Menu Database', row: 1, column: 'tax rate (%)', message: 'No active tax rule found. Create a GST rule in Settings first.', severity: 'error' });
+      return plan;
+    }
+
+    for (const r of itemRows) {
+      const g = new RowReader('Menu Database', r, issues);
+      const code = g.code('item code');
+      if (!code) continue;
+      if (seenItems.has(code)) {
+        g.error('item code', `Duplicate item code (also on row ${seenItems.get(code)})`);
+        continue;
+      }
+      seenItems.set(code, r.row);
+      const existing = itemByCode.get(code);
+      if (mode === 'create' && existing) g.error('item code', `${code} already exists — use "Update existing" to change it`);
+      if (mode === 'update' && !existing) g.error('item code', `${code} is not on your menu — use "Create only" to add it`);
+      const name = g.text('item name', { required: mode === 'create', max: 120 });
+      const category = g.text('category', { required: mode === 'create', max: 60 });
+      const desc = g.text('notes', { max: 500 });
+      const foodType = String(r.cells['food type'] ?? '').trim().toLowerCase();
+      const isVeg = foodType.includes('veg') && !foodType.includes('non');
+      const avail = String(r.cells['availability'] ?? 'Available').trim().toLowerCase();
+      const active = avail !== 'unavailable';
+
+      if (category && !catByName.has(category.toLowerCase()) && !plan.categoriesToCreate.some((c) => c.toLowerCase() === category.toLowerCase())) {
+        plan.categoriesToCreate.push(category);
+      }
+      const data: Record<string, unknown> = { isVeg };
+      if (name !== null) data.name = name;
+      if (category !== null) data.category = category;
+      if (desc !== null) data.description = desc.toUpperCase() === 'CLEAR' ? null : desc;
+      if (active !== null) data.active = active;
+      else if (mode === 'create') data.active = true;
+      plan.items.push({
+        row: r.row, code, op: existing ? 'update' : 'create', data,
+        ...(existing ? { before: { name: existing.name, category: cats.find((c) => c.id === existing.categoryId)?.name, description: existing.description, active: existing.active } } : {}),
+      });
+    }
+
+    const fileItemCodes = new Set(plan.items.map((i) => i.code));
+    if (varRows.length > 0) {
+      for (const [idx, r] of varRows.entries()) {
+        const g = new RowReader('Item Variants', r, issues);
+        const itemCode = g.code('item code');
+        const rawSku = g.code('variant sku');
+        const code = rawSku || `${itemCode}-V${idx + 1}`;
+        if (!itemCode || !code) continue;
+        if (seenVars.has(code)) {
+          g.error('variant sku', `Duplicate variant SKU (also on row ${seenVars.get(code)})`);
+          continue;
+        }
+        seenVars.set(code, r.row);
+        if (!fileItemCodes.has(itemCode) && !itemByCode.has(itemCode)) g.error('item code', `Item ${itemCode} is not in the Menu Database or on your menu`);
+        const existing = varByCode.get(code);
+        const owner = existing ? items.find((i) => i.id === existing.itemId) : undefined;
+        if (existing && owner && owner.code.toUpperCase() !== itemCode) g.error('variant sku', `${code} belongs to item ${owner.code}`);
+        if (mode === 'create' && existing) g.error('variant sku', `${code} already exists — use "Update existing" to change it`);
+        if (mode === 'update' && !existing) g.error('variant sku', `${code} does not exist — use "Create only" to add it`);
+        const creating = !existing;
+        const name = g.text('serving size', { required: creating, max: 40 }) || 'Regular';
+        const qty = g.number('quantity', { positive: true, max: 1_000_000 });
+        const rawUnit = String(r.cells['unit'] ?? '').toLowerCase();
+        const unit = UNIT_KEYS.includes(rawUnit) ? rawUnit : undefined;
+        const price = g.paise('price (inr)', creating);
+        const avail = String(r.cells['availability'] ?? 'Available').trim().toLowerCase();
+        const available = avail !== 'unavailable';
+
+        const data: Record<string, unknown> = {
+          taxRuleId: defaultTax.id,
+          taxName: defaultTax.name,
+        };
+        if (name !== null) data.name = name;
+        if (qty !== null && unit !== undefined) Object.assign(data, { servingQuantity: qty, servingUnit: unit });
+        if (price !== null) data.pricePaise = price;
+        data.available = available;
+        plan.variants.push({
+          row: r.row, itemCode, code, op: creating ? 'create' : 'update', data,
+          ...(existing ? { before: { name: existing.name, pricePaise: existing.pricePaise, available: existing.available } } : {}),
+        });
+      }
+    } else {
+      for (const it of plan.items) {
+        const itemRow = itemRows.find((r) => String(r.cells['item code'] ?? '').trim().toUpperCase() === it.code);
+        const half = itemRow?.cells['half plate price (inr)'] ? Number(itemRow.cells['half plate price (inr)']) : null;
+        const full = itemRow?.cells['full plate price (inr)'] ? Number(itemRow.cells['full plate price (inr)']) : null;
+        const sample = itemRow?.cells['sample price'] ? Number(itemRow.cells['sample price']) : 100;
+
+        if (half && full) {
+          plan.variants.push(
+            { row: it.row, itemCode: it.code, code: `${it.code}-HALF`, op: 'create', data: { name: 'Half Plate', pricePaise: Math.round(half * 100), portionLabel: 'half', portionRatio: 0.5, available: true, taxRuleId: defaultTax.id, taxName: defaultTax.name } },
+            { row: it.row, itemCode: it.code, code: `${it.code}-FULL`, op: 'create', data: { name: 'Full Plate', pricePaise: Math.round(full * 100), portionLabel: 'full', portionRatio: 1.0, available: true, taxRuleId: defaultTax.id, taxName: defaultTax.name } },
+          );
+        } else {
+          plan.variants.push(
+            { row: it.row, itemCode: it.code, code: `${it.code}-REG`, op: 'create', data: { name: 'Regular', pricePaise: Math.round(sample * 100), available: true, taxRuleId: defaultTax.id, taxName: defaultTax.name } },
+          );
+        }
+      }
+    }
+
+    for (const it of plan.items.filter((i) => i.op === 'create')) {
+      if (!plan.variants.some((v) => v.itemCode === it.code)) {
+        issues.push({ sheet: 'Menu Database', row: it.row, column: 'item code', message: `${it.code} needs at least one variant`, severity: 'error' });
+      }
+    }
+    return plan;
+  }
+
+  // in update mode only the code columns are mandatory in the header
+  const headerReq = (s: string) => (mode === 'create' ? reqCols(s) : cols(s).filter((c) => c.required === 'yes').map((c) => c.name));
+  const headerOpt = (s: string) => cols(s).map((c) => c.name).filter((c) => !headerReq(s).includes(c));
+  const itemRows = readSheet(wb, 'Items', headerReq('Items'), headerOpt('Items'), issues, mode === 'create') ?? [];
+  const varRows = readSheet(wb, 'Variants', headerReq('Variants'), headerOpt('Variants'), issues, mode === 'create') ?? [];
+  const recRows = readSheet(wb, 'Recipes', reqCols('Recipes'), optCols('Recipes'), issues, false) ?? [];
+
   for (const r of itemRows) {
     const g = new RowReader('Items', r, issues);
     const code = g.code('item_code');
@@ -73,7 +190,7 @@ export async function validateMenu(tx: Tx, wb: ExcelJS.Workbook, mode: 'create' 
     });
   }
 
-  const seenVars = new Map<string, number>();
+  seenVars.clear();
   const fileItemCodes = new Set(plan.items.map((i) => i.code));
   for (const r of varRows) {
     const g = new RowReader('Variants', r, issues);
@@ -205,7 +322,7 @@ export async function commitMenu(tx: Tx, tenantId: string, plan: Pick<MenuPlan, 
       const created = await tx.menuItem.create({
         data: {
           tenantId, code: it.code, name: d.name!, categoryId: cats.get(d.category!.toLowerCase())!, description: d.description ?? null,
-          active: d.active ?? true, taxRuleId: first.taxRuleId, pricePaise: first.pricePaise,
+          active: d.active ?? true, isVeg: (d as { isVeg?: boolean }).isVeg ?? true, taxRuleId: first.taxRuleId, pricePaise: first.pricePaise,
         },
       });
       await saveVariants(tx, tenantId, created, vs.map((v, i) => ({ ...(v.data as never as object), code: v.code, isDefault: i === 0, available: (v.data.available as boolean) ?? true }) as never));
@@ -219,6 +336,7 @@ export async function commitMenu(tx: Tx, tenantId: string, plan: Pick<MenuPlan, 
         data: {
           ...(d.name !== undefined ? { name: d.name } : {}), ...(d.category !== undefined ? { categoryId: cats.get(d.category.toLowerCase())! } : {}),
           ...(d.description !== undefined ? { description: d.description } : {}), ...(d.active !== undefined ? { active: d.active } : {}),
+          ...((d as { isVeg?: boolean }).isVeg !== undefined ? { isVeg: (d as { isVeg?: boolean }).isVeg } : {}),
         },
       });
       counts.itemsUpdated++;

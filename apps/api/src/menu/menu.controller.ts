@@ -48,10 +48,41 @@ const ItemBody = z
     unit: z.string().max(20).optional(),
     quantity: z.number().int().positive().optional(),
   })
-  .refine((b) => !!b.variants || b.pricePaise !== undefined, { message: 'Add at least one size or portion with a price', path: ['variants'] });
+export const STANDARD_CATEGORIES = [
+  'Soups', 'Veg Starters', 'Non-Veg Starters', 'Tandoori Items',
+  'Veg Main Course', 'Paneer Special', 'Dal Special', 'Non-Veg Main Course',
+  'Seafood', 'Indian Breads', 'Rice', 'Biryani', 'Pulao',
+  'Chinese Starters', 'Chinese Main Course', 'South Indian', 'North Indian',
+  'Continental', 'Italian', 'Fast Food', 'Street Food / Chaat',
+  'Breakfast', 'Snacks', 'Rolls & Wraps', 'Thali / Combos',
+  'Salads', 'Raita & Curd', 'Papad & Accompaniments', 'Desserts',
+  'Ice Cream', 'Cakes & Bakery', 'Hot Beverages', 'Cold Beverages',
+  'Shakes & Smoothies', 'Fresh Juices', 'Mocktails', 'Packaged Beverages',
+  'Kids Menu', 'Jain Food', 'Chef Specials',
+];
+
+const QuickVariant = z.object({
+  name: z.string().trim().min(1).max(40),
+  pricePaise: z.number().int().nonnegative().max(1000000000),
+  portionLabel: z.string().max(30).optional(),
+  servingQuantity: z.number().positive().optional(),
+  servingUnit: z.string().max(20).optional(),
+  portionRatio: z.number().positive().optional(),
+  isDefault: z.boolean().default(false),
+});
+
+const QuickMenuItem = z.object({
+  name: z.string().trim().min(1).max(120),
+  categoryName: z.string().trim().min(1).max(60).optional(),
+  pricePaise: z.number().int().nonnegative().max(1000000000).optional(),
+  isVeg: z.boolean().default(true),
+  variants: z.array(QuickVariant).min(1).max(20).optional(),
+});
+
 const QuickMenuBody = z.object({
-  categoryName: z.string().trim().min(1).max(60), taxRuleId: z.string().uuid(),
-  items: z.array(z.object({ name: z.string().trim().min(1).max(120), pricePaise: z.number().int().nonnegative().max(1000000000), isVeg: z.boolean().default(true) })).min(1).max(100),
+  categoryName: z.string().trim().min(1).max(60).optional().default('Main Course'),
+  taxRuleId: z.string().uuid(),
+  items: z.array(QuickMenuItem).min(1).max(200),
 });
 const ItemPatch = z.object({
   categoryId: z.string().uuid().optional(),
@@ -181,6 +212,32 @@ export class MenuController {
 
   @RequirePermissions('menu.publish')
   @RequiresFeature('menu')
+  @Audited('menu.categories_seeded')
+  @Post('seed-categories')
+  async seedCategories(@CurrentActor() a: Actor, @AuditCtx() audit: AuditDetails) {
+    const seeded = await this.t(a, async tx => {
+      const existing = await tx.menuCategory.findMany({ where: { deleted: false } });
+      const existingNames = new Set(existing.map(c => c.name.trim().toLowerCase()));
+      let order = existing.length * 10;
+      const toCreate: { tenantId: string; name: string; sortOrder: number }[] = [];
+      for (const name of STANDARD_CATEGORIES) {
+        if (!existingNames.has(name.trim().toLowerCase())) {
+          order += 10;
+          toCreate.push({ tenantId: a.tenantId!, name, sortOrder: order });
+        }
+      }
+      if (toCreate.length > 0) {
+        await tx.menuCategory.createMany({ data: toCreate });
+        await this.bump(tx, a);
+      }
+      return { created: toCreate.length, total: existing.length + toCreate.length };
+    });
+    Object.assign(audit, { objectType: 'menu', objectId: a.tenantId, after: seeded });
+    return seeded;
+  }
+
+  @RequirePermissions('menu.publish')
+  @RequiresFeature('menu')
   @Audited('menu.quick_created')
   @Post('quick-create')
   @ApiBody(apiBody(QuickMenuBody))
@@ -188,19 +245,87 @@ export class MenuController {
     const result = await this.t(a, async tx => {
       await tx.$queryRaw`SELECT id FROM restaurant_tenants WHERE id = ${a.tenantId!}::uuid FOR UPDATE`;
       if (!(await tx.taxRule.findFirst({ where: { id: b.taxRuleId, deleted: false } }))) throw notFound('Tax rule');
-      let category = await tx.menuCategory.findFirst({ where: { name: { equals: b.categoryName, mode: 'insensitive' }, deleted: false } });
-      category ??= await tx.menuCategory.create({ data: { tenantId: a.tenantId!, name: b.categoryName } });
-      const names = b.items.map(i => i.name.toLowerCase());
-      if (new Set(names).size !== names.length) throw conflict('duplicate_dish', 'Remove repeated dish names before saving');
-      const existing = await tx.menuItem.findMany({ where: { categoryId: category.id, deleted: false }, select: { name: true } });
-      if (existing.some(i => names.includes(i.name.toLowerCase()))) throw conflict('duplicate_dish', 'A dish already exists in this category. Edit it from the menu instead.');
-      const rows = b.items.map(line => { const id = uuidv7(); return { id, tenantId: a.tenantId!, categoryId: category.id, taxRuleId: b.taxRuleId, code: `Q-${id.replace(/-/g, '')}`, name: line.name, pricePaise: line.pricePaise, isVeg: line.isVeg }; });
-      await tx.menuItem.createMany({ data: rows });
-      await tx.menuVariant.createMany({ data: rows.map(item => ({ tenantId: a.tenantId!, itemId: item.id, code: `${item.code}-REG`, name: 'Regular', pricePaise: item.pricePaise, available: true, isDefault: true })) });
+
+      const existingCats = await tx.menuCategory.findMany({ where: { deleted: false } });
+      const catMap = new Map<string, string>();
+      for (const c of existingCats) catMap.set(c.name.trim().toLowerCase(), c.id);
+
+      const ensureCat = async (name: string) => {
+        const key = name.trim().toLowerCase();
+        if (catMap.has(key)) return catMap.get(key)!;
+        const count = await tx.menuCategory.count();
+        const created = await tx.menuCategory.create({ data: { tenantId: a.tenantId!, name: name.trim(), sortOrder: count * 10 } });
+        catMap.set(key, created.id);
+        return created.id;
+      };
+
+      // Check for repeated dish names in the same category within the request
+      const categoryItemNames = new Map<string, Set<string>>();
+      for (const line of b.items) {
+        const catKey = (line.categoryName || b.categoryName || 'Main Course').trim().toLowerCase();
+        let set = categoryItemNames.get(catKey);
+        if (!set) {
+          set = new Set<string>();
+          categoryItemNames.set(catKey, set);
+        }
+        const nameKey = line.name.trim().toLowerCase();
+        if (set.has(nameKey)) {
+          throw conflict('duplicate_dish', 'Remove repeated dish names before saving');
+        }
+        set.add(nameKey);
+      }
+
+      const defaultCatId = await ensureCat(b.categoryName || 'Main Course');
+      const itemRows: { id: string; tenantId: string; categoryId: string; taxRuleId: string; code: string; name: string; pricePaise: number; isVeg: boolean; unit: string; quantity: number }[] = [];
+      const variantRows: { tenantId: string; itemId: string; code: string; name: string; pricePaise: number; portionLabel?: string; servingQuantity?: Prisma.Decimal; servingUnit?: string; portionRatio?: Prisma.Decimal; available: boolean; isDefault: boolean; sortOrder: number }[] = [];
+
+      for (const line of b.items) {
+        const id = uuidv7();
+        const catId = line.categoryName ? await ensureCat(line.categoryName) : defaultCatId;
+        const code = `Q-${id.replace(/-/g, '')}`;
+
+        const vars = (line.variants && line.variants.length > 0)
+          ? line.variants
+          : [{ name: 'Regular', pricePaise: line.pricePaise ?? 0, isDefault: true, servingQuantity: 1, servingUnit: 'plate', portionRatio: 1 }];
+
+        const def = vars.find(v => v.isDefault) ?? vars[0];
+        itemRows.push({
+          id, tenantId: a.tenantId!, categoryId: catId, taxRuleId: b.taxRuleId, code, name: line.name,
+          pricePaise: def.pricePaise, isVeg: line.isVeg, unit: def.servingUnit || 'plate', quantity: Math.max(1, Math.round(def.servingQuantity || 1)),
+        });
+
+        vars.forEach((v, idx) => {
+          const varCode = (vars.length === 1 && (!v.name || v.name === 'Regular'))
+            ? `${code}-REG`
+            : `${code}-${slug(v.name)}-${idx + 1}`;
+          variantRows.push({
+            tenantId: a.tenantId!, itemId: id, code: varCode, name: v.name || 'Regular',
+            pricePaise: v.pricePaise, portionLabel: v.portionLabel,
+            servingQuantity: v.servingQuantity ? new Prisma.Decimal(v.servingQuantity) : undefined,
+            servingUnit: v.servingUnit,
+            portionRatio: v.portionRatio ? new Prisma.Decimal(v.portionRatio) : undefined,
+            available: true, isDefault: v.isDefault ?? (idx === 0), sortOrder: idx,
+          });
+        });
+      }
+
+      const targetCatIds = Array.from(new Set(itemRows.map(i => i.categoryId)));
+      const existing = await tx.menuItem.findMany({
+        where: { categoryId: { in: targetCatIds }, deleted: false },
+        select: { categoryId: true, name: true },
+      });
+      for (const row of itemRows) {
+        if (existing.some(e => e.categoryId === row.categoryId && e.name.toLowerCase() === row.name.toLowerCase())) {
+          throw conflict('duplicate_dish', 'A dish already exists in this category. Edit it from the menu instead.');
+        }
+      }
+
+      await tx.menuItem.createMany({ data: itemRows });
+      await tx.menuVariant.createMany({ data: variantRows });
       await this.bump(tx, a);
-      return { count: b.items.length, categoryId: category.id };
+      return { count: b.items.length, categoryId: defaultCatId, categoriesCount: catMap.size };
     });
-    Object.assign(audit, { objectType: 'menu_category', objectId: result.categoryId, after: { dishes: b.items.map(i => i.name), count: result.count } });
+    Object.assign(audit, { objectType: 'menu', objectId: a.tenantId, after: { dishes: b.items.map(i => i.name), count: result.count } });
     return result;
   }
 

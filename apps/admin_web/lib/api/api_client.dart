@@ -221,6 +221,7 @@ class ApiClient {
   Future<Json> createTaxRule(String name, int rateBp) async => await _send('POST', '/tax-rules', body: {'name': name, 'rateBp': rateBp}) as Json;
   Future<List<dynamic>> categories() async => await _send('GET', '/menu/categories') as List<dynamic>;
   Future<Json> createCategory(String name, {int sortOrder = 0}) async => await _send('POST', '/menu/categories', body: {'name': name, 'sortOrder': sortOrder}) as Json;
+  Future<Json> seedCategories() async => await _send('POST', '/menu/seed-categories') as Json;
   Future<Json> updateCategory(String id, Json body) async => await _send('PATCH', '/menu/categories/$id', body: body) as Json;
   Future<void> deleteCategory(String id) async => _send('DELETE', '/menu/categories/$id');
   Future<List<dynamic>> items() async => await _send('GET', '/menu/items') as List<dynamic>;
