@@ -36,6 +36,156 @@ const standardMenuCategories = [
   'Kids Menu', 'Jain Food', 'Chef Specials',
 ];
 
+const popularExcelCategories = [
+  'Packaged Beverages',
+  'Cold Beverages',
+  'Hot Beverages',
+  'Fast Food',
+  'Biryani',
+  'Veg Main Course',
+  'Paneer Special',
+  'Dal Special',
+  'Desserts',
+];
+
+/// Smart classification of dish name to the 40 standard categories in Restaurant_POS_Menu_With_Serving_Sizes.xlsx
+String? detectMenuCategory(String rawName) {
+  final name = rawName.trim().toLowerCase();
+  if (name.isEmpty) return null;
+
+  // Packaged Beverages (e.g. Coke, Water, Soda, Energy drink)
+  if (RegExp(r'\b(coke|cola|pepsi|sprite|fanta|thums\s*up|limca|mirinda|mountain\s*dew|red\s*bull|monster|sting|kinley|aquafina|bisleri|water\s*bottle|packaged\s*water|soda\s*can|ginger\s*ale|tonic\s*water|appy|beverage|can|tin)\b').hasMatch(name)) {
+    return 'Packaged Beverages';
+  }
+  // Cold Beverages
+  if (RegExp(r'\b(cold\s*coffee|iced\s*tea|iced\s*latte|iced\s*americano|lassi|chaas|buttermilk|lime\s*soda|lime\s*water|nimbu\s*pani|jaljeera|masala\s*soda)\b').hasMatch(name)) {
+    return 'Cold Beverages';
+  }
+  // Shakes & Smoothies
+  if (RegExp(r'\b(shake|smoothie|frappe)\b').hasMatch(name)) {
+    return 'Shakes & Smoothies';
+  }
+  // Fresh Juices
+  if (RegExp(r'\b(juice|fresh\s*juice|mosambi|orange\s*juice|watermelon\s*juice|pineapple\s*juice|apple\s*juice)\b').hasMatch(name)) {
+    return 'Fresh Juices';
+  }
+  // Mocktails
+  if (RegExp(r'\b(mojito|mocktail|colada|cooler|punch|blue\s*lagoon)\b').hasMatch(name)) {
+    return 'Mocktails';
+  }
+  // Hot Beverages
+  if (RegExp(r'\b(tea|chai|coffee|espresso|cappuccino|latte|hot\s*chocolate|kahwa|americano)\b').hasMatch(name)) {
+    return 'Hot Beverages';
+  }
+  // Ice Cream
+  if (RegExp(r'\b(ice\s*cream|sundae|scoop|kulfi)\b').hasMatch(name)) {
+    return 'Ice Cream';
+  }
+  // Cakes & Bakery
+  if (RegExp(r'\b(pastry|cake|muffin|cupcake|croissant|donut|doughnut)\b').hasMatch(name)) {
+    return 'Cakes & Bakery';
+  }
+  // Desserts
+  if (RegExp(r'\b(gulab\s*jamun|rasmalai|rasgulla|halwa|kheer|jalebi|brownie|mousse|pudding|sweet)\b').hasMatch(name)) {
+    return 'Desserts';
+  }
+  // Soups
+  if (RegExp(r'\b(soup|shorba|broth)\b').hasMatch(name)) {
+    return 'Soups';
+  }
+  // Biryani
+  if (RegExp(r'\b(biryani)\b').hasMatch(name)) {
+    return 'Biryani';
+  }
+  // Pulao
+  if (RegExp(r'\b(pulao|pilaf)\b').hasMatch(name)) {
+    return 'Pulao';
+  }
+  // Rice
+  if (RegExp(r'\b(rice|jeera\s*rice|steamed\s*rice|fried\s*rice)\b').hasMatch(name)) {
+    if (name.contains('fried')) return 'Chinese Main Course';
+    return 'Rice';
+  }
+  // Paneer Special
+  if (RegExp(r'\b(paneer)\b').hasMatch(name)) {
+    if (name.contains('tikka') || name.contains('chilli')) return 'Veg Starters';
+    if (name.contains('pizza')) return 'Italian';
+    if (name.contains('burger')) return 'Fast Food';
+    if (name.contains('roll') || name.contains('wrap')) return 'Rolls & Wraps';
+    return 'Paneer Special';
+  }
+  // Dal Special
+  if (RegExp(r'\b(dal|makhani|tadka|sambar)\b').hasMatch(name)) {
+    return 'Dal Special';
+  }
+  // Indian Breads
+  if (RegExp(r'\b(roti|naan|paratha|kulcha|puri|chapati|phulka|rumali)\b').hasMatch(name)) {
+    return 'Indian Breads';
+  }
+  // South Indian
+  if (RegExp(r'\b(dosa|idli|vada|uttapam|appam|pongal)\b').hasMatch(name)) {
+    return 'South Indian';
+  }
+  // Italian
+  if (RegExp(r'\b(pizza|pasta|lasagna|lasagne|mac\s*and\s*cheese|bruschetta|garlic\s*bread|spaghetti|penne)\b').hasMatch(name)) {
+    return 'Italian';
+  }
+  // Fast Food
+  if (RegExp(r'\b(burger|fries|french\s*fries|sandwich|nuggets|nachos|wedges)\b').hasMatch(name)) {
+    return 'Fast Food';
+  }
+  // Street Food / Chaat
+  if (RegExp(r'\b(chaat|pani\s*puri|golgappa|sev\s*puri|bhel|papdi|bhelpuri|tikki)\b').hasMatch(name)) {
+    return 'Street Food / Chaat';
+  }
+  // Rolls & Wraps
+  if (RegExp(r'\b(roll|wrap|kathi|frankie)\b').hasMatch(name)) {
+    return 'Rolls & Wraps';
+  }
+  // Thali / Combos
+  if (RegExp(r'\b(thali|combo|platter|meal)\b').hasMatch(name)) {
+    return 'Thali / Combos';
+  }
+  // Salads
+  if (RegExp(r'\b(salad|kachumber)\b').hasMatch(name)) {
+    return 'Salads';
+  }
+  // Raita & Curd
+  if (RegExp(r'\b(raita|curd|dahi|tzatziki)\b').hasMatch(name)) {
+    return 'Raita & Curd';
+  }
+  // Papad & Accompaniments
+  if (RegExp(r'\b(papad|chutney|pickle|achar)\b').hasMatch(name)) {
+    return 'Papad & Accompaniments';
+  }
+  // Seafood
+  if (RegExp(r'\b(fish|prawn|crab|lobster|squid|seafood|surmai|pomfret)\b').hasMatch(name)) {
+    return 'Seafood';
+  }
+  // Non-Veg Starters & Main Course
+  if (RegExp(r'\b(chicken|mutton|egg|keema|lamb|meat|tandoori\s*chicken|lollipop|seekh)\b').hasMatch(name)) {
+    if (RegExp(r'\b(tikka|kebab|65|lollipop|dry|chilli|fry|starter|wings)\b').hasMatch(name)) {
+      return 'Non-Veg Starters';
+    }
+    return 'Non-Veg Main Course';
+  }
+  // Chinese
+  if (RegExp(r'\b(manchurian|noodles|hakka|chowmein|schezwan|spring\s*roll|dimsum|momos)\b').hasMatch(name)) {
+    if (name.contains('noodles') || name.contains('gravy') || name.contains('rice')) return 'Chinese Main Course';
+    return 'Chinese Starters';
+  }
+  // Snacks / Breakfast
+  if (RegExp(r'\b(samosa|kachori|pakora|bhajia|cutlet|poha|upma)\b').hasMatch(name)) {
+    return 'Snacks';
+  }
+  return null;
+}
+
+bool detectMenuIsVeg(String rawName) {
+  final name = rawName.trim().toLowerCase();
+  return !RegExp(r'\b(chicken|mutton|egg|fish|prawn|crab|lobster|squid|meat|keema|lamb|pork|beef|bacon|seafood|non-veg|nonveg)\b').hasMatch(name);
+}
+
 /// O3 Menu: categories, dishes with price / GST / veg / availability, and photos. Changes reach the hub on its next pull.
 class MenuScreen extends ConsumerStatefulWidget {
   const MenuScreen({super.key});
@@ -280,10 +430,6 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   }
 
   Future<void> _editItem([Json? item]) async {
-    if (_cats!.isEmpty) {
-      showError(context, 'Add a category first (for example "Starters").');
-      return;
-    }
     try {
       await _ensureTax();
     } catch (e) {
@@ -291,10 +437,11 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       return;
     }
     if (!mounted) return;
+    final defaultCat = _cat ?? (_cats!.isNotEmpty ? _cats!.first['id'] as String : 'standard:Main Course');
     final saved = await showDialog<bool>(
       context: context,
       builder: (_) => _ItemEditor(
-        api: _api, item: item, categories: _cats!, taxes: _taxes!, defaultCategory: _cat ?? _cats!.first['id'] as String, paletteIndex: _items!.length,
+        api: _api, item: item, categories: _cats!, taxes: _taxes!, defaultCategory: defaultCat, paletteIndex: _items!.length,
         restaurantPrefix: _restaurantPrefix,
         canMapRecipes: ref.read(authProvider) is SignedIn && (ref.read(authProvider) as SignedIn).can('inventory.manage'),
       ),
@@ -644,13 +791,105 @@ class _ItemEditorState extends State<_ItemEditor> {
   PreparedImage? _newPhoto;
   bool _removePhoto = false, _busy = false;
   String? _error;
+  String? _detectedCategory;
+  bool _userChangedCategory = false;
 
   @override
   void initState() {
     super.initState();
-    if (widget.item == null && _code.text.isEmpty && widget.restaurantPrefix.isNotEmpty) {
-      _code.text = '${widget.restaurantPrefix}DISH-';
+    // Do not pre-fill code with long prefix that truncates; keep clean hint text instead
+  }
+
+  void _onNameChanged(String val) {
+    final detected = detectMenuCategory(val);
+    final isVeg = detectMenuIsVeg(val);
+    setState(() {
+      _detectedCategory = detected;
+      _veg = isVeg;
+      if (!_userChangedCategory && detected != null) {
+        final match = widget.categories.cast<Json?>().firstWhere(
+          (c) => (c?['name'] as String?)?.trim().toLowerCase() == detected.trim().toLowerCase(),
+          orElse: () => null,
+        );
+        if (match != null) {
+          _category = match['id'] as String;
+        } else if (widget.categories.length > 1 || widget.categories.isEmpty) {
+          _category = 'standard:$detected';
+        }
+      }
+    });
+  }
+
+  void _selectCategoryByName(String catName, {bool userInitiated = true}) {
+    if (userInitiated) _userChangedCategory = true;
+    final match = widget.categories.cast<Json?>().firstWhere(
+      (c) => (c?['name'] as String?)?.trim().toLowerCase() == catName.trim().toLowerCase(),
+      orElse: () => null,
+    );
+    setState(() {
+      if (match != null) {
+        _category = match['id'] as String;
+      } else {
+        _category = 'standard:$catName';
+      }
+    });
+  }
+
+  bool _isCategorySelected(String catName) {
+    if (_category.startsWith('standard:')) {
+      return _category.substring('standard:'.length).toLowerCase() == catName.toLowerCase();
     }
+    final current = widget.categories.cast<Json?>().firstWhere(
+      (c) => c?['id'] == _category,
+      orElse: () => null,
+    );
+    return (current?['name'] as String?)?.toLowerCase() == catName.toLowerCase();
+  }
+
+  List<DropdownMenuItem<String>> _buildCategoryDropdownItems() {
+    final items = <DropdownMenuItem<String>>[];
+    final seen = <String>{};
+
+    for (final c in widget.categories) {
+      final name = (c['name'] as String?)?.trim() ?? '';
+      final id = c['id'] as String;
+      if (name.isNotEmpty && !seen.contains(name.toLowerCase())) {
+        seen.add(name.toLowerCase());
+        items.add(DropdownMenuItem(value: id, child: Text(name, overflow: TextOverflow.ellipsis)));
+      }
+    }
+
+    for (final std in standardMenuCategories) {
+      if (!seen.contains(std.toLowerCase())) {
+        seen.add(std.toLowerCase());
+        items.add(DropdownMenuItem(
+          value: 'standard:$std',
+          child: Row(
+            children: [
+              Expanded(child: Text(std, overflow: TextOverflow.ellipsis)),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                decoration: BoxDecoration(color: HPColors.cardamom.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
+                child: const Text('Excel Standard', style: TextStyle(fontSize: 10, color: HPColors.cardamom, fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+        ));
+      }
+    }
+
+    if (!items.any((item) => item.value == _category)) {
+      items.insert(0, DropdownMenuItem(value: _category, child: Text(_category.replaceFirst('standard:', ''))));
+    }
+    return items;
+  }
+
+  void _autoGenerateCode() {
+    final clean = _name.text.trim().toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+    final pfx = widget.restaurantPrefix.isNotEmpty ? widget.restaurantPrefix : 'DISH-';
+    final sfx = clean.length >= 4 ? clean.substring(0, 4) : (clean.isNotEmpty ? '${clean}101' : '001');
+    setState(() => _code.text = '$pfx$sfx');
   }
 
   Future<void> _pick() async {
@@ -680,6 +919,11 @@ class _ItemEditorState extends State<_ItemEditor> {
       _error = null;
     });
     try {
+      if (_category.startsWith('standard:')) {
+        final stdName = _category.substring('standard:'.length);
+        final created = await widget.api.createCategory(stdName, sortOrder: widget.categories.length * 10);
+        _category = created['id'] as String;
+      }
       final variants = [for (final s in _sizes) s.toJson()];
       final body = {
         'name': _name.text.trim(),
@@ -711,9 +955,6 @@ class _ItemEditorState extends State<_ItemEditor> {
     }
   }
 
-  /// Side by side on wide dialogs, stacked on phones.
-  Widget _flexible(Widget child) => MediaQuery.sizeOf(context).width < 600 ? child : Expanded(child: child);
-
   Map<String, String> _plate() {
     final c = _palettes[widget.paletteIndex % _palettes.length];
     return {'base': c[0], 'sauce': c[1], 'garnish': c[2]};
@@ -726,6 +967,8 @@ class _ItemEditorState extends State<_ItemEditor> {
     final ImageProvider? photo = _newPhoto != null
         ? MemoryImage(_newPhoto!.bytes)
         : (!_removePhoto && _imageId != null ? NetworkImage(widget.api.mediaUrl(_imageId)) : null);
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
+
     return HPDialog(
       title: widget.item == null ? 'Add a dish' : 'Edit ${widget.item!['name']}',
       actions: [
@@ -749,71 +992,164 @@ class _ItemEditorState extends State<_ItemEditor> {
             ]),
           ),
         ]),
-        Row(children: [
-          Expanded(flex: 2, child: TextField(key: const Key('dish-name'), controller: _name, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Dish name'))),
-          const SizedBox(width: HPSpace.sm),
-          Expanded(
-            child: TextField(
-              key: const Key('dish-code'),
-              controller: _code,
-              textCapitalization: TextCapitalization.characters,
-              decoration: InputDecoration(
-                labelText: 'SKU / Code',
-                hintText: 'e.g. RST-001',
-                suffixIcon: Tooltip(
-                  message: 'Auto-generate SKU',
-                  child: IconButton(
-                    icon: const Icon(Icons.auto_awesome_rounded, size: 18),
-                    onPressed: () {
-                      final clean = _name.text.trim().toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
-                      final pfx = widget.restaurantPrefix.isNotEmpty ? widget.restaurantPrefix : 'DISH-';
-                      final sfx = clean.length >= 4 ? clean.substring(0, 4) : '${clean}101';
-                      setState(() => _code.text = '$pfx$sfx');
-                    },
+        const SizedBox(height: HPSpace.md),
+
+        // Row 1: Dish name & SKU / Code
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 3,
+              child: TextField(
+                key: const Key('dish-name'),
+                controller: _name,
+                textCapitalization: TextCapitalization.words,
+                decoration: InputDecoration(
+                  labelText: 'Dish name',
+                  hintText: 'e.g. Coke, Butter Chicken, Cold Coffee, Paneer Tikka',
+                  suffixIcon: _detectedCategory != null
+                      ? Tooltip(
+                          message: 'Auto-detected category: $_detectedCategory',
+                          child: const Icon(Icons.auto_awesome_rounded, color: HPColors.cardamom, size: 18),
+                        )
+                      : null,
+                ),
+                onChanged: _onNameChanged,
+              ),
+            ),
+            const SizedBox(width: HPSpace.md),
+            Expanded(
+              flex: 2,
+              child: TextField(
+                key: const Key('dish-code'),
+                controller: _code,
+                textCapitalization: TextCapitalization.characters,
+                decoration: InputDecoration(
+                  labelText: 'SKU / Code',
+                  hintText: widget.restaurantPrefix.isNotEmpty ? 'e.g. ${widget.restaurantPrefix}001' : 'e.g. RST-001',
+                  suffixIcon: Tooltip(
+                    message: 'Auto-generate SKU',
+                    child: IconButton(
+                      icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+                      onPressed: _autoGenerateCode,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ]),
-        Flex(
-          direction: MediaQuery.sizeOf(context).width < 600 ? Axis.vertical : Axis.horizontal,
-          crossAxisAlignment: MediaQuery.sizeOf(context).width < 600 ? CrossAxisAlignment.stretch : CrossAxisAlignment.start,
-          children: [
-          _flexible(
-            DropdownButtonFormField<String>(
-              initialValue: _tax,
-              isExpanded: true,
-              decoration: const InputDecoration(labelText: 'GST', helperText: 'Split as CGST + SGST'),
-              items: [for (final t in widget.taxes) DropdownMenuItem(value: t['id'] as String, child: Text('${t['name']}', overflow: TextOverflow.ellipsis))],
-              onChanged: (v) => setState(() => _tax = v!),
-            ),
-          ),
-        ]),
-        const SizedBox(height: HPSpace.md),
-        DropdownButtonFormField<String>(
-          initialValue: _category,
-          isExpanded: true,
-          decoration: const InputDecoration(labelText: 'Category'),
-          items: [for (final c in widget.categories) DropdownMenuItem(value: c['id'] as String, child: Text('${c['name']}'))],
-          onChanged: (v) => setState(() => _category = v!),
+          ],
         ),
+        const SizedBox(height: HPSpace.sm),
+
+        // Quick Category Suggestions / Popular Chips
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final cat in popularExcelCategories)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ActionChip(
+                    visualDensity: VisualDensity.compact,
+                    label: Text(cat, style: TextStyle(fontSize: 11, fontWeight: _isCategorySelected(cat) ? FontWeight.bold : FontWeight.normal)),
+                    backgroundColor: _isCategorySelected(cat) ? p.accent.withValues(alpha: 0.15) : null,
+                    side: _isCategorySelected(cat) ? BorderSide(color: p.accent) : BorderSide(color: p.line.withValues(alpha: 0.5)),
+                    onPressed: () => _selectCategoryByName(cat),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: HPSpace.sm),
+
+        // Category & GST side-by-side on wide screens, stacked on mobile (without invalid vertical Expanded)
+        if (isMobile) ...[
+          DropdownButtonFormField<String>(
+            value: _category,
+            isExpanded: true,
+            decoration: InputDecoration(
+              labelText: 'Category',
+              helperText: _detectedCategory != null ? 'Auto-detected: $_detectedCategory' : 'All 40 standard categories from Excel catalog',
+              helperStyle: TextStyle(color: _detectedCategory != null ? p.success : p.muted, fontSize: 11),
+            ),
+            items: _buildCategoryDropdownItems(),
+            onChanged: (v) {
+              if (v != null) setState(() {
+                _category = v;
+                _userChangedCategory = true;
+              });
+            },
+          ),
+          const SizedBox(height: HPSpace.sm),
+          DropdownButtonFormField<String>(
+            initialValue: _tax,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'GST Rate', helperText: 'Split as CGST + SGST'),
+            items: [for (final t in widget.taxes) DropdownMenuItem(value: t['id'] as String, child: Text('${t['name']}', overflow: TextOverflow.ellipsis))],
+            onChanged: (v) => setState(() => _tax = v!),
+          ),
+        ] else ...[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 3,
+                child: DropdownButtonFormField<String>(
+                  value: _category,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: 'Category',
+                    helperText: _detectedCategory != null ? 'Auto-detected: $_detectedCategory' : 'All 40 standard categories from Excel catalog',
+                    helperStyle: TextStyle(color: _detectedCategory != null ? p.success : p.muted, fontSize: 11),
+                  ),
+                  items: _buildCategoryDropdownItems(),
+                  onChanged: (v) {
+                    if (v != null) setState(() {
+                      _category = v;
+                      _userChangedCategory = true;
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(width: HPSpace.md),
+              Expanded(
+                flex: 2,
+                child: DropdownButtonFormField<String>(
+                  initialValue: _tax,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'GST Rate', helperText: 'Split as CGST + SGST'),
+                  items: [for (final t in widget.taxes) DropdownMenuItem(value: t['id'] as String, child: Text('${t['name']}', overflow: TextOverflow.ellipsis))],
+                  onChanged: (v) => setState(() => _tax = v!),
+                ),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: HPSpace.lg),
+
+        // Sizes & Pricing Header
         Row(children: [
-          Expanded(child: Text('SIZES & PORTIONS', style: HPType.overline(p.muted))),
-          TextButton.icon(key: const Key('add-size'), onPressed: _sizes.length >= 20 ? null : () => setState(() => _sizes.add(_SizeDraft.blank())), icon: const Icon(Icons.add_rounded, size: 18), label: const Text('Add size')),
+          Expanded(child: Text('SIZES & PRICING', style: HPType.overline(p.muted))),
+          TextButton.icon(
+            key: const Key('add-size'),
+            onPressed: _sizes.length >= 20 ? null : () => setState(() => _sizes.add(_SizeDraft.blank())),
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('Add size'),
+          ),
         ]),
+        const SizedBox(height: 2),
+        Text('For single items (e.g. 1 Coke), just type the price below. Click presets for multi-size portions.', style: HPType.body(p.muted).copyWith(fontSize: 12)),
+        const SizedBox(height: HPSpace.sm),
         Wrap(spacing: 8, runSpacing: 6, children: [
-          TextButton(onPressed: () => setState(() { _sizes.clear(); for (final (name, ratio) in [('Half', .5), ('Full', 1.0)]) { _sizes.add(_SizeDraft(name: '$name plate', portion: name.toLowerCase(), ratio: '$ratio', qty: '$ratio', unit: 'plate', isDefault: ratio == 1)); } }), child: const Text('Half / Full Plate')),
+          TextButton(onPressed: () => setState(() { _sizes.clear(); for (final quantity in [200, 300, 500, 1000]) { _sizes.add(_SizeDraft(name: '$quantity ml', qty: '$quantity', unit: 'ml', isDefault: quantity == 300)); } }), child: const Text('🥤 Drinks: 200 / 300 / 500 ml / 1 L')),
+          TextButton(onPressed: () => setState(() { _sizes.clear(); for (final (name, ratio) in [('Half', .5), ('Full', 1.0)]) { _sizes.add(_SizeDraft(name: '$name plate', portion: name.toLowerCase(), ratio: '$ratio', qty: '$ratio', unit: 'plate', isDefault: ratio == 1)); } }), child: const Text('🍛 Half / Full Plate')),
           TextButton(onPressed: () => setState(() { _sizes.clear(); for (final (name, ratio) in [('Quarter', .25), ('Half', .5), ('Full', 1.0)]) { _sizes.add(_SizeDraft(name: '$name plate', portion: name.toLowerCase(), ratio: '$ratio', qty: '$ratio', unit: 'plate', isDefault: ratio == 1)); } }), child: const Text('Quarter / Half / Full')),
-          TextButton(onPressed: () => setState(() { _sizes.clear(); _sizes.add(_SizeDraft(name: 'Cup 150 ml', qty: '150', unit: 'ml', isDefault: false)); _sizes.add(_SizeDraft(name: 'Bowl 250 ml', qty: '250', unit: 'ml', isDefault: true)); }), child: const Text('Cup 150 ml / Bowl 250 ml')),
-          TextButton(onPressed: () => setState(() { _sizes.clear(); for (final s in ['Small 7"', 'Medium 10"', 'Large 12"']) { _sizes.add(_SizeDraft(name: s, unit: 'piece', isDefault: s.startsWith('Medium'))); } }), child: const Text('Pizza 7" / 10" / 12"')),
-          TextButton(onPressed: () => setState(() { _sizes.clear(); for (final s in ['1 Scoop', '2 Scoops', '3 Scoops']) { _sizes.add(_SizeDraft(name: s, unit: 'scoop', isDefault: s.startsWith('1'))); } }), child: const Text('Ice cream: 1 / 2 / 3 scoops')),
-          TextButton(onPressed: () => setState(() { _sizes.clear(); for (final quantity in [200, 300, 500, 1000]) { _sizes.add(_SizeDraft(name: '$quantity ml', qty: '$quantity', unit: 'ml', isDefault: quantity == 300)); } }), child: const Text('Drinks: 200 / 300 / 500 ml / 1 L')),
+          TextButton(onPressed: () => setState(() { _sizes.clear(); _sizes.add(_SizeDraft(name: 'Cup 150 ml', qty: '150', unit: 'ml', isDefault: false)); _sizes.add(_SizeDraft(name: 'Bowl 250 ml', qty: '250', unit: 'ml', isDefault: true)); }), child: const Text('🍵 Cup 150 ml / Bowl 250 ml')),
+          TextButton(onPressed: () => setState(() { _sizes.clear(); for (final s in ['Small 7"', 'Medium 10"', 'Large 12"']) { _sizes.add(_SizeDraft(name: s, unit: 'piece', isDefault: s.startsWith('Medium'))); } }), child: const Text('🍕 Pizza: 7" / 10" / 12"')),
+          TextButton(onPressed: () => setState(() { _sizes.clear(); for (final s in ['1 Scoop', '2 Scoops', '3 Scoops']) { _sizes.add(_SizeDraft(name: s, unit: 'scoop', isDefault: s.startsWith('1'))); } }), child: const Text('🍨 Ice cream: 1 / 2 / 3 scoops')),
           TextButton(onPressed: () => setState(() { _sizes.clear(); for (final p in ['1 Piece', '2 Pieces', '4 Pieces']) { _sizes.add(_SizeDraft(name: p, unit: 'piece', isDefault: p.startsWith('2'))); } }), child: const Text('Pieces: 1 / 2 / 4')),
-          TextButton(onPressed: () => setState(() { _sizes.clear(); _sizes.add(_SizeDraft(name: '1 Thali / Combo', unit: 'combo', isDefault: true)); }), child: const Text('1 Thali / Combo')),
+          TextButton(onPressed: () => setState(() { _sizes.clear(); _sizes.add(_SizeDraft(name: '1 Thali / Combo', unit: 'combo', isDefault: true)); }), child: const Text('🍱 1 Thali / Combo')),
         ]),
-        Text('Each size has its own price (before GST). A half plate does not have to cost half.', style: HPType.body(p.muted).copyWith(fontSize: 12)),
         const SizedBox(height: HPSpace.sm),
         for (final (i, s) in _sizes.indexed)
           _SizeRow(
@@ -905,7 +1241,16 @@ class _SizeDraft {
 }
 
 class _SizeRow extends StatelessWidget {
-  const _SizeRow({super.key, required this.index, required this.size, required this.canRemove, required this.onDefault, required this.onRemove, required this.onChanged, this.onRecipe});
+  const _SizeRow({
+    super.key,
+    required this.index,
+    required this.size,
+    required this.canRemove,
+    required this.onDefault,
+    required this.onRemove,
+    required this.onChanged,
+    this.onRecipe,
+  });
   final int index;
   final _SizeDraft size;
   final bool canRemove;
@@ -915,60 +1260,189 @@ class _SizeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.hp;
-    Widget box(double w, Widget child) => SizedBox(width: w, child: child);
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
+    final volumeOrQtyLabel = (size.unit == 'ml' || size.unit == 'l')
+        ? 'Volume'
+        : (size.unit == 'g' || size.unit == 'kg' ? 'Weight' : 'Portion qty');
+
     return Card(
       margin: const EdgeInsets.only(bottom: HPSpace.sm),
       color: p.raised,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: size.isDefault ? p.accent.withValues(alpha: 0.5) : p.line.withValues(alpha: 0.6)),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(HPSpace.md),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, crossAxisAlignment: WrapCrossAlignment.center, children: [
-            box(170, TextField(key: Key('size-name-$index'), controller: size.name, decoration: const InputDecoration(labelText: 'Size / portion', hintText: '500 ml'), onChanged: (_) => onChanged())),
-            box(120, TextField(key: Key('size-price-$index'), controller: size.price, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Price', prefixText: '₹ '))),
-            box(100, TextField(key: Key('size-qty-$index'), controller: size.qty, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Serves'))),
-            box(110, DropdownButtonFormField<String?>(
-              key: Key('size-unit-$index'),
-              initialValue: size.unit,
-              isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Unit'),
-              items: [const DropdownMenuItem<String?>(value: null, child: Text('—')), for (final u in servingUnits) DropdownMenuItem<String?>(value: u, child: Text(u))],
-              onChanged: (v) {
-                size.unit = v;
-                onChanged();
-              },
-            )),
-            box(120, DropdownButtonFormField<String?>(
-              initialValue: size.portion,
-              isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Portion'),
-              items: [const DropdownMenuItem<String?>(value: null, child: Text('—')), for (final l in portionLabels) DropdownMenuItem<String?>(value: l, child: Text(l))],
-              onChanged: (v) {
-                size.portion = v;
-                onChanged();
-              },
-            )),
-            box(100, Tooltip(
-              message: 'Default recipe scale vs the full portion (1 = full). Prices are never derived from it.',
-              child: TextField(controller: size.ratio, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Ratio')),
-            )),
-            box(150, TextField(controller: size.code, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(labelText: 'Code (optional)', hintText: 'COLA-500'))),
-          ]),
-          Wrap(spacing: HPSpace.md, crossAxisAlignment: WrapCrossAlignment.center, children: [
-            Row(mainAxisSize: MainAxisSize.min, children: [
-              Radio<bool>(key: Key('size-default-$index'), value: true, groupValue: size.isDefault, onChanged: (_) => onDefault()), // ignore: deprecated_member_use
-              Text('Default', style: HPType.body(p.text)),
-            ]),
-            Row(mainAxisSize: MainAxisSize.min, children: [
-              Switch(value: size.available, onChanged: (v) {
-                size.available = v;
-                onChanged();
-              }),
-              Text(size.available ? 'Available' : 'Sold out', style: HPType.body(p.text)),
-            ]),
-            if (onRecipe != null) TextButton.icon(key: Key('size-recipe-$index'), onPressed: onRecipe, icon: const Icon(Icons.blender_outlined, size: 18), label: const Text('Recipe')),
-            if (canRemove) TextButton.icon(key: Key('size-remove-$index'), onPressed: onRemove, icon: const Icon(Icons.delete_outline_rounded, size: 18), label: const Text('Remove')),
-          ]),
-        ]),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Row 1: Primary Inputs (Size name & Price)
+            if (isMobile) ...[
+              TextField(
+                key: Key('size-name-$index'),
+                controller: size.name,
+                decoration: const InputDecoration(labelText: 'Size / portion', hintText: 'e.g. Regular, 300 ml, Half plate'),
+                onChanged: (_) => onChanged(),
+              ),
+              const SizedBox(height: HPSpace.sm),
+              TextField(
+                key: Key('size-price-$index'),
+                controller: size.price,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'Price', prefixText: '₹ '),
+                onChanged: (_) => onChanged(),
+              ),
+            ] else ...[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: TextField(
+                      key: Key('size-name-$index'),
+                      controller: size.name,
+                      decoration: const InputDecoration(labelText: 'Size / portion', hintText: 'e.g. Regular, 300 ml, Half plate'),
+                      onChanged: (_) => onChanged(),
+                    ),
+                  ),
+                  const SizedBox(width: HPSpace.sm),
+                  Expanded(
+                    flex: 2,
+                    child: TextField(
+                      key: Key('size-price-$index'),
+                      controller: size.price,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: 'Price', prefixText: '₹ '),
+                      onChanged: (_) => onChanged(),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: HPSpace.sm),
+
+            // Row 2: Secondary / Portion Measurements (Qty, Unit, Portion, Ratio, Code)
+            Wrap(
+              spacing: HPSpace.sm,
+              runSpacing: HPSpace.sm,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                SizedBox(
+                  width: 110,
+                  child: TextField(
+                    key: Key('size-qty-$index'),
+                    controller: size.qty,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: volumeOrQtyLabel,
+                      hintText: (size.unit == 'ml' || size.unit == 'l') ? 'e.g. 200' : 'e.g. 1',
+                    ),
+                    onChanged: (_) => onChanged(),
+                  ),
+                ),
+                SizedBox(
+                  width: 105,
+                  child: DropdownButtonFormField<String?>(
+                    key: Key('size-unit-$index'),
+                    initialValue: size.unit,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Unit'),
+                    items: [
+                      const DropdownMenuItem<String?>(value: null, child: Text('—')),
+                      for (final u in servingUnits) DropdownMenuItem<String?>(value: u, child: Text(u)),
+                    ],
+                    onChanged: (v) {
+                      size.unit = v;
+                      onChanged();
+                    },
+                  ),
+                ),
+                SizedBox(
+                  width: 110,
+                  child: DropdownButtonFormField<String?>(
+                    initialValue: size.portion,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Portion'),
+                    items: [
+                      const DropdownMenuItem<String?>(value: null, child: Text('—')),
+                      for (final l in portionLabels) DropdownMenuItem<String?>(value: l, child: Text(l)),
+                    ],
+                    onChanged: (v) {
+                      size.portion = v;
+                      onChanged();
+                    },
+                  ),
+                ),
+                SizedBox(
+                  width: 90,
+                  child: Tooltip(
+                    message: 'Default recipe scale vs the full portion (1 = full). Prices are never derived from it.',
+                    child: TextField(
+                      controller: size.ratio,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: 'Ratio'),
+                      onChanged: (_) => onChanged(),
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 130,
+                  child: TextField(
+                    controller: size.code,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: const InputDecoration(labelText: 'Code (optional)', hintText: 'e.g. COLA-500'),
+                    onChanged: (_) => onChanged(),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: HPSpace.sm),
+
+            // Row 3: Action Controls (Default, Available, Recipe, Remove)
+            Wrap(
+              spacing: HPSpace.md,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  Radio<bool>(
+                    key: Key('size-default-$index'),
+                    value: true,
+                    groupValue: size.isDefault,
+                    onChanged: (_) => onDefault(), // ignore: deprecated_member_use
+                  ),
+                  Text('Default', style: HPType.body(p.text).copyWith(fontSize: 13)),
+                ]),
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  Switch(
+                    value: size.available,
+                    onChanged: (v) {
+                      size.available = v;
+                      onChanged();
+                    },
+                  ),
+                  Text(size.available ? 'In stock' : 'Sold out', style: HPType.body(p.text).copyWith(fontSize: 13)),
+                ]),
+                if (onRecipe != null)
+                  TextButton.icon(
+                    key: Key('size-recipe-$index'),
+                    onPressed: onRecipe,
+                    icon: const Icon(Icons.blender_outlined, size: 16),
+                    label: const Text('Recipe', style: TextStyle(fontSize: 12)),
+                  ),
+                if (canRemove)
+                  TextButton.icon(
+                    key: Key('size-remove-$index'),
+                    onPressed: onRemove,
+                    icon: Icon(Icons.delete_outline_rounded, size: 16, color: p.danger),
+                    label: Text('Remove', style: TextStyle(fontSize: 12, color: p.danger)),
+                  ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
