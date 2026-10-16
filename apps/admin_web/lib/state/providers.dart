@@ -38,6 +38,38 @@ class SignedIn extends AuthState {
   /// Restaurant user (owner / IT admin …) rather than a platform administrator.
   bool get isRestaurant => me['type'] == 'user';
   List<String> get roles => ((me['roles'] as List?) ?? const []).cast<String>();
+
+  String? get restaurantName => (me['tenant'] as Map?)?['name'] as String?;
+  String? get restaurantCode => (me['tenant'] as Map?)?['code'] as String?;
+  String get restaurantPrefix => restaurantShortPrefix(name: restaurantName, fallbackCode: restaurantCode);
+}
+
+/// Calculates a concise short prefix from a restaurant name.
+/// e.g. "Demo Dhaba" -> "DD-", "The Spice Route" -> "TSR-", "McDonald's" -> "MCD-".
+/// If only 1 word and <= 4 chars: e.g. "Chai" -> "CHAI-", "KFC" -> "KFC-".
+/// Falls back to fallbackCode (e.g. tenant code "R000000") or 'RST-'.
+String restaurantShortPrefix({String? name, String? fallbackCode}) {
+  if (name != null && name.trim().isNotEmpty) {
+    final words = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .map((w) => w.replaceAll(RegExp(r'[^A-Za-z0-9]'), ''))
+        .where((w) => w.isNotEmpty)
+        .toList();
+    if (words.length >= 2) {
+      final initials = words.take(4).map((w) => w[0].toUpperCase()).join();
+      if (initials.isNotEmpty) return '$initials-';
+    } else if (words.length == 1) {
+      final clean = words.first.toUpperCase();
+      if (clean.length <= 4) return '$clean-';
+      return '${clean.substring(0, 3)}-';
+    }
+  }
+  if (fallbackCode != null && fallbackCode.trim().isNotEmpty) {
+    final clean = fallbackCode.trim().toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+    if (clean.isNotEmpty) return '$clean-';
+  }
+  return 'RST-';
 }
 
 class AuthNotifier extends Notifier<AuthState> with ChangeNotifier {

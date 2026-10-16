@@ -46,6 +46,7 @@ class FakeRestaurantApi {
 
   Map<String, dynamic> me = {
     'type': 'user', 'id': 'u-own', 'email': 'owner@demo.com', 'name': 'Demo Owner', 'tenantId': 't1', 'roles': ['owner'],
+    'tenant': {'id': 't1', 'code': 'R000000', 'name': 'Demo Dhaba'},
     'permissions': ['restaurant.profile.read', 'restaurant.profile.manage', 'license.read', 'staff.read', 'staff.manage', 'device.manage', 'floor.read', 'floor.manage', 'menu.read', 'menu.publish', 'reports.read', 'order.write',
       'inventory.read', 'inventory.manage', 'inventory.write', 'inventory.consume', 'inventory.request', 'expense.read', 'expense.write', 'import.run'],
   };
@@ -871,5 +872,87 @@ void main() {
     expect(api.last('POST', '/commit'), {'partial': true});
     expect(find.byKey(const Key('import-done')), findsOneWidget);
     expect(find.textContaining('Variants row 4 (WATER-1L)'), findsOneWidget);
+  });
+
+  test('restaurantShortPrefix derives concise short code from restaurant name', () {
+    expect(restaurantShortPrefix(name: 'Demo Dhaba'), 'DD-');
+    expect(restaurantShortPrefix(name: 'The Spice Route'), 'TSR-');
+    expect(restaurantShortPrefix(name: 'Burger King Express'), 'BKE-');
+    expect(restaurantShortPrefix(name: 'Chai'), 'CHAI-');
+    expect(restaurantShortPrefix(name: "McDonald's"), 'MCD-');
+    expect(restaurantShortPrefix(name: 'Subway'), 'SUB-');
+    expect(restaurantShortPrefix(name: null, fallbackCode: 'R001'), 'R001-');
+    expect(restaurantShortPrefix(name: '', fallbackCode: ''), 'RST-');
+  });
+
+  testWidgets('dish SKU code starts with restaurant short name and auto-generates cleanly', (t) async {
+    await start(t);
+    await go(t, 'Menu', size: desktop);
+    await t.tap(find.byKey(const Key('add-dish')));
+    await t.pumpAndSettle();
+
+    // Dish 1: Single-word beverage Coke -> SKU: DD-COKE
+    await t.enterText(find.byKey(const Key('dish-name')), 'Coke');
+    await t.tap(find.byTooltip('Auto-generate SKU'));
+    await t.pumpAndSettle();
+    expect(find.widgetWithText(TextField, 'DD-COKE'), findsOneWidget);
+
+    // Dish 2: Multi-word item Paneer Tikka -> SKU: DD-PT01
+    await t.enterText(find.byKey(const Key('dish-name')), 'Paneer Tikka');
+    await t.tap(find.byTooltip('Auto-generate SKU'));
+    await t.pumpAndSettle();
+    expect(find.widgetWithText(TextField, 'DD-PT01'), findsOneWidget);
+  });
+
+  testWidgets('menu pagination: smooth rendering with 24 items per page, page navigation and page sizing', (t) async {
+    final api = await start(t);
+    // Populate categories, taxes and 60 items in mock api
+    api.cats.add({'id': 'cat-1', 'name': 'Mains', 'sortOrder': 0});
+    api.taxes.add({'id': 'tx-1', 'name': 'GST 5%', 'rateBp': 500});
+    api.items.clear();
+    for (var i = 1; i <= 60; i++) {
+      api.items.add({
+        'id': 'item-$i',
+        'code': 'DD-ITEM$i',
+        'name': 'Dish $i',
+        'categoryId': 'cat-1',
+        'taxRuleId': 'tx-1',
+        'available': true,
+        'variants': [
+          {'id': 'v-$i', 'name': 'Regular', 'pricePaise': 15000, 'isDefault': true}
+        ],
+      });
+    }
+
+    await go(t, 'Menu', size: desktop);
+    await t.pumpAndSettle();
+
+    // Verify first page renders items 1 to 24 and shows count
+    expect(find.text('Showing 1–24 of 60 dishes'), findsNWidgets(2)); // top and bottom bars
+    expect(find.byKey(const Key('item-Dish 1')), findsOneWidget);
+    expect(find.byKey(const Key('item-Dish 24')), findsOneWidget);
+    expect(find.byKey(const Key('item-Dish 25')), findsNothing); // Page 2 item not rendered on page 1
+
+    // Navigate to next page
+    await t.tap(find.byKey(const Key('page-next-top')));
+    await t.pumpAndSettle();
+    expect(find.text('Showing 25–48 of 60 dishes'), findsNWidgets(2));
+    expect(find.byKey(const Key('item-Dish 24')), findsNothing);
+    expect(find.byKey(const Key('item-Dish 25')), findsOneWidget);
+    expect(find.byKey(const Key('item-Dish 48')), findsOneWidget);
+    expect(find.byKey(const Key('item-Dish 49')), findsNothing);
+
+    // Navigate to last page via top bar button
+    await t.tap(find.byKey(const Key('page-last-top')));
+    await t.pumpAndSettle();
+    expect(find.text('Showing 49–60 of 60 dishes'), findsNWidgets(2));
+    expect(find.byKey(const Key('item-Dish 49')), findsOneWidget);
+    expect(find.byKey(const Key('item-Dish 60')), findsOneWidget);
+
+    // Navigate back to first page via top bar button
+    await t.tap(find.byKey(const Key('page-first-top')));
+    await t.pumpAndSettle();
+    expect(find.text('Showing 1–24 of 60 dishes'), findsNWidgets(2));
+    expect(find.byKey(const Key('item-Dish 1')), findsOneWidget);
   });
 }

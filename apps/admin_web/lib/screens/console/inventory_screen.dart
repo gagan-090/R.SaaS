@@ -85,9 +85,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   String get _restaurantPrefix {
     final a = ref.read(authProvider);
     if (a is SignedIn) {
-      final t = a.me['tenant'] as Map?;
-      final code = t?['code'] as String?;
-      if (code != null && code.isNotEmpty) return '$code-';
+      final name = a.restaurantName ?? ref.read(restaurantLookProvider).valueOrNull?.name;
+      return restaurantShortPrefix(name: name, fallbackCode: a.restaurantCode);
     }
     return '';
   }
@@ -488,16 +487,37 @@ class _ProductEditorState extends State<_ProductEditor> {
               textCapitalization: TextCapitalization.characters,
               decoration: InputDecoration(
                 labelText: 'SKU (stable code)',
-                hintText: 'RICE-BAS',
+                hintText: widget.restaurantPrefix.isNotEmpty ? 'e.g. ${widget.restaurantPrefix}001' : 'RICE-BAS',
                 suffixIcon: _isNew
                     ? Tooltip(
                         message: 'Generate SKU',
                         child: IconButton(
                           icon: const Icon(Icons.auto_awesome_rounded, size: 18),
                           onPressed: () {
-                            final clean = _name.text.trim().toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+                            final raw = _name.text.trim();
                             final pfx = widget.restaurantPrefix.isNotEmpty ? widget.restaurantPrefix : 'INV-';
-                            final sfx = clean.length >= 4 ? clean.substring(0, 4) : '${clean}101';
+                            if (raw.isEmpty) {
+                              setState(() => _sku.text = '${pfx}001');
+                              return;
+                            }
+                            final words = raw
+                                .split(RegExp(r'\s+'))
+                                .map((w) => w.replaceAll(RegExp(r'[^A-Za-z0-9]'), ''))
+                                .where((w) => w.isNotEmpty)
+                                .toList();
+                            String sfx;
+                            if (words.length == 1) {
+                              final w = words.first.toUpperCase();
+                              sfx = w.length <= 8 ? w : w.substring(0, 6);
+                            } else {
+                              final initials = words.map((w) => w[0].toUpperCase()).join();
+                              if (initials.length >= 2 && initials.length <= 4) {
+                                sfx = '${initials}01';
+                              } else {
+                                final w = words.first.toUpperCase();
+                                sfx = w.length <= 5 ? w : w.substring(0, 5);
+                              }
+                            }
                             setState(() => _sku.text = '$pfx$sfx');
                           },
                         ),

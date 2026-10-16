@@ -198,6 +198,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   Object? _error;
   String? _cat; // null = all
   String _q = '';
+  int _page = 0;
+  int _pageSize = 24;
 
   ApiClient get _api => ref.read(apiProvider);
   bool get _isOwner => (ref.read(authProvider) as SignedIn).roles.contains('owner');
@@ -209,11 +211,10 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   String get _restaurantPrefix {
     final a = ref.read(authProvider);
     if (a is SignedIn) {
-      final t = a.me['tenant'] as Map?;
-      final code = t?['code'] as String?;
-      if (code != null && code.isNotEmpty) return '$code-';
+      final name = a.restaurantName ?? ref.read(restaurantLookProvider).valueOrNull?.name;
+      return restaurantShortPrefix(name: name, fallbackCode: a.restaurantCode);
     }
-    return '';
+    return 'RST-';
   }
 
   @override
@@ -466,19 +467,51 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
         .toList();
     final catName = {for (final c in _cats!) c['id']: c['name']};
 
+    final totalItems = visible.length;
+    final totalPages = _pageSize > 0 ? (totalItems / _pageSize).ceil().clamp(1, 999999) : 1;
+    final currentPage = _page.clamp(0, totalPages - 1);
+    final paged = _pageSize > 0 ? visible.skip(currentPage * _pageSize).take(_pageSize).toList() : visible;
+
     final categoryRail = _CategoryList(
       cats: _cats!,
       items: _items!,
       selected: _cat,
       canEdit: edit,
       horizontal: narrow,
-      onSelect: (id) => setState(() => _cat = id),
+      onSelect: (id) => setState(() {
+        _cat = id;
+        _page = 0;
+      }),
       onAdd: _editCategory,
       onRename: _editCategory,
       onDelete: _deleteCategory,
       onMove: _moveCategory,
       onToggle: (c) => _run(() => _api.updateCategory(c['id'] as String, {'active': c['active'] == false}),
           c['active'] == false ? '${c['name']} is back on the POS' : '${c['name']} hidden from the POS'),
+    );
+
+    final topPagination = _MenuPaginationBar(
+      totalItems: totalItems,
+      page: currentPage,
+      pageSize: _pageSize,
+      compact: true,
+      onPageChanged: (newPage) => setState(() => _page = newPage),
+      onPageSizeChanged: (newSize) => setState(() {
+        _pageSize = newSize;
+        _page = 0;
+      }),
+    );
+
+    final bottomPagination = _MenuPaginationBar(
+      totalItems: totalItems,
+      page: currentPage,
+      pageSize: _pageSize,
+      compact: false,
+      onPageChanged: (newPage) => setState(() => _page = newPage),
+      onPageSizeChanged: (newSize) => setState(() {
+        _pageSize = newSize;
+        _page = 0;
+      }),
     );
 
     final grid = visible.isEmpty
@@ -488,37 +521,55 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
             message: _items!.isEmpty ? 'Add categories and dishes. Photos are optional — every dish gets an illustrated plate.' : null,
             action: edit && _items!.isEmpty ? PrimaryButton(label: 'Add your first dish', icon: Icons.add_rounded, onPressed: () => _editItem()) : null,
           )
-        : LayoutBuilder(builder: (c, box) {
-            final cols = (box.maxWidth / 300).floor().clamp(1, 4);
-            const gap = HPSpace.md;
-            final w = (box.maxWidth - gap * (cols - 1)) / cols;
-            return Wrap(spacing: gap, runSpacing: gap, children: [
-              for (final i in visible)
-                SizedBox(
-                  width: w,
-                  child: _ItemTile(
-                    key: Key('item-${i['name']}'),
-                    item: i,
-                    category: '${catName[i['categoryId']] ?? ''}',
-                    imageUrl: i['imageId'] == null ? null : _api.mediaUrl(i['imageId'] as String),
-                    canEdit: edit,
-                    onEdit: () => _editItem(i),
-                    onToggle: (v) => _toggle(i, v),
-                    onDelete: () async {
-                      if (await confirm(context, title: 'Delete ${i['name']}?', message: 'It disappears from every terminal on the next sync. Past bills keep their copy of the name and price.')) {
-                        await _run(() => _api.deleteItem(i['id'] as String), 'Dish deleted');
-                      }
-                    },
-                  ),
-                ),
-            ]);
-          });
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              topPagination,
+              const SizedBox(height: HPSpace.md),
+              LayoutBuilder(builder: (c, box) {
+                final cols = (box.maxWidth / 300).floor().clamp(1, 4);
+                const gap = HPSpace.md;
+                final w = (box.maxWidth - gap * (cols - 1)) / cols;
+                return Wrap(spacing: gap, runSpacing: gap, children: [
+                  for (final i in paged)
+                    SizedBox(
+                      width: w,
+                      child: _ItemTile(
+                        key: Key('item-${i['name']}'),
+                        item: i,
+                        category: '${catName[i['categoryId']] ?? ''}',
+                        imageUrl: i['imageId'] == null ? null : _api.mediaUrl(i['imageId'] as String),
+                        canEdit: edit,
+                        onEdit: () => _editItem(i),
+                        onToggle: (v) => _toggle(i, v),
+                        onDelete: () async {
+                          if (await confirm(context, title: 'Delete ${i['name']}?', message: 'It disappears from every terminal on the next sync. Past bills keep their copy of the name and price.')) {
+                            await _run(() => _api.deleteItem(i['id'] as String), 'Dish deleted');
+                          }
+                        },
+                      ),
+                    ),
+                ]);
+              }),
+              const SizedBox(height: HPSpace.md),
+              bottomPagination,
+            ],
+          );
 
     return PageFrame(
       title: 'Menu',
       subtitle: '${_items!.length} dishes · ${_cats!.length} categories · changes reach your terminals within a minute',
       actions: [
-        SizedBox(width: narrow ? double.infinity : 260, child: HPSearchField(hint: 'Search dishes', onChanged: (v) => setState(() => _q = v))),
+        SizedBox(
+          width: narrow ? double.infinity : 260,
+          child: HPSearchField(
+            hint: 'Search dishes',
+            onChanged: (v) => setState(() {
+              _q = v;
+              _page = 0;
+            }),
+          ),
+        ),
         if (edit && (_can('import.run') || _isOwner))
           SecondaryButton(key: const Key('import-menu'), label: 'Import Excel', icon: _can('import.run') ? Icons.upload_file_rounded : Icons.lock_outline_rounded, onPressed: () async {
             if (!_can('import.run')) {
@@ -541,6 +592,181 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
               const SizedBox(width: HPSpace.x2),
               Expanded(child: grid),
             ]),
+    );
+  }
+}
+
+class _MenuPaginationBar extends StatelessWidget {
+  const _MenuPaginationBar({
+    required this.totalItems,
+    required this.page,
+    required this.pageSize,
+    required this.onPageChanged,
+    required this.onPageSizeChanged,
+    this.compact = false,
+  });
+
+  final int totalItems;
+  final int page;
+  final int pageSize;
+  final ValueChanged<int> onPageChanged;
+  final ValueChanged<int> onPageSizeChanged;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.hp;
+    final totalPages = pageSize > 0 ? (totalItems / pageSize).ceil().clamp(1, 999999) : 1;
+    final currentPage = page.clamp(0, totalPages - 1);
+    final start = totalItems == 0 ? 0 : currentPage * pageSize + 1;
+    final end = pageSize > 0 ? (currentPage * pageSize + pageSize).clamp(0, totalItems) : totalItems;
+
+    final pageButtons = <int>[];
+    if (totalPages <= 7) {
+      pageButtons.addAll(List.generate(totalPages, (i) => i));
+    } else {
+      final startPage = (currentPage - 2).clamp(0, totalPages - 5);
+      final endPage = (startPage + 4).clamp(4, totalPages - 1);
+      for (var i = startPage; i <= endPage; i++) {
+        pageButtons.add(i);
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: HPSpace.md, vertical: 8),
+      decoration: BoxDecoration(
+        color: p.raised,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: p.line.withValues(alpha: 0.5)),
+      ),
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        runSpacing: HPSpace.sm,
+        spacing: HPSpace.md,
+        children: [
+          Text(
+            totalItems == 0
+                ? '0 dishes'
+                : 'Showing $start–$end of $totalItems ${totalItems == 1 ? 'dish' : 'dishes'}',
+            style: HPType.label(p.text).copyWith(fontSize: 13),
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Per page:', style: HPType.body(p.muted).copyWith(fontSize: 12)),
+                  const SizedBox(width: 6),
+                  DropdownButton<int>(
+                    key: Key(compact ? 'page-size-top' : 'page-size-bottom'),
+                    value: pageSize,
+                    underline: const SizedBox.shrink(),
+                    isDense: true,
+                    style: HPType.label(p.text).copyWith(fontSize: 13),
+                    items: const [
+                      DropdownMenuItem(value: 24, child: Text('24')),
+                      DropdownMenuItem(value: 48, child: Text('48')),
+                      DropdownMenuItem(value: 96, child: Text('96')),
+                      DropdownMenuItem(value: 0, child: Text('All')),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) onPageSizeChanged(v);
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(width: HPSpace.md),
+              if (totalPages > 1) ...[
+                IconButton(
+                  key: Key(compact ? 'page-first-top' : 'page-first-bottom'),
+                  icon: const Icon(Icons.first_page_rounded, size: 20),
+                  tooltip: 'First page',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: currentPage > 0 ? () => onPageChanged(0) : null,
+                ),
+                IconButton(
+                  key: Key(compact ? 'page-prev-top' : 'page-prev-bottom'),
+                  icon: const Icon(Icons.chevron_left_rounded, size: 20),
+                  tooltip: 'Previous page',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: currentPage > 0 ? () => onPageChanged(currentPage - 1) : null,
+                ),
+                if (!compact) ...[
+                  if (pageButtons.isNotEmpty && pageButtons.first > 0) ...[
+                    _pagePill(context, 0, false, p),
+                    if (pageButtons.first > 1)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: Text('…', style: TextStyle(color: p.muted, fontSize: 13)),
+                      ),
+                  ],
+                  for (final pNum in pageButtons)
+                    _pagePill(context, pNum, pNum == currentPage, p),
+                  if (pageButtons.isNotEmpty && pageButtons.last < totalPages - 1) ...[
+                    if (pageButtons.last < totalPages - 2)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: Text('…', style: TextStyle(color: p.muted, fontSize: 13)),
+                      ),
+                    _pagePill(context, totalPages - 1, false, p),
+                  ],
+                ] else ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Text(
+                      '${currentPage + 1} / $totalPages',
+                      style: HPType.label(p.text).copyWith(fontSize: 13),
+                    ),
+                  ),
+                ],
+                IconButton(
+                  key: Key(compact ? 'page-next-top' : 'page-next-bottom'),
+                  icon: const Icon(Icons.chevron_right_rounded, size: 20),
+                  tooltip: 'Next page',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: currentPage < totalPages - 1 ? () => onPageChanged(currentPage + 1) : null,
+                ),
+                IconButton(
+                  key: Key(compact ? 'page-last-top' : 'page-last-bottom'),
+                  icon: const Icon(Icons.last_page_rounded, size: 20),
+                  tooltip: 'Last page',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: currentPage < totalPages - 1 ? () => onPageChanged(totalPages - 1) : null,
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pagePill(BuildContext context, int pageIndex, bool isCurrent, dynamic p) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: InkWell(
+        key: Key('page-pill-${pageIndex + 1}'),
+        borderRadius: BorderRadius.circular(6),
+        onTap: isCurrent ? null : () => onPageChanged(pageIndex),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: isCurrent ? p.accent : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: isCurrent ? p.accent : p.line.withValues(alpha: 0.5)),
+          ),
+          child: Text(
+            '${pageIndex + 1}',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+              color: isCurrent ? Colors.white : p.text,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -885,11 +1111,33 @@ class _ItemEditorState extends State<_ItemEditor> {
     return items;
   }
 
-  void _autoGenerateCode() {
-    final clean = _name.text.trim().toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+  String _deriveCode() {
+    final raw = _name.text.trim();
     final pfx = widget.restaurantPrefix.isNotEmpty ? widget.restaurantPrefix : 'DISH-';
-    final sfx = clean.length >= 4 ? clean.substring(0, 4) : (clean.isNotEmpty ? '${clean}101' : '001');
-    setState(() => _code.text = '$pfx$sfx');
+    if (raw.isEmpty) return '${pfx}001';
+    final words = raw
+        .split(RegExp(r'\s+'))
+        .map((w) => w.replaceAll(RegExp(r'[^A-Za-z0-9]'), ''))
+        .where((w) => w.isNotEmpty)
+        .toList();
+    String sfx;
+    if (words.length == 1) {
+      final w = words.first.toUpperCase();
+      sfx = w.length <= 8 ? w : w.substring(0, 6);
+    } else {
+      final initials = words.map((w) => w[0].toUpperCase()).join();
+      if (initials.length >= 2 && initials.length <= 4) {
+        sfx = '${initials}01';
+      } else {
+        final w = words.first.toUpperCase();
+        sfx = w.length <= 5 ? w : w.substring(0, 5);
+      }
+    }
+    return '$pfx$sfx';
+  }
+
+  void _autoGenerateCode() {
+    setState(() => _code.text = _deriveCode());
   }
 
   Future<void> _pick() async {
@@ -925,13 +1173,17 @@ class _ItemEditorState extends State<_ItemEditor> {
         _category = created['id'] as String;
       }
       final variants = [for (final s in _sizes) s.toJson()];
+      String? itemCode = _code.text.trim().isNotEmpty ? _code.text.trim().toUpperCase() : null;
+      if (itemCode == null && widget.item == null && _name.text.trim().isNotEmpty) {
+        itemCode = _deriveCode();
+      }
       final body = {
         'name': _name.text.trim(),
         'categoryId': _category,
         'taxRuleId': _tax,
         'isVeg': _veg,
         'available': _available,
-        if (_code.text.trim().isNotEmpty) 'code': _code.text.trim().toUpperCase(),
+        if (itemCode != null && itemCode.isNotEmpty) 'code': itemCode,
         if (_desc.text.trim().isNotEmpty) 'description': _desc.text.trim(),
       };
       final Json saved;
@@ -1026,7 +1278,11 @@ class _ItemEditorState extends State<_ItemEditor> {
                 textCapitalization: TextCapitalization.characters,
                 decoration: InputDecoration(
                   labelText: 'SKU / Code',
-                  hintText: widget.restaurantPrefix.isNotEmpty ? 'e.g. ${widget.restaurantPrefix}001' : 'e.g. RST-001',
+                  hintText: widget.restaurantPrefix.isNotEmpty
+                      ? (_name.text.trim().isNotEmpty
+                          ? 'e.g. ${widget.restaurantPrefix}${_name.text.trim().split(RegExp(r'\s+')).first.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '')}'
+                          : 'e.g. ${widget.restaurantPrefix}001')
+                      : 'e.g. RST-001',
                   suffixIcon: Tooltip(
                     message: 'Auto-generate SKU',
                     child: IconButton(
@@ -1156,6 +1412,7 @@ class _ItemEditorState extends State<_ItemEditor> {
             key: ObjectKey(s),
             index: i,
             size: s,
+            restaurantPrefix: widget.restaurantPrefix,
             canRemove: _sizes.length > 1,
             onDefault: () => setState(() {
               for (final x in _sizes) {
@@ -1249,11 +1506,13 @@ class _SizeRow extends StatelessWidget {
     required this.onDefault,
     required this.onRemove,
     required this.onChanged,
+    this.restaurantPrefix = '',
     this.onRecipe,
   });
   final int index;
   final _SizeDraft size;
   final bool canRemove;
+  final String restaurantPrefix;
   final VoidCallback onDefault, onRemove, onChanged;
   final VoidCallback? onRecipe;
 
@@ -1392,7 +1651,10 @@ class _SizeRow extends StatelessWidget {
                   child: TextField(
                     controller: size.code,
                     textCapitalization: TextCapitalization.characters,
-                    decoration: const InputDecoration(labelText: 'Code (optional)', hintText: 'e.g. COLA-500'),
+                    decoration: InputDecoration(
+                      labelText: 'Code (optional)',
+                      hintText: restaurantPrefix.isNotEmpty ? 'e.g. ${restaurantPrefix}500' : 'e.g. COLA-500',
+                    ),
                     onChanged: (_) => onChanged(),
                   ),
                 ),
