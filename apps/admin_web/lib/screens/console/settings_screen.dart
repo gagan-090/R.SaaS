@@ -97,7 +97,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_error != null) return ErrorState(message: '$_error', onRetry: _load);
+    if (_error != null) return loadErrorView(_error!, page: 'Settings', onRetry: _load);
     if (_overview == null) return const LoadingState();
     final p = context.hp;
     final lic = _overview!['license'] as Json;

@@ -397,8 +397,8 @@ class _RestaurantsScreenState extends ConsumerState<RestaurantsScreen> {
                         title: '${r['name']}',
                         subtitle: '${r['code']} · ${titleCase('${r['plan'] ?? 'no plan'}')}${r['licenseEndsAt'] == null ? '' : ' · ends ${shortDate(r['licenseEndsAt'])}'}',
                         total: '',
-                        status: statusLabel(r['status']),
-                        tone: toneForStatus(r['status'] as String?),
+                        status: restaurantStatusLabel(r['status'], hasPlan: r['plan'] != null),
+                        tone: restaurantStatusTone(r['status'], hasPlan: r['plan'] != null),
                         onTap: () => c.go('/restaurants/${r['id']}'),
                       ),
                     ),
@@ -428,7 +428,7 @@ class _RestaurantsScreenState extends ConsumerState<RestaurantsScreen> {
                                 DataCell(Text('${r['code']}', style: HPType.mono(context.hp.muted))),
                                 DataCell(Text('${r['ownerEmail']}')),
                                 DataCell(Text(titleCase('${r['plan'] ?? '—'}'))),
-                                DataCell(StatusChip(label: statusLabel(r['status']), tone: toneForStatus(r['status'] as String?))),
+                                DataCell(StatusChip(label: restaurantStatusLabel(r['status'], hasPlan: r['plan'] != null), tone: restaurantStatusTone(r['status'], hasPlan: r['plan'] != null))),
                                 DataCell(Text(shortDate(r['licenseEndsAt']))),
                                 DataCell(Text('${r['branches']}')),
                               ]),
@@ -906,6 +906,8 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
 
         const gap = SizedBox(height: HPSpace.lg, width: HPSpace.lg);
         // archives only matter once a restaurant is suspended or has been archived
+        // a revoked / never-issued license leaves the account open but everything inside it locked
+        final hasPlan = ent['state'] != 'none';
         final showCold = archivesList.isNotEmpty || status == 'suspended' || status == 'archived';
         return ListView(padding: EdgeInsets.all(narrow ? HPSpace.lg : HPSpace.x4), children: [
           Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: HPSpace.md, runSpacing: HPSpace.sm, children: [
@@ -914,11 +916,11 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
               Text('${r['name']}', style: HPType.titleScreen(p.text).copyWith(fontSize: narrow ? 28 : 34)),
               Text('${r['code']} · ${r['ownerEmail']}', style: HPType.body(p.muted)),
             ]),
-            StatusChip(label: statusLabel(status), tone: toneForStatus(status)),
-            StatusChip(label: 'License: ${statusLabel(ent['state'])}', tone: toneForStatus('${ent['state']}')),
+            StatusChip(key: const Key('restaurant-status'), label: restaurantStatusLabel(status, hasPlan: hasPlan), tone: restaurantStatusTone(status, hasPlan: hasPlan)),
+            StatusChip(label: hasPlan ? 'License: ${statusLabel(ent['state'])}' : 'License: none · console locked', tone: hasPlan ? toneForStatus('${ent['state']}') : HPTone.danger),
           ]),
           const SizedBox(height: HPSpace.md),
-          _LifecyclePipeline(status: status),
+          _LifecyclePipeline(status: status, hasPlan: hasPlan),
           const SizedBox(height: HPSpace.lg),
           LayoutBuilder(builder: (c2, box) {
             final cols = narrow ? 2 : 4;
@@ -960,14 +962,15 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
 }
 
 class _LifecyclePipeline extends StatelessWidget {
-  const _LifecyclePipeline({required this.status});
+  const _LifecyclePipeline({required this.status, this.hasPlan = true});
   final String status;
+  final bool hasPlan;
   @override
   Widget build(BuildContext context) {
     final p = context.hp;
-    final steps = const [
+    final steps = [
       ('pending', 'Create', 'Pending owner verification'),
-      ('active', 'Active', 'Operational & licensed'),
+      hasPlan ? ('active', 'Active', 'Operational & licensed') : ('active', 'Active · no plan', 'Locked until a plan is issued'),
       ('suspended', 'Suspended', 'Paused · Logs remain on system'),
       ('archived', 'Archived', 'Cold storage · Downloadable bundle'),
       ('deleted', 'Delete', 'Housekeeping removal'),
@@ -1016,7 +1019,9 @@ class _LifecyclePipeline extends StatelessWidget {
         caption: steps[i].$3,
         isCurrent: !isBlocked && (steps[i].$1 == status || (status == 'pending' && i == 0)),
         isPast: !isBlocked && currentIdx > i,
-        tone: status == 'suspended' && steps[i].$1 == 'suspended'
+        tone: status == 'active' && !hasPlan && steps[i].$1 == 'active'
+            ? HPTone.saffron
+            : status == 'suspended' && steps[i].$1 == 'suspended'
             ? HPTone.saffron
             : status == 'archived' && steps[i].$1 == 'archived'
                 ? HPTone.pending
@@ -1091,37 +1096,6 @@ class _AuditListState extends ConsumerState<AuditList> {
     return '${shortDate(iso)}, $h:${t.minute.toString().padLeft(2, '0')} ${t.hour < 12 ? 'AM' : 'PM'}';
   }
 
-  static String _short(Object? v) {
-    if (v == null) return '—';
-    // lists of records (roles, dish sizes): their names, e.g. "Onboarding Admin, Platform Auditor"
-    if (v is List) return v.isEmpty ? 'none' : _short(v.map((x) => x is Map ? (x['name'] ?? x['code'] ?? x) : x).join(', '));
-    final s = v is String ? v : '$v';
-    return s.length > 60 ? '${s.substring(0, 57)}…' : s;
-  }
-
-  /// Field-by-field changes ("Status: active → suspended"); for creations just the new values.
-  static List<(String, String)> _changes(Map<String, dynamic> e) {
-    // before/after are free-form JSON: anything that is not an object (list, text, number) shows as one value
-    Map<String, dynamic> asMap(Object? v) => v is Map ? v.cast<String, dynamic>() : v == null ? const {} : {e['action'] == 'platform.admin.roles_changed' ? 'roles' : 'value': v};
-    final before = asMap(e['before']);
-    final after = asMap(e['after']);
-    const hidden = {'id', 'tenantId', 'branchId', 'seq', 'createdAt', 'updatedAt', 'signedToken', 'passwordHash', 'pinHash', 'tokenHash', 'deleted'};
-    final keys = {...before.keys, ...after.keys}.where((k) => !hidden.contains(k)).toList();
-    return [
-      for (final k in keys)
-        if ('${before[k]}' != '${after[k]}' || before.isEmpty)
-          (titleCase(k.replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}').toLowerCase()), before.isEmpty || !before.containsKey(k) ? _short(after[k]) : '${_short(before[k])} → ${_short(after[k])}'),
-    ];
-  }
-
-  static List<(String, String)> _safeChanges(Map<String, dynamic> e) {
-    try {
-      return _changes(e);
-    } catch (_) {
-      return const []; // one malformed record must not blank the whole log
-    }
-  }
-
   @override
   Widget build(BuildContext context) => AsyncView<Map<String, dynamic>>(
         key: ValueKey('${widget.tenantId}|${widget.action}|${widget.category}|${widget.q}'),
@@ -1133,7 +1107,7 @@ class _AuditListState extends ConsumerState<AuditList> {
           final items = (d['items'] as List).whereType<Map>().map((m) => m.cast<String, dynamic>()).take(widget.limit ?? (widget.embedded ? 12 : 1000)).toList();
           final tiles = [
             for (final e in items)
-              for (final changes in [_safeChanges(e)])
+              for (final changes in [auditChanges(e)])
               Theme(
                 data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
                 child: ExpansionTile(

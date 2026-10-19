@@ -131,7 +131,7 @@ class _TablesScreenState extends ConsumerState<TablesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_error != null) return ErrorState(message: '$_error', onRetry: _load);
+    if (_error != null) return loadErrorView(_error!, page: 'Floors & tables', onRetry: _load);
     if (_floors == null) return const SkeletonGrid(maxExtent: 140);
     final edit = _canEdit;
     final floor = _floors!.where((f) => f['id'] == _floor).firstOrNull;

@@ -76,7 +76,7 @@ class _RolesScreenState extends ConsumerState<RolesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_error != null) return ErrorState(message: '$_error', onRetry: _load);
+    if (_error != null) return loadErrorView(_error!, page: 'Roles', onRetry: _load);
     if (_data == null) return const LoadingState();
     final p = context.hp;
     final inPlan = _data!['customRolesInPlan'] == true;

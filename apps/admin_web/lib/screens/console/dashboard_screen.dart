@@ -50,7 +50,7 @@ class _RestaurantDashboardScreenState extends ConsumerState<RestaurantDashboardS
           onRefresh: () async => setState(() => _reload++),
           child: PageFrame(
             title: '${r['name']}',
-            subtitle: 'Good ${_partOfDay()} · ${lic['planName'] ?? 'No plan'} plan${lic['endsAt'] == null ? '' : ' until ${shortDate(lic['endsAt'])}'}',
+            subtitle: 'Good ${_partOfDay()} · ${lic['planName'] == null ? 'No active plan' : '${lic['planName']} plan${lic['endsAt'] == null ? '' : ' until ${shortDate(lic['endsAt'])}'}'}',
             actions: [
               StatusChip(label: _hubLabel(o['hub'] as Json?), tone: _hubTone(o['hub'] as Json?), icon: Icons.router_rounded),
               if (canReports)
@@ -71,6 +71,18 @@ class _RestaurantDashboardScreenState extends ConsumerState<RestaurantDashboardS
               IconButton(tooltip: 'Refresh', onPressed: () => setState(() => _reload++), icon: const Icon(Icons.refresh_rounded)),
             ],
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              if (lic['state'] == 'none') ...[
+                Card(
+                  key: const Key('dashboard-no-plan'),
+                  color: HPColors.amber.withValues(alpha: .12),
+                  child: ListTile(
+                    leading: const Icon(Icons.lock_outline_rounded),
+                    title: const Text('Your restaurant has no active plan'),
+                    subtitle: const Text('Menu, floors & tables, staff and the POS are locked until House Plating issues or renews your plan.'),
+                  ),
+                ),
+                const SizedBox(height: HPSpace.lg),
+              ],
               _Checklist(counts: o['counts'] as Json, hub: o['hub'] as Json?),
               if (d != null) ..._report(context, d, narrow),
             ]),

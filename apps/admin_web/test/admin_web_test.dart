@@ -227,7 +227,7 @@ void main() {
     await signIn(t);
     await t.tap(find.byKey(const Key('nav-Audit log')));
     await t.pumpAndSettle();
-    expect(find.text('Bulk Import'), findsOneWidget);
+    expect(find.text('Bulk import'), findsOneWidget);
     expect(find.byType(ExpansionTile), findsNWidgets(items.length));
     await t.tap(find.text('Admin roles changed'));
     await t.pumpAndSettle();

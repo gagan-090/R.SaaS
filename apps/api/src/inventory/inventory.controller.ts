@@ -251,6 +251,7 @@ export class InventoryController {
       const sku = b.sku.toUpperCase();
       if (await tx.inventoryProduct.findFirst({ where: { sku } })) throw conflict('duplicate_sku', `SKU ${sku} already exists`);
       await this.checkRefs(tx, b);
+      if (b.baseUnit === b.purchaseUnit) b.conversionFactor = 1; // "1 kg = 1000 kg" would divide every cost by 1000
       return tx.inventoryProduct.create({ data: { ...b, sku, tenantId: a.tenantId!, avgCostPaise: b.unitCostPaise / b.conversionFactor } });
     });
     Object.assign(audit, { objectType: 'inventory_product', objectId: p.id, after: { sku: p.sku, name: p.name, baseUnit: p.baseUnit, purchaseUnit: p.purchaseUnit, conversionFactor: n(p.conversionFactor), unitCostPaise: p.unitCostPaise } });
@@ -271,7 +272,11 @@ export class InventoryController {
       if (b.baseUnit && b.baseUnit !== before.baseUnit && (await tx.stockMovement.count({ where: { productId: id } }))) {
         throw conflict('base_unit_locked', 'The base unit cannot change after stock movements exist');
       }
-      return { before, after: await tx.inventoryProduct.update({ where: { id }, data: b }) };
+      if ((b.baseUnit ?? before.baseUnit) === (b.purchaseUnit ?? before.purchaseUnit)) b.conversionFactor = 1;
+      // before any stock moved the average cost is just the list cost, so a corrected conversion fixes it too
+      const fresh = (b.conversionFactor !== undefined || b.unitCostPaise !== undefined) && !(await tx.stockMovement.count({ where: { productId: id } }));
+      const avg = fresh ? { avgCostPaise: (b.unitCostPaise ?? before.unitCostPaise) / (b.conversionFactor ?? n(before.conversionFactor)) } : {};
+      return { before, after: await tx.inventoryProduct.update({ where: { id }, data: { ...b, ...avg } }) };
     });
     const pick = (x: typeof r.before) => ({ name: x.name, category: x.category, baseUnit: x.baseUnit, purchaseUnit: x.purchaseUnit, conversionFactor: n(x.conversionFactor), unitCostPaise: x.unitCostPaise, minStock: n(x.minStock), active: x.active });
     Object.assign(audit, { objectType: 'inventory_product', objectId: id, before: pick(r.before), after: pick(r.after) });

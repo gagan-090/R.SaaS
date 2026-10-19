@@ -37,17 +37,13 @@ class _AdminsScreenState extends ConsumerState<AdminsScreen> {
           builder: (c, set) => HPDialog(title: title, actions: [
             SecondaryButton(label: 'Cancel', onPressed: () => Navigator.pop(c)),
             PrimaryButton(label: 'Save', height: 56, onPressed: selected.isEmpty ? null : () => Navigator.pop(c, selected.toList())),
-          ], child: Column(children: [
+          ], child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             for (final r in roles.cast<Map<String, dynamic>>())
-              CheckboxListTile(
-                value: selected.contains(r['id']),
-                title: Text('${r['name']}'),
-                subtitle: Text(
-                  [if ('${r['description'] ?? ''}'.isNotEmpty) '${r['description']}', 'Can: ${(r['permissions'] as List).map(permissionLabel).join(' · ')}'].join('\n'),
-                  style: HPType.body(context.hp.muted).copyWith(fontSize: 12),
-                ),
-                isThreeLine: true,
-                onChanged: (v) => set(() => v! ? selected.add(r['id'] as String) : selected.remove(r['id'])),
+              _RoleOption(
+                key: Key('role-option-${r['name']}'),
+                role: r,
+                selected: selected.contains(r['id']),
+                onChanged: (v) => set(() => v ? selected.add(r['id'] as String) : selected.remove(r['id'])),
               ),
           ])),
         ),
@@ -282,4 +278,52 @@ class _AdminCredentialsDialogState extends State<_AdminCredentialsDialog> {
       if (_error != null) Padding(padding: const EdgeInsets.only(top: HPSpace.md), child: Text(_error!, key: const Key('admin-create-error'), style: HPType.body(context.hp.danger))),
     ])),
   );
+}
+
+/// One role in the "Roles for …" picker: the name, what it is for, and every permission as a readable chip
+/// (the old three-line subtitle cut the list off mid-word).
+class _RoleOption extends StatelessWidget {
+  const _RoleOption({super.key, required this.role, required this.selected, required this.onChanged});
+  final Map<String, dynamic> role;
+  final bool selected;
+  final ValueChanged<bool> onChanged;
+  @override
+  Widget build(BuildContext context) {
+    final p = context.hp;
+    final description = '${role['description'] ?? ''}';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: HPSpace.md),
+      child: Material(
+        color: selected ? p.brand.withValues(alpha: .06) : p.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: selected ? p.brand : p.line, width: selected ? 1.5 : 1)),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => onChanged(!selected),
+          child: Padding(
+            padding: const EdgeInsets.all(HPSpace.md),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('${role['name']}', style: HPType.titleCard(p.text).copyWith(fontSize: 16)),
+                  if (description.isNotEmpty) ...[const SizedBox(height: 2), Text(description, style: HPType.body(p.muted).copyWith(fontSize: 13.5))],
+                  const SizedBox(height: HPSpace.sm),
+                  Text('CAN', style: HPType.overline(p.muted)),
+                  const SizedBox(height: 4),
+                  Wrap(spacing: 6, runSpacing: 6, children: [
+                    for (final perm in role['permissions'] as List)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(color: p.ground, borderRadius: BorderRadius.circular(6), border: Border.all(color: p.line)),
+                        child: Text(permissionLabel(perm), style: HPType.body(p.text).copyWith(fontSize: 12.5)),
+                      ),
+                  ]),
+                ]),
+              ),
+              Checkbox(value: selected, onChanged: (v) => onChanged(v ?? false)),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
 }

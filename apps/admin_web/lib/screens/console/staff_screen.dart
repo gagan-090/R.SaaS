@@ -94,7 +94,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_error != null) return ErrorState(message: '$_error', onRetry: _load);
+    if (_error != null) return loadErrorView(_error!, page: 'Staff', onRetry: _load);
     if (_staff == null) return const Center(child: SizedBox(width: 600, child: Column(mainAxisSize: MainAxisSize.min, children: [SkeletonBox(height: 72), SizedBox(height: 12), SkeletonBox(height: 72)])));
     final p = context.hp;
     final active = _staff!.where((u) => u['status'] == 'active').toList();
@@ -109,17 +109,21 @@ class _StaffScreenState extends ConsumerState<StaffScreen> {
     final limit = _limits?['employeeLimit'] as int?;
     final used = _limits?['activeEmployees'] as int? ?? 0;
     final full = limit != null && used >= limit;
+    final noPlan = _limits?['planActive'] == false;
     return PageFrame(
       title: 'Staff',
       subtitle: '${active.length} ${active.length == 1 ? 'person' : 'people'} on the team${limit != null ? ' · $used of $limit employees in your plan' : ''}',
       actions: [
-        if (_canEdit) PrimaryButton(key: const Key('add-staff'), label: 'Add person', icon: Icons.person_add_alt_1_rounded, height: 48, onPressed: full ? null : () => _edit()),
+        if (_canEdit) PrimaryButton(key: const Key('add-staff'), label: 'Add person', icon: Icons.person_add_alt_1_rounded, height: 48, onPressed: full || noPlan ? null : () => _edit()),
       ],
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, children: [
           for (final e in byRole.entries) StatusChip(label: '${e.value} · ${e.key}'),
         ]),
-        if (full && _canEdit)
+        if (noPlan && _canEdit)
+          _Notice(key: const Key('staff-no-plan'), icon: Icons.lock_outline_rounded, title: 'No active plan',
+              text: 'People cannot be added or changed until your restaurant has an active plan. ${_isOwner ? 'Ask House Plating to issue or renew your plan' : 'Ask the owner to renew the plan'}.'),
+        if (full && !noPlan && _canEdit)
           _Notice(key: const Key('limit-reached'), icon: Icons.group_off_outlined, title: 'Employee limit reached',
               text: 'Your plan allows $limit active employees. Turn someone off, or ${_isOwner ? 'ask House Plating for a bigger plan' : 'ask the owner about a bigger plan'}.'),
         if (_limits?['staffPortal'] != true)

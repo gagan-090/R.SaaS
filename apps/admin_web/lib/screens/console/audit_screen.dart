@@ -1,4 +1,3 @@
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +7,7 @@ import '../../api/api_client.dart';
 import '../../state/providers.dart';
 import '../../util/download.dart';
 import '../../widgets/common.dart';
+import '../../widgets/labels.dart';
 import 'dashboard_screen.dart' show rupees;
 
 /// Auditor portal (also for owners and admins with audit access): the restaurant's activity log with filters and
@@ -120,7 +120,7 @@ class _LogTabState extends State<_LogTab> {
   @override
   Widget build(BuildContext context) {
     final p = context.hp;
-    if (_error != null) return ErrorState(message: '$_error', onRetry: _load);
+    if (_error != null) return loadErrorView(_error!, page: 'Audit & records', onRetry: _load);
     final f = _facets;
     Widget drop(String key, String label, String? value, List<(String, String)> items, ValueChanged<String?> on) => SizedBox(
           width: 210,
@@ -139,9 +139,9 @@ class _LogTabState extends State<_LogTab> {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, crossAxisAlignment: WrapCrossAlignment.end, children: [
         if (f != null) ...[
-          drop('f-module', 'Area', _module, [for (final m in (f['modules'] as List).cast<String>()) (m, m)], (v) => _module = v),
+          drop('f-module', 'Area', _module, [for (final m in (f['modules'] as List).cast<String>()) (m, titleCase(m))], (v) => _module = v),
           drop('f-actor', 'Employee', _actor, [for (final e in (f['employees'] as List).cast<Json>()) (e['id'] as String, '${e['name']}')], (v) => _actor = v),
-          drop('f-role', 'Role', _role, [for (final r in (f['roles'] as List).cast<String>()) (r, r == 'it_admin' ? 'Restaurant admin' : r)], (v) => _role = v),
+          drop('f-role', 'Role', _role, [for (final r in (f['roles'] as List).cast<String>()) (r, roleWord(r))], (v) => _role = v),
         ],
         SizedBox(width: 140, child: TextField(key: const Key('f-from'), controller: _from, decoration: const InputDecoration(labelText: 'From (YYYY-MM-DD)'), onSubmitted: (_) => _load())),
         SizedBox(width: 140, child: TextField(key: const Key('f-to'), controller: _to, decoration: const InputDecoration(labelText: 'To'), onSubmitted: (_) => _load())),
@@ -159,21 +159,44 @@ class _LogTabState extends State<_LogTab> {
           child: Column(children: [
             for (final (i, e) in _rows!.indexed) ...[
               if (i > 0) const Divider(height: 1),
+              for (final changes in [auditChanges(e)])
               ExpansionTile(
                 key: Key('log-${e['id']}'),
-                leading: Icon(e['source'] == 'pos' ? Icons.point_of_sale_rounded : Icons.cloud_outlined, color: p.muted),
-                title: Text('${e['action']}', style: HPType.label(p.text)),
+                leading: Tooltip(
+                  message: e['source'] == 'pos' ? 'Done on the POS' : 'Done online (console or app)',
+                  child: Icon(e['source'] == 'pos' ? Icons.point_of_sale_rounded : Icons.language_rounded, color: p.muted),
+                ),
+                title: Text(auditActionLabel(e['action']), style: HPType.label(p.text)),
                 subtitle: Text(
-                  [_when(e['at']), '${e['actorName']}${e['actorRole'] != null ? ' (${e['actorRole']})' : ''}', '${e['module']}', if (e['reason'] != null) 'reason: ${e['reason']}'].join(' · '),
+                  [
+                    _when(e['at']),
+                    'by ${e['actorName'] ?? 'System'}${e['actorRole'] != null ? ' (${roleWord(e['actorRole'])})' : ''}',
+                    if (e['module'] != null) titleCase('${e['module']}'),
+                    if (e['reason'] != null) '“${e['reason']}”',
+                  ].join(' · '),
                   style: HPType.body(p.muted),
                 ),
                 childrenPadding: const EdgeInsets.fromLTRB(HPSpace.lg, 0, HPSpace.lg, HPSpace.md),
                 expandedCrossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Record: ${e['objectType'] ?? '—'} ${e['objectId'] ?? ''}', style: HPType.mono(p.muted)),
-                  if (e['requestId'] != null) Text('Request: ${e['requestId']}', style: HPType.mono(p.muted)),
-                  if (e['before'] != null) Text('Before: ${const JsonEncoder.withIndent('  ').convert(e['before'])}', style: HPType.mono(p.text)),
-                  if (e['after'] != null) Text('After: ${const JsonEncoder.withIndent('  ').convert(e['after'])}', style: HPType.mono(p.text)),
+                  for (final (k, v) in changes)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        SizedBox(width: 170, child: Text(k, style: HPType.body(p.muted))),
+                        Expanded(child: SelectableText(v, style: HPType.body(p.text))),
+                      ]),
+                    ),
+                  if (changes.isEmpty) Text('No details recorded.', style: HPType.body(p.faint)),
+                  // ids stay available (the filter searches them) but small and out of the way
+                  if (e['objectId'] != null || e['requestId'] != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: HPSpace.sm),
+                      child: SelectableText(
+                        [if (e['objectId'] != null) 'Record id ${e['objectId']}', if (e['requestId'] != null) 'Request id ${e['requestId']}'].join(' · '),
+                        style: HPType.body(p.faint).copyWith(fontSize: 11.5),
+                      ),
+                    ),
                 ],
               ),
             ],
@@ -221,7 +244,7 @@ class _SalesTabState extends State<_SalesTab> {
   @override
   Widget build(BuildContext context) {
     final p = context.hp;
-    if (_error != null) return ErrorState(message: '$_error', onRetry: _load);
+    if (_error != null) return loadErrorView(_error!, page: 'Audit & records', onRetry: _load);
     final s = _s;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, crossAxisAlignment: WrapCrossAlignment.end, children: [

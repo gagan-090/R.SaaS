@@ -319,7 +319,7 @@ class _FloorEditorState extends State<FloorEditor> {
   @override
   Widget build(BuildContext context) {
     final p = context.hp;
-    if (_error != null) return ErrorState(message: '$_error', onRetry: _load);
+    if (_error != null) return loadErrorView(_error!, page: 'Floor plan', onRetry: _load);
     if (_server == null) return const SkeletonBox(height: 420);
     final narrow = MediaQuery.sizeOf(context).width < 900;
     final overlaps = _overlaps;

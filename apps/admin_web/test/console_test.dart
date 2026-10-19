@@ -33,6 +33,7 @@ class FakeRestaurantApi {
   final customRoles = <Map<String, dynamic>>[];
   final tableLive = <String, String>{}; // table id → occupied / billing from synced orders
   bool inventoryInPlan = true;
+  bool noPlan = false; // license revoked: every plan-gated route answers 403 feature_not_in_plan
   int failNextMovement = 0; // simulate a dropped connection: the client must retry with the same key
   final movements = <Map<String, dynamic>>[];
   final products = <Map<String, dynamic>>[
@@ -59,7 +60,9 @@ class FakeRestaurantApi {
         'branding': brandingInPlan ? brand : null,
         'restaurant': {'id': 't1', 'code': 'R000000', 'name': 'Demo Dhaba', 'gstin': '27AAAPA1234A1Z5', 'address': 'MG Road, Pune', 'status': 'active'},
         'branches': [{'id': 'b1', 'code': 'BR01', 'name': 'MG Road'}],
-        'license': {'state': 'active', 'plan': 'premium', 'planName': 'Premium', 'features': features, 'limits': {}, 'endsAt': '2026-11-12T00:00:00Z'},
+        'license': noPlan
+            ? {'state': 'none', 'plan': null, 'planName': null, 'features': <String>[], 'limits': {}, 'endsAt': null}
+            : {'state': 'active', 'plan': 'premium', 'planName': 'Premium', 'features': features, 'limits': {}, 'endsAt': '2026-11-12T00:00:00Z'},
         'counts': {'items': items.length, 'categories': cats.length, 'tables': floors.fold<int>(0, (s, f) => s + (f['tables'] as List).length), 'staff': staff.where((u) => u['status'] == 'active').length, 'devices': devices.length},
         'hub': {'online': true, 'lastSeenAt': DateTime.now().toUtc().toIso8601String()},
       };
@@ -106,6 +109,9 @@ class FakeRestaurantApi {
         final body = req.body.isEmpty ? <String, dynamic>{} : jsonDecode(req.body) as Map<String, dynamic>;
         Object? out;
         var status = 200;
+        if (noPlan && (path.startsWith('/menu/') || path.startsWith('/floors'))) {
+          return http.Response('{"code":"feature_not_in_plan","message":"Your plan does not include \\"menu\\""}', 403);
+        }
         switch ((req.method, path)) {
           case ('POST', '/auth/login'):
             out = {'status': 'ok', 'accessToken': 'a', 'refreshToken': 'r', 'expiresIn': 900};
@@ -172,6 +178,11 @@ class FakeRestaurantApi {
           case ('GET', '/inventory/products'):
             if (!inventoryInPlan) return http.Response('{"code":"feature_not_in_plan","message":"Your plan does not include this"}', 403);
             out = products;
+          case ('POST', '/inventory/products'):
+            final pr = {...body, 'id': id('p'), 'stock': 0, 'valuePaise': 0, 'low': false, 'negative': false, 'expiring': <Object>[], 'avgCostPaise': 0};
+            products.add(pr);
+            out = pr;
+            status = 201;
           case ('GET', '/inventory/locations'):
             out = [];
           case ('GET', '/inventory/suppliers'):
@@ -237,7 +248,7 @@ class FakeRestaurantApi {
           case ('GET', '/imports/job-1/errors.csv'):
             return http.Response('severity,sheet,row,column,problem', 200, headers: {'content-type': 'text/csv'});
           case ('GET', '/staff/limits'):
-            out = {'employeeLimit': null, 'activeEmployees': staff.where((u) => u['status'] == 'active').length - 1, 'staffPortal': true, 'customRoles': true, 'extendedRoles': true};
+            out = {'employeeLimit': null, 'activeEmployees': staff.where((u) => u['status'] == 'active').length - 1, 'staffPortal': true, 'customRoles': true, 'extendedRoles': true, 'planActive': !noPlan};
           case ('GET', '/roles'):
             out = {'builtIn': [], 'custom': customRoles, 'catalog': [], 'customRolesInPlan': true};
           case ('PUT', '/me/pin'):
@@ -954,5 +965,77 @@ void main() {
     await t.pumpAndSettle();
     expect(find.text('Showing 1–24 of 60 dishes'), findsNWidgets(2));
     expect(find.byKey(const Key('item-Dish 1')), findsOneWidget);
+  });
+
+  group('client review (HousePlating.pdf)', () {
+    testWidgets('revoked plan: dashboard says "No active plan" (never "No plan plan"); menu and floors explain the lock, no "Something went wrong"', (t) async {
+      await start(t, setup: (f) => f.noPlan = true);
+      expect(find.textContaining('No active plan'), findsOneWidget);
+      expect(find.textContaining('plan plan'), findsNothing);
+      expect(find.byKey(const Key('dashboard-no-plan')), findsOneWidget);
+      for (final page in ['Menu', 'Floors & tables']) {
+        await go(t, page, size: desktop);
+        expect(find.byKey(const Key('plan-locked')), findsOneWidget, reason: page);
+        expect(find.text('Not in your plan'), findsOneWidget);
+        expect(find.text('Something went wrong'), findsNothing);
+        expect(find.text('Try again'), findsNothing);
+      }
+    });
+
+    testWidgets('revoked plan: nobody can be added on the Staff page', (t) async {
+      await start(t, setup: (f) => f.noPlan = true);
+      await go(t, 'Staff', size: desktop);
+      expect(find.byKey(const Key('staff-no-plan')), findsOneWidget);
+      expect(t.widget<PrimaryButton>(find.byKey(const Key('add-staff'))).onPressed, isNull);
+    });
+
+    testWidgets('standard categories: the confirm button says "Add categories", not "Delete"', (t) async {
+      await start(t);
+      await go(t, 'Menu', size: desktop);
+      await t.tap(find.byKey(const Key('seed-categories')));
+      await t.pumpAndSettle();
+      expect(find.text('Add the standard categories?'), findsOneWidget);
+      expect(find.widgetWithText(PrimaryButton, 'Add categories'), findsOneWidget);
+      expect(find.byType(DangerButton), findsNothing);
+      expect(find.text('Delete'), findsNothing);
+    });
+
+    testWidgets('a dish added under "Non-Veg Main Course" starts as non-veg', (t) async {
+      await start(t, setup: (f) => f.cats.add({'id': 'c-nv', 'name': 'Non-Veg Main Course', 'sortOrder': 0}));
+      await go(t, 'Menu', size: desktop);
+      await t.tap(find.byKey(const Key('add-dish')));
+      await t.pumpAndSettle();
+      bool veg() => t.widget<SwitchListTile>(find.widgetWithText(SwitchListTile, 'Vegetarian')).value;
+      expect(veg(), isFalse);
+      await t.enterText(find.byKey(const Key('dish-name')), 'Butter Chicken');
+      await t.pumpAndSettle();
+      expect(veg(), isFalse);
+    });
+
+    testWidgets('inventory: one "Add category" button; same buy / count unit needs no conversion; stock in hand is recorded as opening stock', (t) async {
+      final api = await start(t);
+      await go(t, 'Inventory', size: desktop);
+      expect(find.text('Category ++'), findsNothing);
+      expect(find.text('Add category'), findsOneWidget);
+      await t.tap(find.byKey(const Key('add-product')));
+      await t.pumpAndSettle();
+      await t.enterText(find.byKey(const Key('product-sku')), 'WHEAT');
+      await t.enterText(find.byKey(const Key('product-name')), 'Wheat flour');
+      for (final (key, unit) in [('base-unit', 'kg'), ('purchase-unit', 'kg')]) {
+        await t.ensureVisible(find.byKey(Key(key)));
+        await t.tap(find.byKey(Key(key)));
+        await t.pumpAndSettle();
+        await t.tap(find.text(unit).last);
+        await t.pumpAndSettle();
+      }
+      expect(find.byKey(const Key('product-factor')), findsNothing);
+      expect(find.byKey(const Key('product-factor-same')), findsOneWidget);
+      await t.enterText(find.byKey(const Key('product-cost')), '25');
+      await t.enterText(find.byKey(const Key('product-opening')), '1000');
+      await t.tap(find.byKey(const Key('save-product')));
+      await t.pumpAndSettle();
+      expect(api.last('POST', '/inventory/products'), allOf(containsPair('conversionFactor', 1.0), containsPair('unitCostPaise', 2500)));
+      expect(api.last('POST', '/inventory/movements'), allOf(containsPair('type', 'opening'), containsPair('quantity', 1000.0), containsPair('unit', 'kg')));
+    });
   });
 }

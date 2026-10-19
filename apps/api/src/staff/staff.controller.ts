@@ -112,6 +112,12 @@ export class StaffController {
     if (active >= limit) throw forbidden('employee_limit', `Your plan allows ${limit} active employees. Turn someone off or ask for a bigger plan.`);
   }
 
+  /** No active plan (never issued, revoked or expired to read-only) means no new or re-activated employees. */
+  private assertPlanActive(ent: Ent) {
+    if (ent.state === 'none') throw forbidden('no_active_plan', 'Your restaurant has no active plan, so employees cannot be added or changed. Ask House Plating to issue a plan.');
+    if (ent.readOnly) throw forbidden('license_read_only', `Your plan is ${ent.state.replace(/_/g, ' ')}, so employees cannot be added or changed. Renew or contact House Plating.`);
+  }
+
   private async emailTaken(email: string, exceptUserId?: string) {
     const [u, admin] = await this.db.platform((p) => Promise.all([p.user.findUnique({ where: { email } }), p.platformAdmin.findUnique({ where: { email } })]));
     return !!admin || (!!u && u.id !== exceptUserId);
@@ -163,7 +169,7 @@ export class StaffController {
       return {
         employeeLimit: ent.limits.staffPerBranch ?? null, activeEmployees: active,
         staffPortal: ent.features.includes('staff_portal'), customRoles: ent.features.includes('roles.custom'),
-        extendedRoles: ent.features.includes('roles.extended'),
+        extendedRoles: ent.features.includes('roles.extended'), planActive: ent.state !== 'none' && !ent.readOnly,
       };
     });
   }
@@ -177,6 +183,7 @@ export class StaffController {
     const [pinHash, passwordHash] = await Promise.all([b.pin ? hashPassword(b.pin) : null, b.password ? hashPassword(b.password) : null]);
     const r = await this.t(a, async (tx) => {
       const ent = await this.licenses.entitlement(tx, a.tenantId!);
+      this.assertPlanActive(ent);
       const cr = await this.assertCanAssign(tx, a, ent, b.role, b.customRoleId, b.canDiscount);
       if (b.status === 'active') await this.assertUnderLimit(tx, ent);
       if (b.webAccess && !ent.features.includes('staff_portal')) throw forbidden('feature_not_in_plan', 'Web portal access for employees is not in your plan');
@@ -216,6 +223,8 @@ export class StaffController {
       if (!before) throw notFound('Employee');
       const role = before.roles[0];
       const ent = await this.licenses.entitlement(tx, a.tenantId!);
+      // turning someone off is always allowed (a leaver must lose access even without a plan)
+      if (!(Object.keys(b).length === 1 && b.status === 'disabled')) this.assertPlanActive(ent);
       if (role?.role === 'owner' && (b.role || b.status === 'disabled' || b.webAccess === false)) {
         throw forbidden('owner_protected', 'The owner account cannot be demoted or turned off here');
       }

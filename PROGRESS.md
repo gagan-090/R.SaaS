@@ -266,3 +266,16 @@ were verified in its live Swagger document and added to the OpenAPI artifact. No
 Verification: admin web **89 passed** (6 new), ui_kit **12 passed**, POS **25 passed**, Flutter analyze clean on
 POS (admin web: 5 pre-existing infos in menu_screen), API `tsc --noEmit` clean. Not reproduced against live data:
 the "audit log is blank" report (the list is now hardened against the likeliest cause, a non-object before/after).
+
+## Client review fixes (HousePlating.pdf) — 2026-10-19
+1. Admins → Edit roles: each role is a card with its name, purpose and every permission as a readable chip (no cut-off text).
+2. Console dashboard: "No active plan" instead of "No plan plan"; a banner explains that menu, floors, staff and the POS stay locked without a plan.
+3. Restaurant list/detail: an active restaurant without a license shows "Active · no plan" (amber); the lifecycle step reads "Locked until a plan is issued".
+4. Menu, Floors & tables, Staff, Roles, Settings, Audit: a plan refusal shows "Not in your plan" with what to do, not "Something went wrong / Try again".
+5. API: adding or re-activating employees needs an active, non-read-only plan (`no_active_plan` / `license_read_only`); turning someone off still works. Staff page disables "Add person" (`planActive` in /staff/limits).
+6. Excel templates: data sheets first, friendly headers ("Item code *"), required columns coloured, hover notes, TRUE/FALSE + unit drop-downs, 4 sample dishes (no quarter plate), short "How to fill" sheet last. The importer accepts both header spellings.
+7. "Seed 40 categories" → "Add standard categories", confirm button "Add categories" (not a red "Delete"); a second run says they are already there.
+8. Add dish: the Vegetarian switch follows the category ("Non-Veg …" → non-veg) and meat words in the name, until the owner flips it.
+9. Inventory: one "Add category" button. 10. Same buy/count unit needs no conversion (forced to 1 in UI and API; avg cost recomputed before stock moves); "Stock in hand now" on a new product is recorded as opening stock.
+11. Audit & records: actions in words ("Expense added"), roles/areas in words, field-by-field changes instead of JSON.
+Tests: admin_web 99 passed (new: client review group in console_test, review_labels_test); ui_kit 12 passed; API tsc + eslint clean; template round-trip through readSheet clean. API DB-backed specs (imports.spec updated) not run — no local Postgres.

@@ -255,7 +255,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
           const SizedBox(width: HPSpace.sm),
           SecondaryButton(
             key: const Key('inv-category-plus'),
-            label: 'Category ++',
+            label: 'Add category',
             icon: Icons.add_rounded,
             height: 48,
             onPressed: _addCategoryPrompt,
@@ -286,13 +286,6 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                   selected: _stockCat == c,
                   onTap: () => setState(() => _stockCat = c),
                 ),
-              ),
-            if (_can('inventory.manage'))
-              ActionChip(
-                key: const Key('inv-cat-chip-add'),
-                avatar: const Icon(Icons.add_rounded, size: 16),
-                label: const Text('Category ++'),
-                onPressed: _addCategoryPrompt,
               ),
           ],
         ),
@@ -399,6 +392,7 @@ class _ProductEditorState extends State<_ProductEditor> {
   late final _cat = TextEditingController(text: widget.product?['category'] as String? ?? '');
   late final _factor = TextEditingController(text: '${widget.product?['conversionFactor'] ?? 1}'.replaceAll(RegExp(r'\.0+$'), ''));
   late final _cost = TextEditingController(text: widget.product == null ? '' : ((widget.product!['unitCostPaise'] as int) / 100).toStringAsFixed(2));
+  final _opening = TextEditingController();
   late final _min = TextEditingController(text: '${widget.product?['minStock'] ?? 0}'.replaceAll(RegExp(r'\.0+$'), ''));
   late String _base = widget.product?['baseUnit'] as String? ?? 'g';
   late String _purchase = widget.product?['purchaseUnit'] as String? ?? 'kg';
@@ -432,7 +426,9 @@ class _ProductEditorState extends State<_ProductEditor> {
   }
 
   Future<void> _save() async {
-    final factor = double.tryParse(_factor.text.trim());
+    // same unit both ways: nothing to convert, whatever the box held
+    final factor = _base == _purchase ? 1.0 : double.tryParse(_factor.text.trim());
+    final opening = double.tryParse(_opening.text.trim().isEmpty ? '0' : _opening.text.trim());
     final cost = double.tryParse(_cost.text.trim().isEmpty ? '0' : _cost.text.trim());
     final min = double.tryParse(_min.text.trim().isEmpty ? '0' : _min.text.trim());
     if (_isNew && !RegExp(r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,39}$').hasMatch(_sku.text.trim())) return setState(() => _error = 'SKU: letters, digits, - _ . (no spaces)');
@@ -440,6 +436,7 @@ class _ProductEditorState extends State<_ProductEditor> {
     if (factor == null || factor <= 0) return setState(() => _error = 'Conversion must be a number above 0');
     if (cost == null || cost < 0) return setState(() => _error = 'Cost must be a number (₹ per purchase unit)');
     if (min == null || min < 0) return setState(() => _error = 'Reorder level must be 0 or more');
+    if (opening == null || opening < 0) return setState(() => _error = 'Stock in hand must be 0 or more');
     setState(() {
       _busy = true;
       _error = null;
@@ -450,7 +447,15 @@ class _ProductEditorState extends State<_ProductEditor> {
     };
     try {
       if (_isNew) {
-        await widget.api.createInvProduct({...body, 'sku': _sku.text.trim().toUpperCase()});
+        final created = await widget.api.createInvProduct({...body, 'sku': _sku.text.trim().toUpperCase()});
+        // stock only changes through movements, so the "stock in hand" box records the opening stock right away
+        if (opening > 0 && created['id'] != null) {
+          await widget.api.invMove({
+            'type': 'opening', 'productId': created['id'], 'quantity': opening, 'unit': _purchase,
+            'locationId': _location, 'unitCostPaise': (cost * 100).round(),
+            'idempotencyKey': 'web-open-${DateTime.now().microsecondsSinceEpoch}-${math.Random().nextInt(1 << 32)}',
+          });
+        }
       } else {
         await widget.api.updateInvProduct(widget.product!['id'] as String, body);
       }
@@ -538,7 +543,7 @@ class _ProductEditorState extends State<_ProductEditor> {
           ActionChip(
             key: const Key('editor-cat-plus'),
             avatar: const Icon(Icons.add_rounded, size: 16),
-            label: const Text('Category ++'),
+            label: const Text('New category'),
             onPressed: () async {
               final c = TextEditingController();
               final ok = await showDialog<bool>(
@@ -582,15 +587,37 @@ class _ProductEditorState extends State<_ProductEditor> {
             ),
         ]),
         const SizedBox(height: HPSpace.sm),
-        Text('Stock is counted in the base unit. You buy in the purchase unit; "1 purchase unit = N base units".', style: HPType.body(p.muted).copyWith(fontSize: 12)),
+        Text('"Count in" is how recipes and stock are measured (e.g. g). "Buy in" is how the supplier sells it (e.g. kg). '
+            'When they differ, say how many of one fit in the other — 1 kg = 1000 g.', style: HPType.body(p.muted).copyWith(fontSize: 12)),
         const SizedBox(height: HPSpace.sm),
-        Row(children: [
-          Expanded(child: unit('base-unit', 'Base unit', _base, (v) => _base = v)),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(child: unit('base-unit', 'Count in', _base, (v) => _base = v)),
           const SizedBox(width: HPSpace.sm),
-          Expanded(child: unit('purchase-unit', 'Purchase unit', _purchase, (v) => _purchase = v)),
+          Expanded(child: unit('purchase-unit', 'Buy in', _purchase, (v) => _purchase = v)),
           const SizedBox(width: HPSpace.sm),
-          Expanded(child: TextField(key: const Key('product-factor'), controller: _factor, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: InputDecoration(labelText: '1 $_purchase = ? $_base'))),
+          Expanded(
+            child: _base == _purchase
+                ? InputDecorator(key: const Key('product-factor-same'), decoration: const InputDecoration(labelText: 'Conversion', enabled: false), child: Text('Same unit', style: HPType.body(p.muted)))
+                : TextField(
+                    key: const Key('product-factor'),
+                    controller: _factor,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(labelText: '$_base in 1 $_purchase', suffixText: _base, helperText: 'e.g. 1 $_purchase = ${_factor.text.isEmpty ? '?' : _factor.text} $_base'),
+                    onChanged: (_) => setState(() {}),
+                  ),
+          ),
         ]),
+        const SizedBox(height: HPSpace.md),
+        if (_isNew)
+          TextField(
+            key: const Key('product-opening'),
+            controller: _opening,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(labelText: 'Stock in hand now (optional)', suffixText: _purchase, helperText: 'Saved as opening stock. Later stock comes from Received, Kitchen use and bills.'),
+          )
+        else
+          Text('In stock: ${qtyText(widget.product!['stock'] as num? ?? 0, _base)}. To add or correct stock, use "Receive stock" or "Stock count" from the product\'s ⋮ menu — this form does not change the quantity.',
+              key: const Key('product-stock-note'), style: HPType.body(p.muted).copyWith(fontSize: 12)),
         const SizedBox(height: HPSpace.md),
         Row(children: [
           Expanded(child: TextField(key: const Key('product-cost'), controller: _cost, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: InputDecoration(labelText: 'Cost per $_purchase', prefixText: '₹ '))),

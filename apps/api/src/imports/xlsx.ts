@@ -49,8 +49,11 @@ function cellValue(c: ExcelJS.Cell): { value: unknown; formula: boolean } {
   return { value: v, formula: false };
 }
 
+/** "Item code *" / "item_code" / "ITEM CODE" → "item_code": the template shows friendly headers, the code reads keys. */
+export const headerKey = (v: unknown) => String(v ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+
 /**
- * Reads a sheet into rows keyed by its header names (row 1, case-insensitive). Missing required headers, unknown
+ * Reads a sheet into rows keyed by its header names (row 1, case-insensitive; spaces, "*" and punctuation ignored). Missing required headers, unknown
  * headers (warning) and formula cells are reported; blank rows are skipped.
  */
 export function readSheet(wb: ExcelJS.Workbook, name: string, required: string[], optional: string[], issues: CellIssue[], mustExist = true): SheetRow[] | null {
@@ -59,11 +62,14 @@ export function readSheet(wb: ExcelJS.Workbook, name: string, required: string[]
     if (mustExist) issues.push({ sheet: name, row: 0, column: '', message: `The "${name}" sheet is missing`, severity: 'error' });
     return null;
   }
+  const known = [...required, ...optional];
+  // a header matches a declared column however it is spelled ("Item code *" ↔ "item_code", "Tax Rate (%)" ↔ "tax rate (%)")
+  const byKey = new Map(known.map((k) => [headerKey(k), k]));
   const headers: string[] = [];
   ws.getRow(1).eachCell({ includeEmpty: true }, (c, col) => {
-    headers[col] = String(cellValue(c).value ?? '').trim().toLowerCase();
+    const raw = String(cellValue(c).value ?? '').trim().toLowerCase();
+    headers[col] = byKey.get(headerKey(raw)) ?? raw;
   });
-  const known = [...required, ...optional];
   for (const h of required) if (!headers.includes(h)) issues.push({ sheet: name, row: 1, column: h, message: `Required column "${h}" is missing`, severity: 'error' });
   for (const h of headers) if (h && !known.includes(h)) issues.push({ sheet: name, row: 1, column: h, message: `Unknown column "${h}" is ignored`, severity: 'warning' });
   if (required.some((h) => !headers.includes(h))) return [];

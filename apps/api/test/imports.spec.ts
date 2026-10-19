@@ -35,7 +35,7 @@ describe('excel import', () => {
   });
   afterAll(() => t.close());
 
-  it('templates download with an Instructions sheet and example rows', async () => {
+  it('templates download with the data sheets first, friendly headers, a few example rows and a short help sheet', async () => {
     const res = await t.http().get(api('/imports/templates/menu')).set(owner()).buffer(true).parse((resp, cb) => {
       const chunks: Buffer[] = [];
       resp.on('data', (c: Buffer) => chunks.push(c));
@@ -44,27 +44,30 @@ describe('excel import', () => {
     expect(res.headers['content-type']).toMatch(/spreadsheetml/);
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(res.body as ArrayBuffer);
-    expect(wb.worksheets.map((w) => w.name)).toEqual(['Instructions', 'Items', 'Variants', 'Recipes']);
-    expect(wb.getWorksheet('Variants')!.actualRowCount).toBeGreaterThan(8);
+    expect(wb.worksheets.map((w) => w.name)).toEqual(['Items', 'Variants', 'Recipes', 'How to fill']);
+    expect(wb.getWorksheet('Variants')!.actualRowCount).toBeGreaterThan(3);
+    expect(wb.getWorksheet('Items')!.getRow(1).getCell(1).value).toBe('Item code *');
+    // no quarter plates in the sample any more
+    expect(JSON.stringify(wb.getWorksheet('Variants')!.getSheetValues())).not.toMatch(/Quarter/i);
   });
 
   it('inventory template: validate → preview → commit; opening stock becomes ledger movements exactly once', async () => {
     const file = (await buildTemplate('inventory')).toString('base64');
     const v = (await validate('inventory', 'stock.xlsx', file).expect(200)).body;
     expect(v.issues.filter((i: { severity: string }) => i.severity === 'error')).toEqual([]);
-    expect(v.counts).toMatchObject({ productsCreate: 7, openingMovements: 7, suppliersCreate: 3, locationsCreate: 3 });
+    expect(v.counts).toMatchObject({ productsCreate: 4, openingMovements: 4, suppliersCreate: 3, locationsCreate: 3 });
     const rice = v.preview.opening.find((o: { sku: string }) => o.sku === 'RICE-BAS');
     expect(rice).toMatchObject({ baseQty: 25000, baseUnit: 'g', valuePaise: 150000 });
     expect(v.preview.opening.find((o: { sku: string }) => o.sku === 'COLA-500ML-BTL')).toMatchObject({ baseQty: 48 });
     expect(await t.owner.inventoryProduct.count({ where: { tenantId: r.tenantId } })).toBe(0); // validation writes nothing
     const c = (await commit(v.id).expect(200)).body;
     expect(c.status).toBe('committed');
-    expect(c.result).toMatchObject({ productsCreated: 7, openingMovements: 7 });
+    expect(c.result).toMatchObject({ productsCreated: 4, openingMovements: 4 });
     const again = (await commit(v.id).expect(200)).body; // a retried confirm
     expect(again.result).toEqual(c.result);
     const prod = (await t.http().get(api('/inventory/products')).set(owner()).expect(200)).body;
     expect(prod.find((p: { sku: string }) => p.sku === 'RICE-BAS')).toMatchObject({ stock: 25000 });
-    expect(await t.owner.stockMovement.count({ where: { tenantId: r.tenantId, type: 'opening', sourceType: 'import' } })).toBe(7);
+    expect(await t.owner.stockMovement.count({ where: { tenantId: r.tenantId, type: 'opening', sourceType: 'import' } })).toBe(4);
     // the same file again: create mode refuses existing SKUs, and says the file was imported before
     const v2 = (await validate('inventory', 'stock.xlsx', file).expect(200)).body;
     expect(v2.canCommit).toBe(false);
@@ -74,31 +77,31 @@ describe('excel import', () => {
     const p2 = (await commit(v2.id, true).expect(200)).body;
     expect(p2.status).toBe('partially_committed');
     expect(p2.result.openingMovements).toBe(0);
-    expect(await t.owner.stockMovement.count({ where: { tenantId: r.tenantId, type: 'opening' } })).toBe(7);
+    expect(await t.owner.stockMovement.count({ where: { tenantId: r.tenantId, type: 'opening' } })).toBe(4);
     const job = await t.owner.importJob.findUniqueOrThrow({ where: { id: v.id } });
     expect(job).toMatchObject({ fileName: 'stock.xlsx', actorId: r.ownerUserId, status: 'committed' });
     expect(await t.owner.auditEvent.count({ where: { tenantId: r.tenantId, action: 'import.committed' } })).toBeGreaterThanOrEqual(1);
   });
 
-  it('menu template (beverage sizes, quarter/half/full plates, recipes) imports and drives the menu', async () => {
+  it('menu template (beverage sizes, half/full plates, recipes) imports and drives the menu', async () => {
     const v = (await validate('menu', 'menu.xlsx', (await buildTemplate('menu')).toString('base64')).expect(200)).body;
     expect(v.issues.filter((i: { severity: string }) => i.severity === 'error')).toEqual([]);
-    expect(v.counts).toMatchObject({ itemsCreate: 7, variantsCreate: 12, recipes: 5 });
-    expect(v.preview.categoriesToCreate).toEqual(expect.arrayContaining(['Soft Drinks', 'Main Course', 'Rice', 'Breads', 'Desserts', 'Starters']));
+    expect(v.counts).toMatchObject({ itemsCreate: 4, variantsCreate: 6, recipes: 2 });
+    expect(v.preview.categoriesToCreate).toEqual(expect.arrayContaining(['Soft Drinks', 'Main Course', 'Desserts', 'Starters']));
     await commit(v.id).expect(200);
     const items = (await t.http().get(api('/menu/items')).set(owner()).expect(200)).body;
     const cola = items.find((i: { code: string }) => i.code === 'COLA');
-    expect(cola.variants.map((x: { name: string; pricePaise: number }) => [x.name, x.pricePaise])).toEqual([['250 ml', 3000], ['500 ml', 5000], ['1 litre', 9000]]);
+    expect(cola.variants.map((x: { name: string; pricePaise: number }) => [x.name, x.pricePaise])).toEqual([['250 ml', 3000], ['500 ml', 5000]]);
     const bir = items.find((i: { code: string }) => i.code === 'BIRYANI');
-    expect(bir.variants.map((x: { code: string; pricePaise: number }) => [x.code, x.pricePaise])).toEqual([['BIRYANI-QTR', 12000], ['BIRYANI-HALF', 22000], ['BIRYANI-FULL', 40000]]);
+    expect(bir.variants.map((x: { code: string; pricePaise: number }) => [x.code, x.pricePaise])).toEqual([['BIRYANI-HALF', 22000], ['BIRYANI-FULL', 40000]]);
     const full = bir.variants.find((x: { code: string }) => x.code === 'BIRYANI-FULL');
     const rec = (await t.http().get(api(`/menu/variants/${full.id}/recipe`)).set(owner()).expect(200)).body;
     expect(rec.lines.map((l: { sku: string }) => l.sku).sort()).toEqual(['CHK-CURRY', 'OIL-SUN', 'RICE-BAS']);
-    // the quarter plate has no recipe of its own: full × 0.3
-    const qtr = bir.variants.find((x: { code: string }) => x.code === 'BIRYANI-QTR');
-    const q = (await t.http().get(api(`/menu/variants/${qtr.id}/recipe`)).set(owner()).expect(200)).body;
+    // the half plate has no recipe of its own: full × 0.5
+    const half = bir.variants.find((x: { code: string }) => x.code === 'BIRYANI-HALF');
+    const q = (await t.http().get(api(`/menu/variants/${half.id}/recipe`)).set(owner()).expect(200)).body;
     expect(q.own).toBe(false);
-    expect(q.lines.find((l: { sku: string }) => l.sku === 'RICE-BAS').quantity).toBe(90);
+    expect(q.lines.find((l: { sku: string }) => l.sku === 'RICE-BAS').quantity).toBe(150);
   });
 
   it('update mode matches by code; blank cells keep values; CLEAR empties; the preview shows before and after', async () => {

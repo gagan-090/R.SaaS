@@ -207,11 +207,14 @@ void main() {
     final api = await signInAs(t, 'auditor', ['restaurant.profile.read', 'license.read', 'staff.read', 'floor.read', 'menu.read', 'order.read', 'kds.read', 'audit.read', 'audit.export']);
     await t.tap(find.byKey(const Key('nav-Audit & records')));
     await t.pumpAndSettle();
-    expect(find.text('staff.created'), findsOneWidget);
-    expect(find.text('pos.order.line_reversed'), findsOneWidget);
-    await t.tap(find.text('pos.order.line_reversed'));
+    // readable words, never raw action codes or JSON
+    expect(find.text('Staff member added'), findsOneWidget);
+    expect(find.text('staff.created'), findsNothing);
+    expect(find.text('Line reversed'), findsOneWidget);
+    await t.tap(find.text('Line reversed'));
     await t.pumpAndSettle();
-    expect(find.textContaining('"status": "reversed"'), findsOneWidget);
+    expect(find.text('sent → reversed'), findsOneWidget);
+    expect(find.textContaining('"status"'), findsNothing);
     await t.enterText(find.byKey(const Key('f-q')), 'req-1');
     await t.tap(find.byKey(const Key('f-apply')));
     await t.pumpAndSettle();

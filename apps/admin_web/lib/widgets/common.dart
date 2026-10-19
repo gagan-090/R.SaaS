@@ -61,8 +61,29 @@ class PageFrame extends StatelessWidget {
   }
 }
 
-/// Yes / no confirmation for destructive actions without a reason.
-Future<bool> confirm(BuildContext context, {required String title, required String message, String confirmLabel = 'Delete'}) async =>
+/// Error codes the API uses when the restaurant's plan (or the lack of one) blocks a page.
+const planErrorCodes = {'feature_not_in_plan', 'no_active_plan', 'license_read_only'};
+
+bool isPlanError(Object? e) => e is ApiException && planErrorCodes.contains(e.code);
+
+/// A page that failed to load. A plan refusal gets a plain "not in your plan" page instead of
+/// "Something went wrong" with a pointless Try again; anything else keeps the error + retry.
+Widget loadErrorView(Object error, {required String page, VoidCallback? onRetry}) {
+  if (!isPlanError(error)) return ErrorState(message: error is ApiException ? error.message : '$error', onRetry: onRetry);
+  return PageFrame(
+    title: page,
+    child: EmptyState(
+      key: const Key('plan-locked'),
+      icon: Icons.lock_outline_rounded,
+      title: 'Not in your plan',
+      message: '$page is not included in your restaurant\'s current plan, or the plan is no longer active.\n'
+          'Ask House Plating to activate or upgrade your plan, then open this page again.',
+    ),
+  );
+}
+
+/// Yes / no confirmation without a reason; destructive (red) by default, [destructive] false for a plain action.
+Future<bool> confirm(BuildContext context, {required String title, required String message, String confirmLabel = 'Delete', bool destructive = true}) async =>
     await showDialog<bool>(
       barrierDismissible: false,
       context: context,
@@ -70,7 +91,9 @@ Future<bool> confirm(BuildContext context, {required String title, required Stri
         title: title,
         actions: [
           SecondaryButton(label: 'Cancel', onPressed: () => Navigator.pop(c, false)),
-          DangerButton(label: confirmLabel, onPressed: () => Navigator.pop(c, true)),
+          destructive
+              ? DangerButton(label: confirmLabel, onPressed: () => Navigator.pop(c, true))
+              : PrimaryButton(key: const Key('confirm-ok'), label: confirmLabel, height: 48, onPressed: () => Navigator.pop(c, true)),
         ],
         child: Text(message),
       ),
@@ -118,7 +141,7 @@ class _AsyncViewState<T> extends State<AsyncView<T>> {
         future: _f,
         builder: (c, s) {
           if (s.connectionState != ConnectionState.done && !s.hasData) return const LoadingState();
-          if (s.hasError) return ErrorState(message: '${s.error}', onRetry: _reload);
+          if (s.hasError) return loadErrorView(s.error!, page: 'This page', onRetry: _reload);
           final data = s.data as T;
           if (widget.isEmpty?.call(data) ?? false) return EmptyState(title: widget.emptyTitle);
           return widget.builder(c, data, _reload);

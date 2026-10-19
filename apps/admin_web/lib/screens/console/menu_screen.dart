@@ -187,6 +187,14 @@ bool detectMenuIsVeg(String rawName) {
   return !RegExp(r'\b(chicken|mutton|egg|fish|prawn|crab|lobster|squid|meat|keema|lamb|pork|beef|bacon|seafood|non-veg|nonveg)\b').hasMatch(name);
 }
 
+/// Veg hint from a category name: "Non-Veg Main Course" → false, "Veg Starters" → true, "Desserts" → null (no hint).
+bool? categoryIsVeg(String rawName) {
+  final name = rawName.trim().toLowerCase();
+  if (RegExp(r'non[\s-]?veg|\b(chicken|mutton|fish|seafood|egg|meat|kebab|keema|prawn)\b').hasMatch(name)) return false;
+  if (RegExp(r'\b(veg|vegetarian|paneer|dal)\b').hasMatch(name)) return true;
+  return null;
+}
+
 /// O3 Menu: categories, dishes with price / GST / veg / availability, and photos. Changes reach the hub on its next pull.
 class MenuScreen extends ConsumerStatefulWidget {
   const MenuScreen({super.key});
@@ -310,11 +318,18 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   }
 
   Future<void> _seedCategories() async {
-    if (!await confirm(context, title: 'Seed 40 standard categories?', message: 'This adds the full catalog of professional restaurant categories (Soups, Starters, Main Course, Biryani, Breads, Desserts, Beverages, etc.) to your menu.')) return;
+    if (!await confirm(context,
+        title: 'Add the standard categories?',
+        message: 'Adds up to 40 common restaurant categories (Soups, Starters, Main Course, Biryani, Breads, Desserts, Beverages, …) to your menu. '
+            'Categories you already have are skipped, and nothing is deleted. Empty ones you do not need can be removed later.',
+        confirmLabel: 'Add categories',
+        destructive: false)) {
+      return;
+    }
     await _run(() async {
       final r = await _api.seedCategories();
       final created = r['created'] ?? 0;
-      if (mounted) showDone(context, 'Added $created standard categories');
+      if (mounted) showDone(context, created == 0 ? 'All standard categories are already on your menu' : 'Added $created standard categories');
     });
   }
 
@@ -467,7 +482,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_error != null) return ErrorState(message: '$_error', onRetry: _load);
+    if (_error != null) return loadErrorView(_error!, page: 'Menu', onRetry: _load);
     if (_cats == null) return const SkeletonGrid(maxExtent: 260, aspect: 1.4);
     final narrow = isNarrowWeb(context);
     final edit = _canEdit;
@@ -595,7 +610,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
             if (done == true) await _load();
           }),
         if (edit) ...[
-          SecondaryButton(label: 'Seed 40 categories', icon: Icons.playlist_add_check_rounded, onPressed: _seedCategories),
+          SecondaryButton(key: const Key('seed-categories'), label: 'Add standard categories', icon: Icons.playlist_add_check_rounded, onPressed: _seedCategories),
           SecondaryButton(label: 'Quick add / paste', onPressed: _quickAdd),
         ],
         PrimaryButton(key: const Key('add-dish'), label: 'Add dish', icon: Icons.add_rounded, height: 48, onPressed: () => _editItem()),
@@ -1043,10 +1058,12 @@ class _ItemEditorState extends State<_ItemEditor> {
   String? _error;
   String? _detectedCategory;
   bool _userChangedCategory = false;
+  bool _vegTouched = false; // once the owner flips the switch, the category no longer decides it
 
   @override
   void initState() {
     super.initState();
+    if (widget.item == null) _autoVeg();
     // Do not pre-fill code with long prefix that truncates; keep clean hint text instead
   }
 
@@ -1055,7 +1072,7 @@ class _ItemEditorState extends State<_ItemEditor> {
     final isVeg = detectMenuIsVeg(val);
     setState(() {
       _detectedCategory = detected;
-      _veg = isVeg;
+      if (!_vegTouched) _veg = isVeg;
       if (!_userChangedCategory && detected != null) {
         final match = widget.categories.cast<Json?>().firstWhere(
           (c) => (c?['name'] as String?)?.trim().toLowerCase() == detected.trim().toLowerCase(),
@@ -1067,7 +1084,19 @@ class _ItemEditorState extends State<_ItemEditor> {
           _category = 'standard:$detected';
         }
       }
+      if (isVeg) _autoVeg(); // a meat word in the name always wins; otherwise the category decides
     });
+  }
+
+  String _categoryName(String id) => id.startsWith('standard:')
+      ? id.substring('standard:'.length)
+      : '${widget.categories.cast<Json?>().firstWhere((c) => c?['id'] == id, orElse: () => null)?['name'] ?? ''}';
+
+  /// Veg switch follows the category ("Non-Veg Main Course" → non-veg) until the owner sets it by hand.
+  void _autoVeg() {
+    if (_vegTouched) return;
+    final hint = categoryIsVeg(_categoryName(_category));
+    _veg = detectMenuIsVeg(_name.text) && (hint ?? true);
   }
 
   void _selectCategoryByName(String catName, {bool userInitiated = true}) {
@@ -1082,6 +1111,7 @@ class _ItemEditorState extends State<_ItemEditor> {
       } else {
         _category = 'standard:$catName';
       }
+      _autoVeg();
     });
   }
 
@@ -1357,6 +1387,7 @@ class _ItemEditorState extends State<_ItemEditor> {
               if (v != null) setState(() {
                 _category = v;
                 _userChangedCategory = true;
+                _autoVeg();
               });
             },
           ),
@@ -1387,6 +1418,7 @@ class _ItemEditorState extends State<_ItemEditor> {
                     if (v != null) setState(() {
                       _category = v;
                       _userChangedCategory = true;
+                      _autoVeg();
                     });
                   },
                 ),
@@ -1456,7 +1488,7 @@ class _ItemEditorState extends State<_ItemEditor> {
         const SizedBox(height: HPSpace.md),
         TextField(controller: _desc, maxLines: 2, decoration: const InputDecoration(labelText: 'Description (optional)')),
         const SizedBox(height: HPSpace.sm),
-        SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Vegetarian'), secondary: VegMark(isVeg: _veg), value: _veg, onChanged: (v) => setState(() => _veg = v)),
+        SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Vegetarian'), secondary: VegMark(isVeg: _veg), value: _veg, onChanged: (v) => setState(() => (_vegTouched = true, _veg = v))),
         SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Available now'), subtitle: const Text('Turn off when it is sold out'), value: _available, onChanged: (v) => setState(() => _available = v)),
         if (_error != null) Padding(padding: const EdgeInsets.only(top: HPSpace.sm), child: Text(_error!, key: const Key('dish-error'), style: HPType.body(p.danger))),
       ]),
