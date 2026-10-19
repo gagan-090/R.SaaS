@@ -56,7 +56,7 @@ class _RolesScreenState extends ConsumerState<RolesScreen> {
   Map<String, String> get _describe => {for (final c in (_data!['catalog'] as List).cast<Json>()) '${c['key']}': '${c['description']}'};
 
   Future<void> _edit([Json? role]) async {
-    final saved = await showDialog<String>(context: context, builder: (_) => _RoleEditor(api: _api, role: role, catalog: (_data!['catalog'] as List).cast<Json>()));
+    final saved = await showDialog<String>(barrierDismissible: false, context: context, builder: (_) => _RoleEditor(api: _api, role: role, catalog: (_data!['catalog'] as List).cast<Json>()));
     if (saved != null) {
       await _load();
       if (mounted) showDone(context, saved);

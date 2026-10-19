@@ -47,7 +47,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
   }
 
   Future<void> _add() async {
-    final ok = await showDialog<bool>(context: context, builder: (_) => _ExpenseEditor(api: _api, categories: (_data!['categories'] as List).cast<String>()));
+    final ok = await showDialog<bool>(barrierDismissible: false, context: context, builder: (_) => _ExpenseEditor(api: _api, categories: (_data!['categories'] as List).cast<String>()));
     if (ok == true) {
       await _load();
       if (mounted) showDone(context, 'Expense recorded');
@@ -57,6 +57,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
   Future<void> _void(Json e) async {
     final reason = TextEditingController();
     final ok = await showDialog<bool>(
+      barrierDismissible: false,
       context: context,
       builder: (d) => HPDialog(
         title: 'Void this expense?',

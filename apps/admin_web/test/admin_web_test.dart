@@ -214,4 +214,100 @@ void main() {
     expect(find.text('No history yet'), findsNothing);
     expect(find.byType(ExpansionTile), findsWidgets);
   });
+
+  testWidgets('audit log: odd before/after shapes still render; All activity keeps the restaurant filter; Clear resets', (t) async {
+    final fx = await pumpApp(t);
+    final audit = FixtureApi.fixture('GET_platform_audit.json')! as Map<String, dynamic>;
+    final items = [...(audit['items'] as List)];
+    items.add({...(items.first as Map), 'id': 'odd', 'action': 'menu.bulk_import', 'before': ['a', 'b'], 'after': 'text'});
+    // shapes found in the live database: role changes and dish-size edits store lists
+    items.add({...(items.first as Map), 'id': 'roles', 'action': 'platform.admin.roles_changed', 'before': [{'id': 'r1', 'name': 'Onboarding Admin'}], 'after': [{'id': 'r1', 'name': 'Onboarding Admin'}, {'id': 'r2', 'name': 'Platform Auditor'}]});
+    items.add({...(items.first as Map), 'id': 'sizes', 'action': 'menu.variants_updated', 'before': [{'code': 'SC-1', 'name': 'Regular', 'available': true, 'pricePaise': 25000}], 'after': null});
+    fx.overrides['GET /platform/audit'] = (200, {...audit, 'items': items});
+    await signIn(t);
+    await t.tap(find.byKey(const Key('nav-Audit log')));
+    await t.pumpAndSettle();
+    expect(find.text('Bulk Import'), findsOneWidget);
+    expect(find.byType(ExpansionTile), findsNWidgets(items.length));
+    await t.tap(find.text('Admin roles changed'));
+    await t.pumpAndSettle();
+    expect(find.text('Onboarding Admin → Onboarding Admin, Platform Auditor'), findsOneWidget);
+
+    await t.tap(find.byKey(const Key('audit-cat-auth_failure')));
+    await t.pumpAndSettle();
+    expect(Uri.parse('${fx.calls.last.url}').queryParameters['category'], 'auth_failure');
+    await t.enterText(find.byKey(const Key('audit-search')), 'payment');
+    await t.testTextInput.receiveAction(TextInputAction.done);
+    await t.pumpAndSettle();
+    expect(Uri.parse('${fx.calls.last.url}').queryParameters['q'], 'payment');
+    // "All activity" drops only the category; the text filter stays applied
+    await t.tap(find.byKey(const Key('audit-cat-all')));
+    await t.pumpAndSettle();
+    final q = Uri.parse('${fx.calls.last.url}').queryParameters;
+    expect(q['category'], isNull);
+    expect(q['q'], 'payment');
+    await t.tap(find.byKey(const Key('audit-clear')));
+    await t.pumpAndSettle();
+    expect(Uri.parse('${fx.calls.last.url}').queryParameters['q'], isNull);
+    expect(find.byKey(const Key('audit-clear')), findsNothing);
+  });
+
+  testWidgets('register restaurant: show password, one billing cycle for every plan, sent with the request', (t) async {
+    final fx = await pumpApp(t);
+    fx.overrides['GET /plans'] = (200, [
+      {'id': 'a', 'code': 'standard', 'name': 'Standard', 'tier': 1, 'pricePaise': 99900, 'yearlyPricePaise': 999000, 'billingCycle': 'monthly', 'featureFlags': [], 'limits': {}},
+      {'id': 'b', 'code': 'premium', 'name': 'Premium', 'tier': 3, 'pricePaise': 249900, 'yearlyPricePaise': 2499000, 'billingCycle': 'yearly', 'featureFlags': [], 'limits': {}},
+    ]);
+    fx.overrides['POST /restaurants'] = (201, {'status': 'pending', 'emailSent': true});
+    await signIn(t);
+    await t.tap(find.byKey(const Key('nav-Restaurants')));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('register-restaurant')));
+    await t.pumpAndSettle();
+
+    final pw = find.descendant(of: find.byKey(const Key('register-password')), matching: find.byType(EditableText));
+    expect(t.widget<EditableText>(pw).obscureText, isTrue);
+    await t.tap(find.byKey(const Key('register-show-password')));
+    await t.pump();
+    expect(t.widget<EditableText>(pw).obscureText, isFalse);
+
+    await t.tap(find.byKey(const Key('register-plan-monthly')));
+    await t.pumpAndSettle();
+    expect(find.text('Standard · ₹999 / month'), findsWidgets);
+    expect(find.text('Premium · ₹2,499 / month'), findsWidgets);
+    await t.tapAt(const Offset(5, 5)); // close the menu
+    await t.pumpAndSettle();
+    await t.tap(find.text('Pay yearly'));
+    await t.pumpAndSettle();
+    expect(find.text('Standard · ₹9,990 / year'), findsOneWidget);
+
+    // tapping outside the form does not close it
+    await t.tapAt(const Offset(5, 5));
+    await t.pumpAndSettle();
+    expect(find.text('Register restaurant'), findsWidgets);
+    expect(find.byKey(const Key('register-cycle')), findsOneWidget);
+
+    await t.enterText(find.widgetWithText(TextFormField, 'Owner email'), 'o@example.com');
+    await t.enterText(find.widgetWithText(TextFormField, 'Owner name'), 'Owner');
+    await t.enterText(find.widgetWithText(TextFormField, 'Restaurant name'), 'Cafe');
+    await t.tap(find.text('Send verification'));
+    await t.pumpAndSettle();
+    final sent = jsonDecode(fx.where('POST', '/restaurants').single.body) as Map;
+    expect(sent['billingCycle'], 'yearly');
+    expect(sent['planCode'], 'standard');
+  });
+
+  testWidgets('edit roles shows what a role can do in words, not permission codes', (t) async {
+    await pumpApp(t);
+    await signIn(t);
+    await t.tap(find.byKey(const Key('nav-Admins')));
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('refresh-admins')), findsOneWidget);
+    await t.tap(find.byTooltip('Actions').first);
+    await t.pumpAndSettle();
+    await t.tap(find.text('Edit roles'));
+    await t.pumpAndSettle();
+    expect(find.textContaining('platform.restaurant.read'), findsNothing);
+    expect(find.textContaining('See restaurants'), findsWidgets);
+  });
 }

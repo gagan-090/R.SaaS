@@ -17,13 +17,13 @@ Map<String, dynamic> plan(String code, String name, int paise, {bool archived = 
       'featureFlags': ['tables', 'menu', 'billing'], 'limits': {'branches': 1, 'devicesPerBranch': null},
     };
 
-Future<FixtureApi> superAdminOnPlans(WidgetTester t, {Brightness brightness = Brightness.light}) async {
+Future<FixtureApi> superAdminOnPlans(WidgetTester t, {Brightness brightness = Brightness.light, FixtureApi? api}) async {
   t.view.physicalSize = const Size(1600, 1400);
   t.view.devicePixelRatio = 1;
   t.platformDispatcher.platformBrightnessTestValue = brightness;
   addTearDown(t.view.reset);
   addTearDown(t.platformDispatcher.clearPlatformBrightnessTestValue);
-  final fx = FixtureApi()..overrides['GET /plans'] = (200, [plan('standard', 'Standard', 0), plan('premium', 'Premium', 249900)]);
+  final fx = api ?? (FixtureApi()..overrides['GET /plans'] = (200, [plan('standard', 'Standard', 0), plan('premium', 'Premium', 249900)]));
   await t.pumpWidget(ProviderScope(overrides: [apiProvider.overrideWithValue(ApiClient(baseUrl: 'http://api.test/api/v1', client: fx.client()))], child: const AdminApp()));
   await t.pumpAndSettle();
   await t.enterText(find.byKey(const Key('login-email')), 'admin@example.com');
@@ -83,8 +83,9 @@ void main() {
     await t.enterText(find.byKey(const Key('plan-yearly-price')), '12000');
     await t.ensureVisible(find.byKey(const Key('feature-kds')));
     await t.tap(find.byKey(const Key('feature-kds')));
-    await t.ensureVisible(find.text('Yearly'));
-    await t.tap(find.text('Yearly'));
+    final dialogYearly = find.descendant(of: find.byType(HPDialog), matching: find.text('Yearly'));
+    await t.ensureVisible(dialogYearly);
+    await t.tap(dialogYearly);
     await t.pump();
     await t.tap(find.byKey(const Key('save-plan')));
     await t.pumpAndSettle();
@@ -120,16 +121,60 @@ void main() {
     expect(jsonDecode(fx.where('PATCH', '/plans/id-standard').last.body), {'archived': true});
   });
 
-  testWidgets('appearance: white by default even on a dark device; Auto follows the device; Light goes back to white', (t) async {
+  testWidgets('appearance: white by default even on a dark device; a plain Light / Dark switch that always changes the look', (t) async {
     await superAdminOnPlans(t, brightness: Brightness.dark);
     Brightness now() => Theme.of(t.element(find.byType(Scaffold).last)).brightness;
     expect(now(), Brightness.light);
     expect(Theme.of(t.element(find.byType(Scaffold).last)).scaffoldBackgroundColor, HPColors.white);
-    await t.tap(find.byTooltip('Follow this device'));
+    // no "Auto": on a light device it looked identical to Light, so the first two choices seemed to do nothing
+    expect(find.byTooltip('Follow this device'), findsNothing);
+    await t.tap(find.byTooltip('Dark'));
     await t.pumpAndSettle();
     expect(now(), Brightness.dark);
     await t.tap(find.byTooltip('Light'));
     await t.pumpAndSettle();
     expect(now(), Brightness.light);
+  });
+
+  testWidgets('Monthly / Yearly switch reprices every card; Show archived lists only archived plans', (t) async {
+    final fx = await superAdminOnPlans(t);
+    expect(find.text('₹2,499 / month'), findsOneWidget);
+    await t.tap(find.text('Yearly'));
+    await t.pumpAndSettle();
+    expect(find.text('₹2,499 / month'), findsNothing);
+    expect(find.text('₹24,990 / year'), findsOneWidget); // no yearly price stored: 10 × monthly
+    expect(find.textContaining('Works out to'), findsWidgets);
+
+    fx.overrides['GET /plans'] = (200, [plan('standard', 'Standard', 0), plan('premium', 'Premium', 249900), plan('legacy', 'Legacy', 50000, archived: true)]);
+    await t.tap(find.byKey(const Key('plans-archived')));
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('plan-legacy')), findsOneWidget);
+    expect(find.byKey(const Key('plan-standard')), findsNothing);
+    expect(find.byKey(const Key('plan-premium')), findsNothing);
+  });
+
+  testWidgets('plan cards sit side by side at the same height', (t) async {
+    await superAdminOnPlans(t);
+    final a = t.getRect(find.byKey(const Key('plan-standard')));
+    final b = t.getRect(find.byKey(const Key('plan-premium')));
+    expect(a.top, b.top);
+    expect(a.height, b.height);
+  });
+
+  testWidgets('higher plans list only what they add to the plan below; cards stay the same size', (t) async {
+    final fx = FixtureApi();
+    Map<String, dynamic> tiered(String code, String name, int tier, List<String> flags) => {...plan(code, name, 99900 * tier), 'tier': tier, 'featureFlags': flags};
+    fx.overrides['GET /plans'] = (200, [
+      tiered('premium', 'Premium', 3, ['tables', 'menu', 'billing', 'floors', 'kds', 'inventory']),
+      tiered('standard', 'Standard', 1, ['tables', 'menu', 'billing']),
+      tiered('professional', 'Professional', 2, ['tables', 'menu', 'billing', 'floors']),
+    ]);
+    await superAdminOnPlans(t, api: fx);
+    expect(find.text('Everything in Standard, plus:'), findsOneWidget);
+    expect(find.text('Everything in Professional, plus:'), findsOneWidget);
+    expect(find.text('Menu, categories, tax'), findsOneWidget); // listed once, on Standard only
+    expect(find.text('Kitchen display'), findsOneWidget);
+    final h = {for (final c in ['standard', 'professional', 'premium']) t.getRect(find.byKey(Key('plan-$c'))).height};
+    expect(h.length, 1);
   });
 }

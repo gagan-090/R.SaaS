@@ -259,7 +259,9 @@ class HPDialog extends StatelessWidget {
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Text(title, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontSize: 24)),
               const SizedBox(height: HPSpace.lg),
-              Flexible(child: SingleChildScrollView(child: child)),
+              // top inset: an outlined field's floating label sits above its border and would be clipped;
+              // right inset: keeps the web scrollbar off the fields
+              Flexible(child: SingleChildScrollView(padding: const EdgeInsets.only(top: HPSpace.sm, right: HPSpace.md), child: child)),
               if (actions.isNotEmpty) ...[
                 const SizedBox(height: HPSpace.x2),
                 Wrap(alignment: WrapAlignment.end, spacing: HPSpace.md, runSpacing: HPSpace.sm, children: actions),
@@ -280,7 +282,7 @@ class ReasonDialog extends StatefulWidget {
 
   /// Returns the trimmed reason, or null if cancelled.
   static Future<String?> show(BuildContext context, {required String title, required String confirmLabel, String? message, bool destructive = true}) =>
-      showDialog<String>(context: context, builder: (_) => ReasonDialog(title: title, confirmLabel: confirmLabel, message: message, destructive: destructive));
+      showDialog<String>(context: context, barrierDismissible: false, builder: (_) => ReasonDialog(title: title, confirmLabel: confirmLabel, message: message, destructive: destructive));
 
   @override
   State<ReasonDialog> createState() => _ReasonDialogState();
@@ -918,27 +920,36 @@ class DishCard extends StatelessWidget {
 
 /// Appearance picker: follow the device (default), always light, or always dark.
 class ThemeModeSwitch extends StatelessWidget {
-  const ThemeModeSwitch({super.key, required this.value, required this.onChanged, this.compact = false});
+  const ThemeModeSwitch({super.key, required this.value, required this.onChanged, this.compact = false, this.showAuto = true});
   final ThemeMode value;
   final ValueChanged<ThemeMode> onChanged;
 
   /// Icons only (sidebars, top bars).
   final bool compact;
 
+  /// Offer "Auto" (follow the device). Without it the switch is a plain Light / Dark choice, and a stored
+  /// "Auto" shows as whichever look the device is in right now.
+  final bool showAuto;
+
   @override
-  Widget build(BuildContext context) => SegmentedButton<ThemeMode>(
-        key: const Key('theme-mode'),
-        showSelectedIcon: false,
-        style: compact ? const ButtonStyle(visualDensity: VisualDensity.compact, minimumSize: WidgetStatePropertyAll(Size(0, 40))) : null,
-        segments: [
-          ButtonSegment(value: ThemeMode.system, icon: const Icon(Icons.brightness_auto_rounded, size: 18), label: compact ? null : const Text('Auto'), tooltip: 'Follow this device'),
-          ButtonSegment(value: ThemeMode.light, icon: const Icon(Icons.light_mode_rounded, size: 18), label: compact ? null : const Text('Light'), tooltip: 'Light'),
-          ButtonSegment(value: ThemeMode.dark, icon: const Icon(Icons.dark_mode_rounded, size: 18), label: compact ? null : const Text('Dark'), tooltip: 'Dark'),
-        ],
-        selected: {value},
-        onSelectionChanged: (v) {
-          HapticFeedback.selectionClick();
-          onChanged(v.first);
-        },
-      );
+  Widget build(BuildContext context) {
+    final shown = showAuto || value != ThemeMode.system
+        ? value
+        : (MediaQuery.platformBrightnessOf(context) == Brightness.dark ? ThemeMode.dark : ThemeMode.light);
+    return SegmentedButton<ThemeMode>(
+      key: const Key('theme-mode'),
+      showSelectedIcon: false,
+      style: compact ? const ButtonStyle(visualDensity: VisualDensity.compact, minimumSize: WidgetStatePropertyAll(Size(0, 40))) : null,
+      segments: [
+        if (showAuto) ButtonSegment(value: ThemeMode.system, icon: const Icon(Icons.brightness_auto_rounded, size: 18), label: compact ? null : const Text('Auto'), tooltip: 'Follow this device'),
+        ButtonSegment(value: ThemeMode.light, icon: const Icon(Icons.light_mode_rounded, size: 18), label: compact ? null : const Text('Light'), tooltip: 'Light'),
+        ButtonSegment(value: ThemeMode.dark, icon: const Icon(Icons.dark_mode_rounded, size: 18), label: compact ? null : const Text('Dark'), tooltip: 'Dark'),
+      ],
+      selected: {shown},
+      onSelectionChanged: (v) {
+        HapticFeedback.selectionClick();
+        onChanged(v.first);
+      },
+    );
+  }
 }

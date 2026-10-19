@@ -21,7 +21,7 @@ class _AuthFrame extends ConsumerWidget {
           actions: [
             Padding(
               padding: const EdgeInsets.only(right: HPSpace.lg),
-              child: ThemeModeSwitch(compact: true, value: ref.watch(themeModeProvider), onChanged: ref.read(themeModeProvider.notifier).set),
+              child: ThemeModeSwitch(compact: true, showAuto: false, value: ref.watch(themeModeProvider), onChanged: ref.read(themeModeProvider.notifier).set),
             ),
           ],
         ),
@@ -108,6 +108,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _forgotPin() async {
     final email = TextEditingController(text: _email.text.trim());
     final go = await showDialog<bool>(
+      barrierDismissible: false,
       context: context,
       builder: (c) => HPDialog(
         title: 'Forgot your PIN?',

@@ -39,6 +39,25 @@ String roleWord(Object? role) => switch ('$role') {
       final x => titleCase(x),
     };
 
+const _platformPermissions = {
+  'platform.admin.read': 'See admins',
+  'platform.admin.invite': 'Add admins',
+  'platform.admin.roles': 'Change admin roles',
+  'platform.admin.deactivate': 'Deactivate admins',
+  'platform.mfa.reset': 'Reset two-step verification',
+  'platform.audit.read': 'Read the audit log',
+  'platform.restaurant.read': 'See restaurants',
+  'platform.restaurant.create': 'Register restaurants',
+  'platform.restaurant.update': 'Edit restaurants',
+  'platform.restaurant.status': 'Suspend / block restaurants',
+  'platform.license.manage': 'Manage licenses',
+  'platform.payment.record': 'Record payments',
+  'platform.plan.manage': 'Manage plans',
+};
+
+/// "platform.restaurant.read" → "See restaurants" (role pickers show what a role can do, not permission codes).
+String permissionLabel(Object? code) => _platformPermissions['$code'] ?? titleCase('$code'.split('.').skip(1).join(' '));
+
 const _actions = {
   'auth.login': 'Signed in',
   'auth.login_failed': 'Failed sign-in',

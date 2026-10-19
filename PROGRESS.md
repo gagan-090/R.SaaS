@@ -248,3 +248,21 @@ Verification: API admin-creation + auth **18 passed / 2 suites**; admin web **8 
 1600 and 390 px, pending activation, validation and server errors. API lint/typecheck and Flutter analyze passed.
 API and Flutter release web builds passed. Local API restarted with the current configuration; both new routes
 were verified in its live Swagger document and added to the OpenAPI artifact. No schema migration is required.
+
+### Client review fixes (Super Admin web + demo menu) — 2026-10-18
+- Shared dialog: inner top/right inset so floating field labels are no longer clipped and the web scrollbar no longer
+  covers fields (plan editor, Add admin, Add staff …). Form dialogs no longer close on an outside click.
+- Theme: the web console offers a plain Light / Dark switch (Auto looked identical to Light on a light device).
+- Plans: Monthly / Yearly price switch, equal-height cards side by side on one page, "Show archived" lists only
+  archived plans. Register restaurant: show-password toggle; one Pay monthly / Pay yearly choice prices every plan
+  the same way and is sent as `billingCycle`. Restaurant detail shows the license's own cycle and amount.
+- Admins: role picker shows permissions in words; Refresh sits with Add admin. Audit log: chips wrap (no scrollbar
+  over them), All activity drops only the category, Enter applies text filters, Clear filters, malformed
+  before/after records can no longer blank the list; phones scroll filters and events together.
+- Restaurant detail: paired equal-height cards, lifecycle spans the width, cold-storage card only when relevant.
+- Menu: "Arrange by course" (soups → starters → mains → breads → rice → accompaniments → desserts → drinks, saved
+  as the category order the POS uses); All dishes listed in category order; Quarter preset and quarter/custom
+  portion options removed (an existing value stays selectable). Seed: demo menu in course order, no quarter plate.
+Verification: admin web **89 passed** (6 new), ui_kit **12 passed**, POS **25 passed**, Flutter analyze clean on
+POS (admin web: 5 pre-existing infos in menu_screen), API `tsc --noEmit` clean. Not reproduced against live data:
+the "audit log is blank" report (the list is now hardened against the likeliest cause, a non-object before/after).

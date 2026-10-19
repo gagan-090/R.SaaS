@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show mergeSort;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -259,6 +260,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   Future<void> _editCategory([Json? c]) async {
     final name = TextEditingController(text: c?['name'] as String? ?? '');
     final ok = await showDialog<bool>(
+      barrierDismissible: false,
       context: context,
       builder: (d) => HPDialog(
         title: c == null ? 'New category' : 'Rename category',
@@ -285,6 +287,13 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       ..removeAt(i)
       ..insert(j, c['id'] as String);
     await _run(() => _api.orderCategories(ids), 'Order saved');
+  }
+
+  /// Puts the categories in the order a meal is served (soups → starters → mains → breads → rice → desserts →
+  /// drinks); categories of the same course keep their current order. The POS follows the saved order.
+  Future<void> _arrangeByCourse() async {
+    final ids = sortByCourse(_cats!, (c) => '${c['name']}').map((c) => c['id'] as String).toList();
+    await _run(() => _api.orderCategories(ids), 'Menu arranged by course');
   }
 
   Future<void> _deleteCategory(Json c) async {
@@ -317,7 +326,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     final rows = TextEditingController();
     String? error;
     bool busy = false;
-    final saved = await showDialog<bool>(context: context, builder: (d) => StatefulBuilder(builder: (d, update) => HPDialog(
+    final saved = await showDialog<bool>(barrierDismissible: false, context: context, builder: (d) => StatefulBuilder(builder: (d, update) => HPDialog(
       title: 'Quick menu entry',
       actions: [
         SecondaryButton(label: 'Cancel', onPressed: busy ? null : () => Navigator.pop(d)),
@@ -440,6 +449,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     if (!mounted) return;
     final defaultCat = _cat ?? (_cats!.isNotEmpty ? _cats!.first['id'] as String : 'standard:Main Course');
     final saved = await showDialog<bool>(
+      barrierDismissible: false,
       context: context,
       builder: (_) => _ItemEditor(
         api: _api, item: item, categories: _cats!, taxes: _taxes!, defaultCategory: defaultCat, paletteIndex: _items!.length,
@@ -461,10 +471,13 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     if (_cats == null) return const SkeletonGrid(maxExtent: 260, aspect: 1.4);
     final narrow = isNarrowWeb(context);
     final edit = _canEdit;
+    // "All dishes" lists dishes category by category, in the saved category (course) order
+    final catPos = {for (final (i, c) in _cats!.indexed) c['id']: i};
     final visible = _items!
         .where((i) => _cat == null || i['categoryId'] == _cat)
         .where((i) => _q.isEmpty || '${i['name']} ${i['code'] ?? ''}'.toLowerCase().contains(_q.toLowerCase()))
         .toList();
+    mergeSort(visible, compare: (a, b) => (catPos[a['categoryId']] ?? 1 << 20).compareTo(catPos[b['categoryId']] ?? 1 << 20));
     final catName = {for (final c in _cats!) c['id']: c['name']};
 
     final totalItems = visible.length;
@@ -486,6 +499,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       onRename: _editCategory,
       onDelete: _deleteCategory,
       onMove: _moveCategory,
+      onArrange: _cats!.length > 1 ? _arrangeByCourse : null,
       onToggle: (c) => _run(() => _api.updateCategory(c['id'] as String, {'active': c['active'] == false}),
           c['active'] == false ? '${c['name']} is back on the POS' : '${c['name']} hidden from the POS'),
     );
@@ -576,7 +590,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
               showError(context, 'Excel import is not in your plan. Ask the Super Admin to enable "Excel import (menu & inventory)" in Plans, then sign in again.');
               return;
             }
-            final done = await showDialog<bool>(context: context, builder: (_) => ImportDialog(api: _api, kind: 'menu'));
+            final done = await showDialog<bool>(barrierDismissible: false, context: context, builder: (_) => ImportDialog(api: _api, kind: 'menu'));
             if (done == true) await _load();
           }),
         if (edit) ...[
@@ -784,6 +798,7 @@ class _CategoryList extends StatelessWidget {
     required this.onDelete,
     required this.onMove,
     required this.onToggle,
+    this.onArrange,
   });
   final List<Json> cats, items;
   final String? selected;
@@ -792,6 +807,7 @@ class _CategoryList extends StatelessWidget {
   final VoidCallback onAdd;
   final ValueChanged<Json> onRename, onDelete, onToggle;
   final void Function(Json c, int by) onMove;
+  final VoidCallback? onArrange;
 
   int _count(String? id) => items.where((i) => id == null || i['categoryId'] == id).length;
 
@@ -812,6 +828,11 @@ class _CategoryList extends StatelessWidget {
               ),
             ),
           if (canEdit) ActionChip(key: const Key('add-category'), avatar: const Icon(Icons.add_rounded, size: 18), label: const Text('Category'), onPressed: onAdd),
+          if (canEdit && onArrange != null)
+            Padding(
+              padding: const EdgeInsets.only(left: HPSpace.sm),
+              child: ActionChip(key: const Key('arrange-by-course'), avatar: const Icon(Icons.sort_rounded, size: 18), label: const Text('Arrange by course'), onPressed: onArrange),
+            ),
         ]),
       );
     }
@@ -867,6 +888,8 @@ class _CategoryList extends StatelessWidget {
           if (canEdit) ...[
             const SizedBox(height: HPSpace.sm),
             TextButton.icon(key: const Key('add-category'), onPressed: onAdd, icon: const Icon(Icons.add_rounded), label: const Text('Add category')),
+            if (onArrange != null)
+              TextButton.icon(key: const Key('arrange-by-course'), onPressed: onArrange, icon: const Icon(Icons.sort_rounded), label: const Text('Arrange by course')),
           ],
         ]),
       ),
@@ -1399,7 +1422,6 @@ class _ItemEditorState extends State<_ItemEditor> {
         Wrap(spacing: 8, runSpacing: 6, children: [
           TextButton(onPressed: () => setState(() { _sizes.clear(); for (final quantity in [200, 300, 500, 1000]) { _sizes.add(_SizeDraft(name: '$quantity ml', qty: '$quantity', unit: 'ml', isDefault: quantity == 300)); } }), child: const Text('🥤 Drinks: 200 / 300 / 500 ml / 1 L')),
           TextButton(onPressed: () => setState(() { _sizes.clear(); for (final (name, ratio) in [('Half', .5), ('Full', 1.0)]) { _sizes.add(_SizeDraft(name: '$name plate', portion: name.toLowerCase(), ratio: '$ratio', qty: '$ratio', unit: 'plate', isDefault: ratio == 1)); } }), child: const Text('🍛 Half / Full Plate')),
-          TextButton(onPressed: () => setState(() { _sizes.clear(); for (final (name, ratio) in [('Quarter', .25), ('Half', .5), ('Full', 1.0)]) { _sizes.add(_SizeDraft(name: '$name plate', portion: name.toLowerCase(), ratio: '$ratio', qty: '$ratio', unit: 'plate', isDefault: ratio == 1)); } }), child: const Text('Quarter / Half / Full')),
           TextButton(onPressed: () => setState(() { _sizes.clear(); _sizes.add(_SizeDraft(name: 'Cup 150 ml', qty: '150', unit: 'ml', isDefault: false)); _sizes.add(_SizeDraft(name: 'Bowl 250 ml', qty: '250', unit: 'ml', isDefault: true)); }), child: const Text('🍵 Cup 150 ml / Bowl 250 ml')),
           TextButton(onPressed: () => setState(() { _sizes.clear(); for (final s in ['Small 7"', 'Medium 10"', 'Large 12"']) { _sizes.add(_SizeDraft(name: s, unit: 'piece', isDefault: s.startsWith('Medium'))); } }), child: const Text('🍕 Pizza: 7" / 10" / 12"')),
           TextButton(onPressed: () => setState(() { _sizes.clear(); for (final s in ['1 Scoop', '2 Scoops', '3 Scoops']) { _sizes.add(_SizeDraft(name: s, unit: 'scoop', isDefault: s.startsWith('1'))); } }), child: const Text('🍨 Ice cream: 1 / 2 / 3 scoops')),
@@ -1425,7 +1447,7 @@ class _ItemEditorState extends State<_ItemEditor> {
             }),
             onChanged: () => setState(() {}),
             onRecipe: widget.canMapRecipes && s.id != null
-                ? () => showDialog<void>(context: context, builder: (_) => RecipeDialog(api: widget.api, variantId: s.id!, title: '${_name.text.trim()} · ${s.name.text.trim()}'))
+                ? () => showDialog<void>(barrierDismissible: false, context: context, builder: (_) => RecipeDialog(api: widget.api, variantId: s.id!, title: '${_name.text.trim()} · ${s.name.text.trim()}'))
                 : null,
           ),
         if (widget.canMapRecipes && _sizes.any((s) => s.id == null))
@@ -1441,8 +1463,31 @@ class _ItemEditorState extends State<_ItemEditor> {
   }
 }
 
+/// Where a category sits in a meal: 0 soups, 1 starters & snacks, 2 mains (anything unrecognised), 3 breads,
+/// 4 rice & biryani, 5 accompaniments, 6 desserts, 7 drinks. Checked in this order, so "Chinese Starters" is a
+/// starter and "Cold Beverages" a drink.
+int courseRank(String category) {
+  final n = category.toLowerCase();
+  bool any(List<String> words) => words.any(n.contains);
+  if (any(['soup', 'shorba'])) return 0;
+  if (any(['beverage', 'drink', 'juice', 'shake', 'smoothie', 'mocktail', 'cocktail', 'lassi', 'chaas', 'tea', 'coffee', 'water', 'soda', 'cooler'])) return 7;
+  if (any(['dessert', 'sweet', 'ice cream', 'kulfi', 'cake', 'bakery', 'pastry', 'mithai'])) return 6;
+  if (any(['raita', 'curd', 'papad', 'accompaniment', 'pickle', 'chutney'])) return 5;
+  if (any(['rice', 'biryani', 'pulao', 'khichdi'])) return 4;
+  if (any(['bread', 'naan', 'roti', 'paratha', 'kulcha'])) return 3;
+  if (any(['starter', 'appetiser', 'appetizer', 'tandoor', 'kebab', 'snack', 'chaat', 'street', 'fast food', 'roll', 'wrap', 'salad', 'breakfast', 'momo'])) return 1;
+  return 2;
+}
+
+/// Stable sort by [courseRank]: same-course categories keep their relative order.
+List<T> sortByCourse<T>(List<T> cats, String Function(T) name) {
+  final out = [...cats];
+  mergeSort(out, compare: (a, b) => courseRank(name(a)).compareTo(courseRank(name(b))));
+  return out;
+}
+
 const servingUnits = ['ml', 'l', 'g', 'kg', 'piece', 'plate', 'bowl', 'glass', 'cup', 'portion', 'bottle', 'can', 'packet'];
-const portionLabels = ['quarter', 'half', 'full', 'custom'];
+const portionLabels = ['half', 'full'];
 
 /// One size / portion being edited. Prices are typed in rupees and sent as integer paise.
 class _SizeDraft {
@@ -1626,7 +1671,8 @@ class _SizeRow extends StatelessWidget {
                     decoration: const InputDecoration(labelText: 'Portion'),
                     items: [
                       const DropdownMenuItem<String?>(value: null, child: Text('—')),
-                      for (final l in portionLabels) DropdownMenuItem<String?>(value: l, child: Text(l)),
+                      // an older dish may carry a label no longer offered (e.g. quarter): keep it selectable
+                      for (final l in {...portionLabels, if (size.portion != null) size.portion!}) DropdownMenuItem<String?>(value: l, child: Text(l.isEmpty ? '—' : '${l[0].toUpperCase()}${l.substring(1)}')),
                     ],
                     onChanged: (v) {
                       size.portion = v;

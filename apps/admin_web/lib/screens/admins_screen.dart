@@ -31,6 +31,7 @@ class _AdminsScreenState extends ConsumerState<AdminsScreen> {
   void _reload() => setState(() => _load = _mk());
 
   Future<List<String>?> _pickRoles(List<dynamic> roles, Set<String> selected, String title) => showDialog<List<String>>(
+        barrierDismissible: false,
         context: context,
         builder: (c) => StatefulBuilder(
           builder: (c, set) => HPDialog(title: title, actions: [
@@ -41,7 +42,10 @@ class _AdminsScreenState extends ConsumerState<AdminsScreen> {
               CheckboxListTile(
                 value: selected.contains(r['id']),
                 title: Text('${r['name']}'),
-                subtitle: Text('${r['description'] ?? ''}\n${(r['permissions'] as List).join(', ')}', style: HPType.body(context.hp.muted).copyWith(fontSize: 12)),
+                subtitle: Text(
+                  [if ('${r['description'] ?? ''}'.isNotEmpty) '${r['description']}', 'Can: ${(r['permissions'] as List).map(permissionLabel).join(' · ')}'].join('\n'),
+                  style: HPType.body(context.hp.muted).copyWith(fontSize: 12),
+                ),
                 isThreeLine: true,
                 onChanged: (v) => set(() => v! ? selected.add(r['id'] as String) : selected.remove(r['id'])),
               ),
@@ -50,7 +54,7 @@ class _AdminsScreenState extends ConsumerState<AdminsScreen> {
       );
 
   Future<void> _add([Json? pending]) async {
-    final ok = await showDialog<bool>(context: context, builder: (_) => _AdminCredentialsDialog(api: ref.read(apiProvider), pending: pending));
+    final ok = await showDialog<bool>(barrierDismissible: false, context: context, builder: (_) => _AdminCredentialsDialog(api: ref.read(apiProvider), pending: pending));
     if (ok != true || !mounted) return;
     _reload();
     showDone(context, 'Admin ${pending == null ? 'created' : 'activated'} — sign in with email and password');
@@ -114,8 +118,11 @@ class _AdminsScreenState extends ConsumerState<AdminsScreen> {
         return ListView(padding: EdgeInsets.all(isNarrowWeb(c) ? HPSpace.lg : HPSpace.x4), children: [
           Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, runSpacing: HPSpace.md, children: [
             Text('Platform admins', style: Theme.of(c).textTheme.headlineMedium),
-            IconButton(tooltip: 'Refresh account and MFA status', onPressed: _reload, icon: const Icon(Icons.refresh)),
-            if (can('platform.admin.invite')) SizedBox(width: 200, child: PrimaryButton(key: const Key('add-platform-admin'), label: 'Add admin', icon: Icons.person_add_alt, height: 52, onPressed: _add)),
+            // actions grouped on the right: refresh sits beside Add admin instead of floating mid-header
+            Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, crossAxisAlignment: WrapCrossAlignment.center, children: [
+              SizedBox(width: 140, child: SecondaryButton(key: const Key('refresh-admins'), label: 'Refresh', icon: Icons.refresh_rounded, height: 52, onPressed: _reload)),
+              if (can('platform.admin.invite')) SizedBox(width: 200, child: PrimaryButton(key: const Key('add-platform-admin'), label: 'Add admin', icon: Icons.person_add_alt, height: 52, onPressed: _add)),
+            ]),
           ]),
           const SizedBox(height: HPSpace.md),
           Text('Add an admin with a name, email and password. For an Invited account, open its Actions menu and choose Set password & activate.', style: HPType.body(c.hp.muted)),

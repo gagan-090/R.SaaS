@@ -218,7 +218,7 @@ class ConsoleShell extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  child: ThemeModeSwitch(compact: true, value: ref.watch(themeModeProvider), onChanged: ref.read(themeModeProvider.notifier).set),
+                  child: ThemeModeSwitch(showAuto: false, value: ref.watch(themeModeProvider), onChanged: ref.read(themeModeProvider.notifier).set),
                 ),
               ),
               if (me != null)

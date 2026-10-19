@@ -73,6 +73,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _addTax() async {
     var rate = 500;
     final ok = await showDialog<bool>(
+      barrierDismissible: false,
       context: context,
       builder: (d) => StatefulBuilder(
         builder: (d, set) => HPDialog(

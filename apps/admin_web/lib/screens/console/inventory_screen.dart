@@ -116,13 +116,14 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
 
   Future<void> _purchase() async {
     if (_products!.isEmpty || _suppliers!.isEmpty) { showError(context, 'Add products and a supplier first, then receive your purchase here.'); return; }
-    final saved = await showDialog<bool>(context: context, builder: (_) => PurchaseDialog(api: _api, products: _products!, suppliers: _suppliers!, locations: _locations!));
+    final saved = await showDialog<bool>(barrierDismissible: false, context: context, builder: (_) => PurchaseDialog(api: _api, products: _products!, suppliers: _suppliers!, locations: _locations!));
     if (saved == true) { await _load(); if (mounted) showDone(context, 'Purchase received. Stock and cost updated.'); }
   }
 
   Future<void> _editProduct([Json? p, String? initialCategory]) async {
     final knownCats = _products?.map((x) => x['category'] as String?).whereType<String>().where((c) => c.isNotEmpty).toSet().toList() ?? [];
     final saved = await showDialog<String>(
+      barrierDismissible: false,
       context: context,
       builder: (_) => _ProductEditor(
         api: _api,
@@ -143,6 +144,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   Future<void> _addCategoryPrompt() async {
     final catController = TextEditingController();
     final ok = await showDialog<bool>(
+      barrierDismissible: false,
       context: context,
       builder: (d) => HPDialog(
         title: 'New inventory category',
@@ -177,7 +179,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   }
 
   Future<void> _move(Json p, String type) async {
-    final done = await showDialog<String>(context: context, builder: (_) => _MovementDialog(api: _api, product: p, type: type, locations: _locations!, suppliers: _suppliers!));
+    final done = await showDialog<String>(barrierDismissible: false, context: context, builder: (_) => _MovementDialog(api: _api, product: p, type: type, locations: _locations!, suppliers: _suppliers!));
     if (done != null) {
       await _load();
       if (mounted) showDone(context, done);
@@ -215,7 +217,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
               showError(context, 'Excel import is not in your plan. Ask the Super Admin to enable "Excel import (menu & inventory)" in Plans, then sign in again.');
               return;
             }
-            final done = await showDialog<bool>(context: context, builder: (_) => ImportDialog(api: _api, kind: 'inventory'));
+            final done = await showDialog<bool>(barrierDismissible: false, context: context, builder: (_) => ImportDialog(api: _api, kind: 'inventory'));
             if (done == true) await _load();
           }),
         if (_can('inventory.manage')) PrimaryButton(key: const Key('add-product'), label: 'Add product', icon: Icons.add_rounded, height: 48, onPressed: () => _editProduct()),
@@ -540,6 +542,7 @@ class _ProductEditorState extends State<_ProductEditor> {
             onPressed: () async {
               final c = TextEditingController();
               final ok = await showDialog<bool>(
+                barrierDismissible: false,
                 context: context,
                 builder: (d) => HPDialog(
                   title: 'Quick Category',
@@ -868,6 +871,7 @@ class _RequestsTabState extends State<_RequestsTab> {
     String? product = widget.products.firstOrNull?['id'] as String?;
     final qty = TextEditingController(), note = TextEditingController();
     final ok = await showDialog<bool>(
+      barrierDismissible: false,
       context: context,
       builder: (d) => StatefulBuilder(
         builder: (d, set) => HPDialog(
@@ -944,6 +948,7 @@ class _PlacesTab extends StatelessWidget {
   Future<void> _add(BuildContext context, bool supplier) async {
     final name = TextEditingController(), phone = TextEditingController();
     final ok = await showDialog<bool>(
+      barrierDismissible: false,
       context: context,
       builder: (d) => HPDialog(
         title: supplier ? 'Add supplier' : 'Add storage location',

@@ -64,6 +64,7 @@ class PageFrame extends StatelessWidget {
 /// Yes / no confirmation for destructive actions without a reason.
 Future<bool> confirm(BuildContext context, {required String title, required String message, String confirmLabel = 'Delete'}) async =>
     await showDialog<bool>(
+      barrierDismissible: false,
       context: context,
       builder: (c) => HPDialog(
         title: title,
@@ -150,6 +151,7 @@ class SectionCard extends StatelessWidget {
 Future<(String, String)?> askStepUp(BuildContext context, {bool mfaRequired = true}) {
   final pw = TextEditingController(), code = TextEditingController();
   return showDialog<(String, String)>(
+    barrierDismissible: false,
     context: context,
     builder: (c) => HPDialog(
       title: 'Confirm it is you',

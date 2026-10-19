@@ -39,7 +39,6 @@ const VARIANTS: Record<string, Size[]> = {
     { name: '1 litre', price: 9000, qty: 1, unit: 'l', ratio: 1 },
   ],
   Biryani: [
-    { name: 'Quarter plate', price: 12000, qty: 1, unit: 'plate', ratio: 0.3, portion: 'quarter' },
     { name: 'Half plate', price: 22000, qty: 1, unit: 'plate', ratio: 0.55, portion: 'half' },
     { name: 'Full plate', price: 40000, qty: 1, unit: 'plate', ratio: 1, portion: 'full' },
   ],
@@ -49,15 +48,16 @@ const VARIANTS: Record<string, Size[]> = {
   ],
 };
 
+// in course order: categories are created (and shown) as they first appear — starters, mains, breads, desserts, drinks
 const DISHES = [
-  { name: 'Butter Chicken', cat: 'Mains', price: 34000, tax: 500, veg: false, c: ['#D9622B', '#F2C27B', '#4F8A3B'] },
   { name: 'Paneer Tikka', cat: 'Starters', price: 26000, tax: 500, veg: true, c: ['#8A3B1F', '#F5E3C3', '#6FA14A'] },
+  { name: 'Butter Chicken', cat: 'Mains', price: 34000, tax: 500, veg: false, c: ['#D9622B', '#F2C27B', '#4F8A3B'] },
   { name: 'Dal Makhani', cat: 'Mains', price: 22000, tax: 500, veg: true, c: ['#6B2E1E', '#E8D2A8', '#3F7D3A'] },
-  { name: 'Garlic Naan', cat: 'Breads', price: 6000, tax: 500, veg: true, c: ['#E7C27D', '#B9823A', '#5E8F3E'] },
   { name: 'Biryani', cat: 'Mains', price: 32000, tax: 500, veg: false, c: ['#D99A2B', '#8B4A2B', '#F2E4C2'] },
+  { name: 'Garlic Naan', cat: 'Breads', price: 6000, tax: 500, veg: true, c: ['#E7C27D', '#B9823A', '#5E8F3E'] },
+  { name: 'Gulab Jamun', cat: 'Desserts', price: 9000, tax: 1800, veg: true, c: ['#6E2A12', '#9C4520', '#E9C46A'] },
   { name: 'Mango Lassi', cat: 'Drinks', price: 12000, tax: 1200, veg: true, c: ['#F2B33D', '#F7D27A', '#E07A2E'] },
   { name: 'Masala Chaas', cat: 'Drinks', price: 8000, tax: 1200, veg: true, c: ['#EFE8D6', '#CFE3C2', '#6E9B4E'] },
-  { name: 'Gulab Jamun', cat: 'Desserts', price: 9000, tax: 1800, veg: true, c: ['#6E2A12', '#9C4520', '#E9C46A'] },
   { name: 'Cola', cat: 'Soft Drinks', price: 3000, tax: 1800, veg: true, c: ['#3B1F14', '#6E3B23', '#C9A27A'] },
   { name: 'Mineral Water', cat: 'Soft Drinks', price: 2000, tax: 1800, veg: true, c: ['#CFE6F2', '#E8F4FA', '#7FB3D5'] },
 ];

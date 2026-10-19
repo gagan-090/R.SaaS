@@ -337,7 +337,7 @@ class _RestaurantsScreenState extends ConsumerState<RestaurantsScreen> {
           Text('Restaurants', style: Theme.of(context).textTheme.headlineMedium),
           if (canCreate)
             SizedBox(width: 240, child: PrimaryButton(key: const Key('register-restaurant'), label: 'Register restaurant', icon: Icons.add_rounded, height: 52, onPressed: () async {
-              if (await showDialog<bool>(context: context, builder: (_) => const RegisterRestaurantDialog()) == true) {
+              if (await showDialog<bool>(barrierDismissible: false, context: context, builder: (_) => const RegisterRestaurantDialog()) == true) {
                 // a new registration waits for the owner's email: show it there
                 setState(() {
                   _awaitingTab = true;
@@ -485,7 +485,8 @@ class _RegisterRestaurantDialogState extends ConsumerState<RegisterRestaurantDia
   final _form = GlobalKey<FormState>();
   final _c = {for (final k in ['ownerEmail', 'ownerName', 'restaurantName', 'gstin', 'address', 'password']) k: TextEditingController()};
   String _plan = 'standard';
-  bool _busy = false;
+  String _cycle = 'monthly'; // every plan is priced in this cycle, and the first license runs for it
+  bool _busy = false, _showPassword = false;
   static final _gstin = RegExp(r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$');
 
   @override
@@ -508,6 +509,7 @@ class _RegisterRestaurantDialogState extends ConsumerState<RegisterRestaurantDia
         if (_c['gstin']!.text.trim().isNotEmpty) 'gstin': _c['gstin']!.text.trim().toUpperCase(),
         if (_c['address']!.text.trim().isNotEmpty) 'address': _c['address']!.text.trim(),
         'planCode': _plan,
+        'billingCycle': _cycle,
         if (pwd.isNotEmpty) 'password': pwd,
       });
       if (!mounted) return;
@@ -550,11 +552,18 @@ class _RegisterRestaurantDialogState extends ConsumerState<RegisterRestaurantDia
           TextFormField(controller: _c['restaurantName'], decoration: const InputDecoration(labelText: 'Restaurant name'), validator: (v) => (v ?? '').trim().isEmpty ? 'Required' : null),
           const SizedBox(height: HPSpace.md),
           TextFormField(
+            key: const Key('register-password'),
             controller: _c['password'],
-            obscureText: true,
-            decoration: const InputDecoration(
+            obscureText: !_showPassword,
+            decoration: InputDecoration(
               labelText: 'Owner password (optional)',
               helperText: 'Set now to activate immediately without email verification',
+              suffixIcon: IconButton(
+                key: const Key('register-show-password'),
+                tooltip: _showPassword ? 'Hide password' : 'Show password',
+                icon: Icon(_showPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                onPressed: () => setState(() => _showPassword = !_showPassword),
+              ),
             ),
             validator: (v) => (v != null && v.isNotEmpty && v.length < 8) ? 'Minimum 8 characters' : null,
             onChanged: (_) => setState(() {}),
@@ -565,15 +574,34 @@ class _RegisterRestaurantDialogState extends ConsumerState<RegisterRestaurantDia
           const SizedBox(height: HPSpace.md),
           TextFormField(controller: _c['address'], decoration: const InputDecoration(labelText: 'Address (optional)')),
           const SizedBox(height: HPSpace.md),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: SegmentedButton<String>(
+              key: const Key('register-cycle'),
+              showSelectedIcon: false,
+              segments: const [ButtonSegment(value: 'monthly', label: Text('Pay monthly')), ButtonSegment(value: 'yearly', label: Text('Pay yearly'))],
+              selected: {_cycle},
+              onSelectionChanged: (v) => setState(() => _cycle = v.first),
+            ),
+          ),
+          const SizedBox(height: HPSpace.md),
           Consumer(builder: (c, ref, _) {
-            final plans = ref.watch(activePlansProvider).valueOrNull ?? const <Json>[];
+            final plans = [...ref.watch(activePlansProvider).valueOrNull ?? const <Json>[]]
+              ..sort((a, b) => ((a['tier'] as int?) ?? 999).compareTo((b['tier'] as int?) ?? 999));
             final codes = plans.map((p) => p['code'] as String).toList();
+            if (!codes.contains(_plan) && codes.isNotEmpty) _plan = codes.first;
+            // every option in the same cycle so the prices compare like for like
+            String price(Json p) {
+              final monthly = p['pricePaise'] as int;
+              final paise = _cycle == 'yearly' ? (p['yearlyPricePaise'] as int? ?? monthly * 10) : monthly;
+              return '${formatPaise(paise).replaceAll('.00', '')} / ${_cycle == 'yearly' ? 'year' : 'month'}';
+            }
             return DropdownButtonFormField<String>(
-              key: const Key('register-plan'),
-              initialValue: codes.contains(_plan) ? _plan : (codes.isEmpty ? null : codes.first),
+              key: ValueKey('register-plan-$_cycle'),
+              initialValue: codes.isEmpty ? null : _plan,
               isExpanded: true,
               decoration: const InputDecoration(labelText: 'Plan'),
-              items: [for (final p in plans) DropdownMenuItem(value: p['code'] as String, child: Text('${p['name']} · ${formatPaise(p['pricePaise'] as int)}/${p['billingCycle'] == 'yearly' ? 'yr' : 'mo'}'))],
+              items: [for (final p in plans) DropdownMenuItem(value: p['code'] as String, child: Text('${p['name']} · ${price(p)}'))],
               onChanged: (v) => setState(() => _plan = v!),
             );
           }),
@@ -694,7 +722,7 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text('${p['name']}'),
-                trailing: Text('${formatPaise(p['pricePaise'] as int)}/${p['billingCycle'] == 'yearly' ? 'yr' : 'mo'}'),
+                trailing: Text('${formatPaise(p['pricePaise'] as int).replaceAll('.00', '')}/mo · ${formatPaise(p['yearlyPricePaise'] as int? ?? (p['pricePaise'] as int) * 10).replaceAll('.00', '')}/yr'),
                 selected: p['code'] == currentPlan,
               ),
             ),
@@ -718,6 +746,7 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
     final amount = TextEditingController(), ref0 = TextEditingController();
     String method = 'upi';
     final ok = await showDialog<bool>(
+      barrierDismissible: false,
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, set) => HPDialog(title: 'Record payment', actions: [
@@ -760,6 +789,10 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
         final lic = (r['currentLicense'] as Map?)?.cast<String, dynamic>();
         final plan = plans.where((x) => x['code'] == lic?['planCode']).firstOrNull;
         final planName = '${plan?['name'] ?? lic?['planName'] ?? titleCase('${lic?['planCode'] ?? 'No plan'}')}';
+        // what this restaurant actually pays: the license's own cycle and amount, not the plan's default cycle
+        final yearly = (lic?['billingCycle'] ?? plan?['billingCycle']) == 'yearly';
+        final paidPaise = lic?['amountPaise'] as int? ?? (plan == null ? null : (yearly ? plan['yearlyPricePaise'] as int? ?? (plan['pricePaise'] as int) * 10 : plan['pricePaise'] as int));
+        final priceText = paidPaise == null ? null : '${formatPaise(paidPaise).replaceAll('.00', '')} / ${yearly ? 'year' : 'month'}';
         final ends = DateTime.tryParse('${lic?['endsAt'] ?? ''}');
         final daysLeft = ends?.difference(DateTime.now()).inDays;
         final devices = (r['devices'] as List).cast<Map<String, dynamic>>();
@@ -790,7 +823,7 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
           if (lic == null)
             Text('No active license — the restaurant is read-only until one is issued.', style: HPType.body(p.muted))
           else ...[
-            _kv('Plan', '$planName${plan == null ? '' : ' · ${formatPaise(plan['pricePaise'] as int).replaceAll('.00', '')}/${plan['billingCycle'] == 'yearly' ? 'year' : 'month'}'}'),
+            _kv('Plan', '$planName${priceText == null ? '' : ' · $priceText'}'),
             _kv('Started', shortDate(lic['startsAt'])),
             _kv('Ends', '${shortDate(lic['endsAt'])}${daysLeft == null ? '' : daysLeft >= 0 ? ' · $daysLeft days left' : ' · ended ${-daysLeft} days ago'}'),
             _kv('Grace period', '${lic['graceDays']} days after the end date'),
@@ -872,6 +905,8 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
         ]));
 
         const gap = SizedBox(height: HPSpace.lg, width: HPSpace.lg);
+        // archives only matter once a restaurant is suspended or has been archived
+        final showCold = archivesList.isNotEmpty || status == 'suspended' || status == 'archived';
         return ListView(padding: EdgeInsets.all(narrow ? HPSpace.lg : HPSpace.x4), children: [
           Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: HPSpace.md, runSpacing: HPSpace.sm, children: [
             IconButton(tooltip: 'Back to restaurants', onPressed: () => c.go('/restaurants'), icon: const Icon(Icons.arrow_back)),
@@ -889,20 +924,21 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
             final cols = narrow ? 2 : 4;
             final w = (box.maxWidth - HPSpace.lg * (cols - 1)) / cols;
             return Wrap(spacing: HPSpace.lg, runSpacing: HPSpace.lg, children: [
-              SizedBox(width: w, child: KpiCard(label: 'Plan', value: planName, caption: plan == null ? null : '${formatPaise(plan['pricePaise'] as int).replaceAll('.00', '')} / ${plan['billingCycle'] == 'yearly' ? 'year' : 'month'}', icon: Icons.workspace_premium_outlined, tone: HPTone.saffron)),
+              SizedBox(width: w, child: KpiCard(label: 'Plan', value: planName, caption: priceText, icon: Icons.workspace_premium_outlined, tone: HPTone.saffron)),
               SizedBox(width: w, child: KpiCard(label: 'License ends', value: ends == null ? '—' : shortDate(lic?['endsAt']), caption: daysLeft == null ? null : (daysLeft >= 0 ? '$daysLeft days left' : 'ended'), icon: Icons.event_outlined, tone: daysLeft != null && daysLeft < 7 ? HPTone.danger : HPTone.success)),
               SizedBox(width: w, child: KpiCard(label: 'Branches', value: '${(r['branches'] as List).length}', icon: Icons.storefront_outlined)),
               SizedBox(width: w, child: KpiCard(label: 'Devices', value: '${devices.where((d) => d['revokedAt'] == null).length}', caption: hub == null ? 'No hub yet' : 'Hub: ${hub['name']}', icon: Icons.router_outlined, tone: hub == null ? HPTone.neutral : HPTone.success)),
             ]);
           }),
           const SizedBox(height: HPSpace.lg),
-          if (narrow) ...[profile, gap, license, gap, payments, gap, coldStorageCard, gap, branches]
-          else
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(child: Column(children: [profile, gap, payments, gap, coldStorageCard])),
-              gap,
-              Expanded(child: Column(children: [license, gap, branches])),
-            ]),
+          if (narrow) ...[profile, gap, license, gap, payments, gap, branches, if (showCold) ...[gap, coldStorageCard]]
+          else ...[
+            // paired cards share a row and a height, so a new restaurant's short cards leave no ragged gaps
+            IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [Expanded(child: profile), gap, Expanded(child: license)])),
+            gap,
+            IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [Expanded(child: payments), gap, Expanded(child: branches)])),
+            if (showCold) ...[gap, coldStorageCard],
+          ],
           const SizedBox(height: HPSpace.lg),
           SectionCard(
             title: 'History',
@@ -955,35 +991,39 @@ class _LifecyclePipeline extends StatelessWidget {
             ),
           ]),
           const SizedBox(height: HPSpace.sm),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(children: [
+          LayoutBuilder(builder: (context, box) {
+            // wide: the steps share the full card width; narrow: they scroll sideways
+            final fill = box.maxWidth >= 760;
+            final row = Row(children: [
               for (var i = 0; i < steps.length; i++) ...[
                 if (i > 0)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 6),
                     child: Icon((i == 2 || i == 3) ? Icons.sync_alt_rounded : Icons.arrow_forward_rounded, size: 16, color: p.faint),
                   ),
-                _StepChip(
-                  label: steps[i].$2,
-                  caption: steps[i].$3,
-                  isCurrent: !isBlocked && (steps[i].$1 == status || (status == 'pending' && i == 0)),
-                  isPast: !isBlocked && currentIdx > i,
-                  tone: status == 'suspended' && steps[i].$1 == 'suspended'
-                      ? HPTone.saffron
-                      : status == 'archived' && steps[i].$1 == 'archived'
-                          ? HPTone.pending
-                          : status == 'deleted' && steps[i].$1 == 'deleted'
-                              ? HPTone.danger
-                              : HPTone.success,
-                ),
+                if (fill) Expanded(child: _step(steps, i, currentIdx, isBlocked)) else _step(steps, i, currentIdx, isBlocked),
               ],
-            ]),
-          ),
+            ]);
+            return fill ? row : SingleChildScrollView(scrollDirection: Axis.horizontal, child: row);
+          }),
         ]),
       ),
     );
   }
+
+  Widget _step(List<(String, String, String)> steps, int i, int currentIdx, bool isBlocked) => _StepChip(
+        label: steps[i].$2,
+        caption: steps[i].$3,
+        isCurrent: !isBlocked && (steps[i].$1 == status || (status == 'pending' && i == 0)),
+        isPast: !isBlocked && currentIdx > i,
+        tone: status == 'suspended' && steps[i].$1 == 'suspended'
+            ? HPTone.saffron
+            : status == 'archived' && steps[i].$1 == 'archived'
+                ? HPTone.pending
+                : status == 'deleted' && steps[i].$1 == 'deleted'
+                    ? HPTone.danger
+                    : HPTone.success,
+      );
 }
 
 class _StepChip extends StatelessWidget {
@@ -1005,10 +1045,10 @@ class _StepChip extends StatelessWidget {
         Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(isCurrent ? Icons.radio_button_checked : isPast ? Icons.check_circle_rounded : Icons.radio_button_unchecked, size: 14, color: color),
           const SizedBox(width: 6),
-          Text(label, style: HPType.label(isCurrent ? p.text : isPast ? p.text : p.muted).copyWith(fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal)),
+          Flexible(child: Text(label, overflow: TextOverflow.ellipsis, style: HPType.label(isCurrent ? p.text : isPast ? p.text : p.muted).copyWith(fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal))),
         ]),
         const SizedBox(height: 2),
-        Text(caption, style: HPType.mono(p.muted).copyWith(fontSize: 10)),
+        Text(caption, maxLines: 1, overflow: TextOverflow.ellipsis, style: HPType.mono(p.muted).copyWith(fontSize: 10)),
       ]),
     );
   }
@@ -1017,7 +1057,7 @@ class _StepChip extends StatelessWidget {
 /// P11 audit list (shared by the audit viewer and the restaurant detail page): what happened, who did it, when,
 /// why — tap a row to see exactly what changed.
 class AuditList extends ConsumerStatefulWidget {
-  const AuditList({super.key, this.tenantId, this.action, this.category, this.q, this.embedded = false});
+  const AuditList({super.key, this.tenantId, this.action, this.category, this.q, this.embedded = false, this.limit});
   final String? tenantId;
   final String? action;
   final String? category;
@@ -1025,6 +1065,9 @@ class AuditList extends ConsumerStatefulWidget {
 
   /// Inside another page: no own scrolling, shows the latest events.
   final bool embedded;
+
+  /// How many events to show (default: 12 embedded, all otherwise).
+  final int? limit;
   @override
   ConsumerState<AuditList> createState() => _AuditListState();
 }
@@ -1050,14 +1093,18 @@ class _AuditListState extends ConsumerState<AuditList> {
 
   static String _short(Object? v) {
     if (v == null) return '—';
+    // lists of records (roles, dish sizes): their names, e.g. "Onboarding Admin, Platform Auditor"
+    if (v is List) return v.isEmpty ? 'none' : _short(v.map((x) => x is Map ? (x['name'] ?? x['code'] ?? x) : x).join(', '));
     final s = v is String ? v : '$v';
     return s.length > 60 ? '${s.substring(0, 57)}…' : s;
   }
 
   /// Field-by-field changes ("Status: active → suspended"); for creations just the new values.
   static List<(String, String)> _changes(Map<String, dynamic> e) {
-    final before = (e['before'] as Map?)?.cast<String, dynamic>() ?? const {};
-    final after = (e['after'] as Map?)?.cast<String, dynamic>() ?? const {};
+    // before/after are free-form JSON: anything that is not an object (list, text, number) shows as one value
+    Map<String, dynamic> asMap(Object? v) => v is Map ? v.cast<String, dynamic>() : v == null ? const {} : {e['action'] == 'platform.admin.roles_changed' ? 'roles' : 'value': v};
+    final before = asMap(e['before']);
+    final after = asMap(e['after']);
     const hidden = {'id', 'tenantId', 'branchId', 'seq', 'createdAt', 'updatedAt', 'signedToken', 'passwordHash', 'pinHash', 'tokenHash', 'deleted'};
     final keys = {...before.keys, ...after.keys}.where((k) => !hidden.contains(k)).toList();
     return [
@@ -1065,6 +1112,14 @@ class _AuditListState extends ConsumerState<AuditList> {
         if ('${before[k]}' != '${after[k]}' || before.isEmpty)
           (titleCase(k.replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}').toLowerCase()), before.isEmpty || !before.containsKey(k) ? _short(after[k]) : '${_short(before[k])} → ${_short(after[k])}'),
     ];
+  }
+
+  static List<(String, String)> _safeChanges(Map<String, dynamic> e) {
+    try {
+      return _changes(e);
+    } catch (_) {
+      return const []; // one malformed record must not blank the whole log
+    }
   }
 
   @override
@@ -1075,9 +1130,10 @@ class _AuditListState extends ConsumerState<AuditList> {
         emptyTitle: 'No history yet',
         builder: (c, d, _) {
           final p = context.hp;
-          final items = (d['items'] as List).cast<Map<String, dynamic>>().take(widget.embedded ? 12 : 1000).toList();
+          final items = (d['items'] as List).whereType<Map>().map((m) => m.cast<String, dynamic>()).take(widget.limit ?? (widget.embedded ? 12 : 1000)).toList();
           final tiles = [
             for (final e in items)
+              for (final changes in [_safeChanges(e)])
               Theme(
                 data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
                 child: ExpansionTile(
@@ -1096,7 +1152,7 @@ class _AuditListState extends ConsumerState<AuditList> {
                   childrenPadding: const EdgeInsets.only(left: 52, bottom: HPSpace.md),
                   expandedCrossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    for (final (k, v) in _changes(e))
+                    for (final (k, v) in changes)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 2),
                         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1104,13 +1160,14 @@ class _AuditListState extends ConsumerState<AuditList> {
                           Expanded(child: SelectableText(v, style: HPType.body(p.text))),
                         ]),
                       ),
-                    if (_changes(e).isEmpty) Text('No field changes recorded.', style: HPType.body(p.faint)),
+                    if (changes.isEmpty) Text('No field changes recorded.', style: HPType.body(p.faint)),
                     if (e['ip'] != null) Text('From ${e['ip']}', style: HPType.body(p.faint).copyWith(fontSize: 12)),
                   ],
                 ),
               ),
           ];
-          return widget.embedded ? Column(children: tiles) : ListView(children: tiles);
+          // right inset keeps the web scrollbar off the expand arrows
+          return widget.embedded ? Column(children: tiles) : ListView(padding: const EdgeInsets.only(right: HPSpace.md), children: tiles);
         },
       );
 }
@@ -1123,9 +1180,24 @@ class AuditScreen extends ConsumerStatefulWidget {
 }
 
 class _AuditScreenState extends ConsumerState<AuditScreen> {
-  final _action = TextEditingController(), _tenant = TextEditingController(), _search = TextEditingController();
+  final _action = TextEditingController(), _search = TextEditingController();
   String? _category; // null = all, 'account_lifecycle', 'account_creation', 'account_deletion', 'mfa_reset', 'authentication', 'auth_success', 'auth_failure', 'restaurant_lifecycle'
-  String? _a, _t, _q;
+  String? _a, _q; // applied text filters (Filter button or Enter)
+
+  void _applyText() => setState(() => (_a = _action.text.trim(), _q = _search.text.trim()));
+
+  void _clear() => setState(() {
+        _category = _a = _q = _selectedRestaurantId = null;
+        _action.clear();
+        _search.clear();
+      });
+
+  @override
+  void dispose() {
+    _action.dispose();
+    _search.dispose();
+    super.dispose();
+  }
   List<Json>? _restaurants;
   String? _selectedRestaurantId;
 
@@ -1148,9 +1220,8 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
   @override
   Widget build(BuildContext context) {
     final p = context.hp;
-    return Padding(
-      padding: EdgeInsets.all(isNarrowWeb(context) ? HPSpace.lg : HPSpace.x4),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    final narrow = isNarrowWeb(context);
+    final filters = <Widget>[
         Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, spacing: HPSpace.sm, runSpacing: HPSpace.xs, children: [
           Text('Audit log', style: Theme.of(context).textTheme.headlineMedium),
           Container(
@@ -1167,56 +1238,41 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
           ),
         ]),
         const SizedBox(height: HPSpace.md),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(children: [
-            for (final (cat, label) in const [
-              (null, 'All Activity'),
-              ('account_lifecycle', 'Account Lifecycle'),
-              ('account_creation', 'Account Creation'),
-              ('account_deletion', 'Account Deletion'),
-              ('mfa_reset', 'MFA Reset'),
-              ('authentication', 'Authentication (All)'),
-              ('auth_success', 'Auth Success'),
-              ('auth_failure', 'Auth Failure'),
-              ('restaurant_lifecycle', 'Restaurant Lifecycle'),
-            ])
-              Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: ChoiceChip(
-                  label: Text(label),
-                  selected: _category == cat,
-                  onSelected: (_) => setState(() { _category = cat; if (cat == null) { _a = _t = _q = null; _action.clear(); _tenant.clear(); _search.clear(); _selectedRestaurantId = null; } }),
-                ),
-              ),
-          ]),
-        ),
-        const SizedBox(height: HPSpace.md),
+        // chips wrap onto a second line instead of scrolling sideways under a scrollbar
+        Wrap(spacing: 6, runSpacing: 6, children: [
+          for (final (cat, label) in const [
+            (null, 'All activity'),
+            ('account_lifecycle', 'Account lifecycle'),
+            ('account_creation', 'Account creation'),
+            ('account_deletion', 'Account deletion'),
+            ('mfa_reset', 'MFA reset'),
+            ('authentication', 'Authentication (all)'),
+            ('auth_success', 'Auth success'),
+            ('auth_failure', 'Auth failure'),
+            ('restaurant_lifecycle', 'Restaurant lifecycle'),
+          ])
+            ChoiceChip(
+              key: Key('audit-cat-${cat ?? 'all'}'),
+              label: Text(label),
+              selected: _category == cat,
+              // a category narrows what the other filters already show; "All activity" drops only the category
+              onSelected: (_) => setState(() => _category = cat),
+            ),
+        ]),
+        const SizedBox(height: HPSpace.lg),
         Wrap(spacing: HPSpace.md, runSpacing: HPSpace.md, crossAxisAlignment: WrapCrossAlignment.center, children: [
-          SizedBox(width: isNarrowWeb(context) ? double.infinity : 220, child: TextField(controller: _search, decoration: const InputDecoration(labelText: 'Search text / reason', prefixIcon: Icon(Icons.search)))),
-          SizedBox(width: isNarrowWeb(context) ? double.infinity : 180, child: TextField(controller: _action, decoration: const InputDecoration(labelText: 'Action contains'))),
+          SizedBox(width: isNarrowWeb(context) ? double.infinity : 220, child: TextField(key: const Key('audit-search'), controller: _search, decoration: const InputDecoration(labelText: 'Search text / reason', prefixIcon: Icon(Icons.search)), onSubmitted: (_) => _applyText())),
+          SizedBox(width: isNarrowWeb(context) ? double.infinity : 180, child: TextField(key: const Key('audit-action'), controller: _action, decoration: const InputDecoration(labelText: 'Action contains'), onSubmitted: (_) => _applyText())),
           SizedBox(
             width: isNarrowWeb(context) ? double.infinity : 260,
             child: DropdownButtonFormField<String?>(
-              key: const Key('audit-restaurant-filter'),
+              // keyed by the selection so clearing it from outside resets what the field shows
+              key: ValueKey('audit-restaurant-filter-$_selectedRestaurantId-${_restaurants?.length}'),
               isExpanded: true,
-              value: _selectedRestaurantId,
-              decoration: InputDecoration(
-                labelText: 'Restaurant',
-                prefixIcon: const Icon(Icons.storefront_outlined),
-                suffixIcon: _selectedRestaurantId != null
-                    ? IconButton(
-                        icon: const Icon(Icons.clear_rounded, size: 18),
-                        onPressed: () => setState(() {
-                          _selectedRestaurantId = null;
-                          _tenant.clear();
-                          _t = null;
-                        }),
-                      )
-                    : null,
-              ),
+              initialValue: _selectedRestaurantId,
+              decoration: const InputDecoration(labelText: 'Restaurant', prefixIcon: Icon(Icons.storefront_outlined)),
               items: [
-                const DropdownMenuItem<String?>(value: null, child: Text('All Restaurants', overflow: TextOverflow.ellipsis)),
+                const DropdownMenuItem<String?>(value: null, child: Text('All restaurants', overflow: TextOverflow.ellipsis)),
                 if (_restaurants != null)
                   for (final r in _restaurants!)
                     DropdownMenuItem<String?>(
@@ -1224,18 +1280,22 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
                       child: Text('${r['name']} (${r['code']})', overflow: TextOverflow.ellipsis),
                     ),
               ],
-              onChanged: (v) => setState(() {
-                _selectedRestaurantId = v;
-                _tenant.text = v ?? '';
-                _t = v;
-              }),
+              onChanged: (v) => setState(() => _selectedRestaurantId = v),
             ),
           ),
-          SecondaryButton(label: 'Filter', height: 48, onPressed: () => setState(() => (_a = _action.text.trim(), _t = _selectedRestaurantId ?? (_tenant.text.trim().isEmpty ? null : _tenant.text.trim()), _q = _search.text.trim()))),
+          SecondaryButton(key: const Key('audit-filter'), label: 'Filter', icon: Icons.filter_alt_outlined, height: 48, onPressed: _applyText),
+          if (_category != null || _selectedRestaurantId != null || (_q ?? '').isNotEmpty || (_a ?? '').isNotEmpty)
+            TextButton.icon(key: const Key('audit-clear'), onPressed: _clear, icon: const Icon(Icons.clear_rounded, size: 18), label: const Text('Clear filters')),
         ]),
         const SizedBox(height: HPSpace.lg),
-        Expanded(child: Card(child: Padding(padding: const EdgeInsets.all(HPSpace.lg), child: AuditList(category: _category, action: _a, tenantId: _t, q: _q)))),
-      ]),
+    ];
+    // phones: filters and events scroll together, so the filters never squeeze the list off screen
+    final list = Card(child: Padding(padding: const EdgeInsets.all(HPSpace.lg), child: AuditList(category: _category, action: _a, tenantId: _selectedRestaurantId, q: _q, embedded: narrow, limit: narrow ? 200 : null)));
+    return Padding(
+      padding: EdgeInsets.all(narrow ? HPSpace.lg : HPSpace.x4),
+      child: narrow
+          ? ListView(children: [...filters, list])
+          : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [...filters, Expanded(child: list)]),
     );
   }
 }
@@ -1243,6 +1303,7 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
 /// P8 Plans (feature flags + limits).
 /// Shown when the email provider refused the message: the Super Admin passes the link on another way.
 Future<void> showActivationLinkDialog(BuildContext context, Map<String, dynamic> r) => showDialog<void>(
+      barrierDismissible: false,
       context: context,
       builder: (c) => HPDialog(
         title: 'Email not delivered',
@@ -1305,7 +1366,7 @@ class _PendingRegistrationsState extends ConsumerState<PendingRegistrations> {
 
   Future<void> _activate(Map<String, dynamic> r) async {
     final password = TextEditingController();
-    final ok = await showDialog<bool>(context: context, builder: (d) => HPDialog(title: 'Activate ${r['restaurantName']}', actions: [SecondaryButton(label: 'Cancel', onPressed: () => Navigator.pop(d)), PrimaryButton(label: 'Activate', onPressed: () { if (password.text.length >= 12) Navigator.pop(d, true); })], child: TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'Owner password', helperText: 'At least 12 characters. No email required.'))));
+    final ok = await showDialog<bool>(barrierDismissible: false, context: context, builder: (d) => HPDialog(title: 'Activate ${r['restaurantName']}', actions: [SecondaryButton(label: 'Cancel', onPressed: () => Navigator.pop(d)), PrimaryButton(label: 'Activate', onPressed: () { if (password.text.length >= 12) Navigator.pop(d, true); })], child: TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'Owner password', helperText: 'At least 12 characters. No email required.'))));
     if (ok != true) { password.dispose(); return; }
     try { await ref.read(apiProvider).activateRegistration(r['id'] as String, password.text); if (mounted) { setState(() => _reload++); showDone(context, 'Restaurant active. Owner can sign in with email and password.'); } } catch (e) { if (mounted) showError(context, e); } finally { password.dispose(); }
   }

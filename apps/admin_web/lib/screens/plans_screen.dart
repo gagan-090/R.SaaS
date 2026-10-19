@@ -47,6 +47,7 @@ class PlansScreen extends ConsumerStatefulWidget {
 
 class _PlansScreenState extends ConsumerState<PlansScreen> {
   bool _archived = false;
+  String _cycle = 'monthly'; // which price the cards lead with
   int _reload = 0;
 
   bool get _canEdit {
@@ -55,7 +56,7 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
   }
 
   Future<void> _edit([Json? plan]) async {
-    final saved = await showDialog<String>(context: context, builder: (_) => PlanEditor(api: ref.read(apiProvider), plan: plan));
+    final saved = await showDialog<String>(barrierDismissible: false, context: context, builder: (_) => PlanEditor(api: ref.read(apiProvider), plan: plan));
     if (saved == null) return;
     ref.invalidate(activePlansProvider);
     setState(() => _reload++);
@@ -90,7 +91,8 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
       key: ValueKey('$_reload-$_archived'),
       load: () => ref.read(apiProvider).plans(includeArchived: _archived),
       builder: (c, data, reload) {
-        final plans = data.cast<Json>().toList();
+        // "Show archived" lists only the archived plans; otherwise only the plans on sale
+        final plans = data.cast<Json>().where((p) => (p['archived'] == true) == _archived).toList();
         // Strict ordering: Standard (tier 1) -> Professional (tier 2) -> Premium (tier 3)
         plans.sort((a, b) {
           final tA = (a['tier'] as int?) ?? 999;
@@ -103,17 +105,39 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
           title: 'Plans',
           subtitle: 'Standard, Professional, and Premium subscription plans. Customers can purchase monthly or yearly.',
           actions: [
-            FilterChip(label: const Text('Show archived'), selected: _archived, onSelected: (v) => setState(() => _archived = v)),
+            SegmentedButton<String>(
+              key: const Key('plans-cycle'),
+              showSelectedIcon: false,
+              segments: const [ButtonSegment(value: 'monthly', label: Text('Monthly')), ButtonSegment(value: 'yearly', label: Text('Yearly'))],
+              selected: {_cycle},
+              onSelectionChanged: (v) => setState(() => _cycle = v.first),
+            ),
+            FilterChip(key: const Key('plans-archived'), label: const Text('Show archived'), selected: _archived, onSelected: (v) => setState(() => _archived = v)),
             if (edit) PrimaryButton(key: const Key('add-plan'), label: 'Add plan', icon: Icons.add_rounded, height: 48, onPressed: () => _edit()),
           ],
           child: plans.isEmpty
-              ? const EmptyState(title: 'No plans', icon: Icons.workspace_premium_outlined)
+              ? EmptyState(title: _archived ? 'No archived plans' : 'No plans', icon: Icons.workspace_premium_outlined)
               : LayoutBuilder(builder: (c, box) {
-                  final cols = narrow ? 1 : (box.maxWidth / 360).floor().clamp(1, 4);
+                  // all plans side by side on one page, cards in a row the same height
+                  final cols = narrow ? 1 : plans.length.clamp(1, (box.maxWidth / 280).floor().clamp(1, 4));
                   const gap = HPSpace.lg;
-                  final w = (box.maxWidth - gap * (cols - 1)) / cols;
-                  return Wrap(spacing: gap, runSpacing: gap, children: [
-                    for (final p in plans) SizedBox(width: w, child: _PlanCard(plan: p, canEdit: edit, onEdit: () => _edit(p), onArchive: (v) => _archive(p, v))),
+                  // each plan lists only what it adds to the plan below it (Professional = Standard + …), so cards stay short
+                  Widget card(Json p) {
+                    final i = plans.indexOf(p);
+                    return _PlanCard(plan: p, base: i > 0 ? plans[i - 1] : null, cycle: _cycle, canEdit: edit, onEdit: () => _edit(p), onArchive: (v) => _archive(p, v));
+                  }
+                  return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    for (var i = 0; i < plans.length; i += cols) ...[
+                      if (i > 0) const SizedBox(height: gap),
+                      IntrinsicHeight(
+                        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                          for (var j = i; j < i + cols; j++) ...[
+                            if (j > i) const SizedBox(width: gap),
+                            Expanded(child: j < plans.length ? card(plans[j]) : const SizedBox.shrink()),
+                          ],
+                        ]),
+                      ),
+                    ],
                   ]);
                 }),
         );
@@ -123,8 +147,12 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
 }
 
 class _PlanCard extends StatelessWidget {
-  const _PlanCard({required this.plan, required this.canEdit, required this.onEdit, required this.onArchive});
+  const _PlanCard({required this.plan, this.base, required this.cycle, required this.canEdit, required this.onEdit, required this.onArchive});
   final Json plan;
+
+  /// The next plan down; when set, the card shows "Everything in [base], plus" and only the extra features.
+  final Json? base;
+  final String cycle;
   final bool canEdit;
   final VoidCallback onEdit;
   final ValueChanged<bool> onArchive;
@@ -132,7 +160,11 @@ class _PlanCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.hp;
     final archived = plan['archived'] == true;
-    final features = (plan['featureFlags'] as List).cast<String>();
+    final all = (plan['featureFlags'] as List).cast<String>();
+    final baseFeatures = {...((base?['featureFlags'] as List?) ?? const []).cast<String>()};
+    // only build on the plan below when this one really contains all of it
+    final inherits = base != null && baseFeatures.isNotEmpty && baseFeatures.every(all.contains);
+    final features = inherits ? all.where((f) => !baseFeatures.contains(f)).toList() : all;
     final limits = (plan['limits'] as Map).cast<String, dynamic>();
     final monthlyPaise = (plan['pricePaise'] as int?) ?? 0;
     final yearlyPaise = (plan['yearlyPricePaise'] as int?) ?? (monthlyPaise * 10);
@@ -152,11 +184,13 @@ class _PlanCard extends StatelessWidget {
                   children: [
                     Text('${plan['name']}', style: HPType.titleCard(p.text).copyWith(fontSize: 24), overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 2),
-                    Row(
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Text('${plan['code']}', style: HPType.mono(p.faint)),
                         if (tier != null) ...[
-                          const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(color: p.raised, borderRadius: BorderRadius.circular(4)),
@@ -185,13 +219,15 @@ class _PlanCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${formatPaise(monthlyPaise).replaceAll('.00', '')} / month',
+                  cycle == 'yearly' ? '${formatPaise(yearlyPaise).replaceAll('.00', '')} / year' : '${formatPaise(monthlyPaise).replaceAll('.00', '')} / month',
                   key: Key('plan-price-${plan['code']}'),
                   style: HPType.displayTotal(p.accentInk).copyWith(fontSize: 28),
                 ),
                 Text(
-                  '${formatPaise(yearlyPaise).replaceAll('.00', '')} / year (annual)',
-                  style: HPType.label(p.muted).copyWith(fontSize: 15),
+                  cycle == 'yearly'
+                      ? 'Works out to ${formatPaise(yearlyPaise ~/ 12).replaceAll('.00', '')} / month${monthlyPaise * 12 > yearlyPaise ? ' · saves ${formatPaise(monthlyPaise * 12 - yearlyPaise).replaceAll('.00', '')}' : ''}'
+                      : 'or ${formatPaise(yearlyPaise).replaceAll('.00', '')} / year if paid yearly',
+                  style: HPType.label(p.muted).copyWith(fontSize: 13),
                 ),
               ],
             ),
@@ -199,23 +235,30 @@ class _PlanCard extends StatelessWidget {
             Text('${plan['activeLicenses'] ?? 0} restaurant(s) on this plan', style: HPType.body(p.muted)),
             const SizedBox(height: HPSpace.lg),
             Text('INCLUDES', style: HPType.overline(p.muted)),
-            const SizedBox(height: HPSpace.sm),
-            Wrap(spacing: 6, runSpacing: 6, children: [
-              for (final f in features) Chip(label: Text(_label(f)), visualDensity: VisualDensity.compact),
-            ]),
-            const SizedBox(height: HPSpace.lg),
+            const SizedBox(height: HPSpace.xs),
+            if (inherits)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text('Everything in ${base!['name']}${features.isEmpty ? '' : ', plus:'}', key: Key('plan-inherits-${plan['code']}'), style: HPType.label(p.text).copyWith(fontSize: 13)),
+              ),
+            for (final f in features)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 1.5),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Icon(Icons.check_rounded, size: 15, color: p.success),
+                  const SizedBox(width: 6),
+                  Expanded(child: Text(_label(f), style: HPType.body(p.text).copyWith(fontSize: 13))),
+                ]),
+              ),
+            const SizedBox(height: HPSpace.md),
             Text('LIMITS', style: HPType.overline(p.muted)),
             const SizedBox(height: HPSpace.xs),
-            for (final (k, label) in limitKeys)
-              if (limits.containsKey(k))
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: Row(children: [
-                    Expanded(child: Text(label, style: HPType.body(p.muted))),
-                    Text(limits[k] == null ? 'Unlimited' : '${limits[k]}', style: HPType.label(p.text)),
-                  ]),
-                ),
+            Text(
+              [for (final (k, label) in limitKeys) if (limits.containsKey(k)) '$label: ${limits[k] ?? 'Unlimited'}'].join(' · '),
+              style: HPType.body(p.muted).copyWith(fontSize: 12.5),
+            ),
             if (canEdit) ...[
+              const Spacer(),
               const SizedBox(height: HPSpace.lg),
               SecondaryButton(label: 'Edit', icon: Icons.edit_outlined, height: 44, onPressed: onEdit),
             ],

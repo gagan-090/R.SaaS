@@ -146,7 +146,7 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
       appBar: AppBar(actions: [
         Padding(
           padding: const EdgeInsets.only(right: HPSpace.lg),
-          child: ThemeModeSwitch(compact: true, value: ref.watch(themeModeProvider), onChanged: ref.read(themeModeProvider.notifier).set),
+          child: ThemeModeSwitch(compact: true, showAuto: false, value: ref.watch(themeModeProvider), onChanged: ref.read(themeModeProvider.notifier).set),
         ),
       ]),
       body: Center(

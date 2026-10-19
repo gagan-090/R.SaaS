@@ -239,7 +239,7 @@ class _FloorEditorState extends State<FloorEditor> {
     int duration = 90;
     String? error;
     bool busy = false;
-    await showDialog<void>(context: context, builder: (d) => StatefulBuilder(builder: (d, update) => HPDialog(title: 'Reserve table ${t.name}', actions: [SecondaryButton(label: 'Close', onPressed: () => Navigator.pop(d)), PrimaryButton(label: 'Reserve', busy: busy, onPressed: busy ? null : () async {
+    await showDialog<void>(barrierDismissible: false, context: context, builder: (d) => StatefulBuilder(builder: (d, update) => HPDialog(title: 'Reserve table ${t.name}', actions: [SecondaryButton(label: 'Close', onPressed: () => Navigator.pop(d)), PrimaryButton(label: 'Reserve', busy: busy, onPressed: busy ? null : () async {
       final count = int.tryParse(guests.text);
       if (name.text.trim().isEmpty || count == null || count < 1 || count > t.seats) { update(() => error = 'Enter a guest name and 1–${t.seats} guests.'); return; }
       update(() { busy = true; error = null; });
@@ -263,6 +263,7 @@ class _FloorEditorState extends State<FloorEditor> {
 
   Future<void> _setStatus(HPFloorTable t) async {
     final s = await showDialog<String>(
+      barrierDismissible: false,
       context: context,
       builder: (d) => HPDialog(
         title: 'Table ${t.name}',
