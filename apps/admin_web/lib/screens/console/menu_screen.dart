@@ -471,8 +471,9 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     if (_cats == null) return const SkeletonGrid(maxExtent: 260, aspect: 1.4);
     final narrow = isNarrowWeb(context);
     final edit = _canEdit;
-    // "All dishes" lists dishes category by category, in the saved category (course) order
-    final catPos = {for (final (i, c) in _cats!.indexed) c['id']: i};
+    // Categories and "All dishes" are sorted by meal course order: Starters -> Drinks -> Mains -> Breads -> Rice -> Desserts
+    final orderedCats = sortByCourse(_cats!, (c) => '${c['name']}');
+    final catPos = {for (final (i, c) in orderedCats.indexed) c['id']: i};
     final visible = _items!
         .where((i) => _cat == null || i['categoryId'] == _cat)
         .where((i) => _q.isEmpty || '${i['name']} ${i['code'] ?? ''}'.toLowerCase().contains(_q.toLowerCase()))
@@ -486,7 +487,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     final paged = _pageSize > 0 ? visible.skip(currentPage * _pageSize).take(_pageSize).toList() : visible;
 
     final categoryRail = _CategoryList(
-      cats: _cats!,
+      cats: orderedCats,
       items: _items!,
       selected: _cat,
       canEdit: edit,
@@ -1463,20 +1464,21 @@ class _ItemEditorState extends State<_ItemEditor> {
   }
 }
 
-/// Where a category sits in a meal: 0 soups, 1 starters & snacks, 2 mains (anything unrecognised), 3 breads,
-/// 4 rice & biryani, 5 accompaniments, 6 desserts, 7 drinks. Checked in this order, so "Chinese Starters" is a
-/// starter and "Cold Beverages" a drink.
+/// Where a category sits in a meal:
+/// 0 soups, 1 starters & snacks, 2 drinks & beverages, 3 mains (anything unrecognised),
+/// 4 breads & rotis, 5 rice & biryani, 6 accompaniments, 7 desserts & sweets.
+/// Checked in this order, so "Chinese Starters" is a starter and "Cold Beverages" a drink.
 int courseRank(String category) {
   final n = category.toLowerCase();
   bool any(List<String> words) => words.any(n.contains);
-  if (any(['soup', 'shorba'])) return 0;
-  if (any(['beverage', 'drink', 'juice', 'shake', 'smoothie', 'mocktail', 'cocktail', 'lassi', 'chaas', 'tea', 'coffee', 'water', 'soda', 'cooler'])) return 7;
-  if (any(['dessert', 'sweet', 'ice cream', 'kulfi', 'cake', 'bakery', 'pastry', 'mithai'])) return 6;
-  if (any(['raita', 'curd', 'papad', 'accompaniment', 'pickle', 'chutney'])) return 5;
-  if (any(['rice', 'biryani', 'pulao', 'khichdi'])) return 4;
-  if (any(['bread', 'naan', 'roti', 'paratha', 'kulcha'])) return 3;
-  if (any(['starter', 'appetiser', 'appetizer', 'tandoor', 'kebab', 'snack', 'chaat', 'street', 'fast food', 'roll', 'wrap', 'salad', 'breakfast', 'momo'])) return 1;
-  return 2;
+  if (any(['soup', 'shorba', 'broth'])) return 0;
+  if (any(['starter', 'appetiser', 'appetizer', 'tandoor', 'kebab', 'snack', 'chaat', 'street', 'roll', 'wrap', 'salad', 'breakfast', 'momo'])) return 1;
+  if (any(['beverage', 'drink', 'juice', 'shake', 'smoothie', 'mocktail', 'cocktail', 'lassi', 'chaas', 'tea', 'chai', 'coffee', 'water', 'soda', 'cooler', 'cola', 'coke', 'pepsi', 'sprite'])) return 2;
+  if (any(['bread', 'naan', 'roti', 'paratha', 'kulcha'])) return 4;
+  if (any(['rice', 'biryani', 'pulao', 'khichdi'])) return 5;
+  if (any(['raita', 'curd', 'papad', 'accompaniment', 'pickle', 'chutney'])) return 6;
+  if (any(['dessert', 'sweet', 'ice cream', 'kulfi', 'cake', 'bakery', 'pastry', 'mithai', 'halwa', 'kheer', 'brownie', 'pudding', 'custard'])) return 7;
+  return 3;
 }
 
 /// Stable sort by [courseRank]: same-course categories keep their relative order.

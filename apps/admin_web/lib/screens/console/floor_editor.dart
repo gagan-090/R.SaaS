@@ -414,70 +414,184 @@ class _FloorEditorState extends State<FloorEditor> {
       },
     );
 
-    final toolbar = Wrap(
-      spacing: HPSpace.sm,
-      runSpacing: HPSpace.sm,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        if (_editable) ...[
-          TextButton.icon(onPressed: _uploadBackground, icon: const Icon(Icons.add_photo_alternate_outlined), label: const Text('Upload floor image')),
-          if (_background != null) TextButton(onPressed: () => _change(() => _background = null), child: const Text('Classic floor')),
-          FilledButton.tonalIcon(
-            onPressed: () => _add('square'),
-            icon: const Icon(Icons.crop_square_rounded, size: 18),
-            label: const Text('+ Square'),
+    final searchBox = SizedBox(
+      width: 220,
+      height: 42,
+      child: TextField(
+        decoration: InputDecoration(
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          prefixIcon: const Icon(Icons.search, size: 18),
+          hintText: 'Find table...',
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+        onChanged: (v) => setState(() {
+          _search = v;
+          final i = _tables.indexWhere((t) => t.name.toLowerCase() == v.toLowerCase());
+          if (i >= 0) {
+            _sel = i;
+            final t = _tables[i];
+            _tc.value = Matrix4.identity()..translateByDouble(200 - t.x, 200 - t.y, 0, 1);
+          }
+        }),
+      ),
+    );
+
+    final addTableDropdown = PopupMenuButton<String>(
+      key: const Key('add-plan-table'),
+      tooltip: 'Add table',
+      onSelected: _add,
+      itemBuilder: (_) => const [
+        PopupMenuItem(
+          value: 'square',
+          child: Row(children: [
+            Icon(Icons.crop_square_rounded, size: 20),
+            SizedBox(width: 10),
+            Text('Square table (4 seats)'),
+          ]),
+        ),
+        PopupMenuItem(
+          value: 'round',
+          child: Row(children: [
+            Icon(Icons.circle_outlined, size: 20),
+            SizedBox(width: 10),
+            Text('Round table (2 seats)'),
+          ]),
+        ),
+        PopupMenuItem(
+          value: 'rect',
+          child: Row(children: [
+            Icon(Icons.rectangle_outlined, size: 20),
+            SizedBox(width: 10),
+            Text('Long table (6 seats)'),
+          ]),
+        ),
+      ],
+      child: Container(
+        height: 42,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: p.accentInk,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.add_rounded, size: 18, color: Colors.black),
+            const SizedBox(width: 6),
+            Text('Add table', style: HPType.label(Colors.black).copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(width: 4),
+            const Icon(Icons.arrow_drop_down_rounded, size: 20, color: Colors.black),
+          ],
+        ),
+      ),
+    );
+
+    final imageMenu = PopupMenuButton<String>(
+      tooltip: 'Floor background image',
+      onSelected: (v) {
+        if (v == 'upload') _uploadBackground();
+        if (v == 'reset') _change(() => _background = null);
+      },
+      itemBuilder: (_) => [
+        const PopupMenuItem(
+          value: 'upload',
+          child: Row(children: [
+            Icon(Icons.add_photo_alternate_outlined, size: 18),
+            SizedBox(width: 8),
+            Text('Upload image'),
+          ]),
+        ),
+        if (_background != null)
+          const PopupMenuItem(
+            value: 'reset',
+            child: Row(children: [
+              Icon(Icons.restart_alt_rounded, size: 18),
+              SizedBox(width: 8),
+              Text('Reset to classic floor'),
+            ]),
           ),
-          FilledButton.tonalIcon(
-            onPressed: () => _add('round'),
-            icon: const Icon(Icons.circle_outlined, size: 18),
-            label: const Text('+ Round'),
-          ),
-          FilledButton.tonalIcon(
-            onPressed: () => _add('rect'),
-            icon: const Icon(Icons.rectangle_outlined, size: 18),
-            label: const Text('+ Long'),
-          ),
-          PopupMenuButton<String>(
-            key: const Key('add-plan-table'),
-            tooltip: 'Add a table',
-            onSelected: _add,
-            itemBuilder: (_) => const [
-              PopupMenuItem(
-                value: 'round',
-                child: ListTile(leading: Icon(Icons.circle_outlined), title: Text('Round table (2-4 seats)')),
-              ),
-              PopupMenuItem(
-                value: 'square',
-                child: ListTile(leading: Icon(Icons.crop_square_rounded), title: Text('Square table (4 seats)')),
-              ),
-              PopupMenuItem(
-                value: 'rect',
-                child: ListTile(leading: Icon(Icons.rectangle_outlined), title: Text('Long table (6 seats)')),
-              ),
-            ],
-            child: const Chip(avatar: Icon(Icons.add_rounded, size: 18), label: Text('More tables')),
-          ),
-          FilterChip(key: const Key('snap'), label: const Text('Snap to grid'), selected: _snap, onSelected: (v) => setState(() => _snap = v)),
-          FilterChip(key: const Key('chair-mode'), label: const Text('Move chairs'), selected: _chairMode, onSelected: (v) => setState(() => _chairMode = v)),
+      ],
+      child: Container(
+        height: 42,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          border: Border.all(color: p.outline),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.image_outlined, size: 18, color: p.text),
+            const SizedBox(width: 6),
+            Text('Floor image', style: HPType.label(p.text)),
+            const Icon(Icons.arrow_drop_down_rounded, size: 18),
+          ],
+        ),
+      ),
+    );
+
+    final zoomControls = Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: p.outline),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(tooltip: 'Zoom in', icon: const Icon(Icons.zoom_in_rounded, size: 20), visualDensity: VisualDensity.compact, onPressed: () => _zoom(1.25)),
+          IconButton(tooltip: 'Zoom out', icon: const Icon(Icons.zoom_out_rounded, size: 20), visualDensity: VisualDensity.compact, onPressed: () => _zoom(.8)),
+          IconButton(tooltip: 'Reset view', icon: const Icon(Icons.fit_screen_rounded, size: 20), visualDensity: VisualDensity.compact, onPressed: () => setState(() => _fitToView(_lastAvailW, _lastTargetH))),
+          IconButton(key: const Key('reload-plan'), tooltip: 'Reload', icon: const Icon(Icons.refresh_rounded, size: 20), visualDensity: VisualDensity.compact, onPressed: _dirty ? _cancel : _load),
         ],
-        IconButton(tooltip: 'Zoom in', icon: const Icon(Icons.zoom_in_rounded), onPressed: () => _zoom(1.25)),
-        IconButton(tooltip: 'Zoom out', icon: const Icon(Icons.zoom_out_rounded), onPressed: () => _zoom(.8)),
-        IconButton(tooltip: 'Reset view', icon: const Icon(Icons.fit_screen_rounded), onPressed: () => setState(() => _fitToView(_lastAvailW, _lastTargetH))),
-        IconButton(key: const Key('reload-plan'), tooltip: 'Reload', icon: const Icon(Icons.refresh_rounded), onPressed: _dirty ? _cancel : _load),
-      ]);
+      ),
+    );
+
     final actions = Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, children: [
         if (widget.canEdit && widget.editorInPlan && !_editing)
           PrimaryButton(
             key: const Key('edit-plan'),
             label: 'Edit floor plan',
             icon: Icons.edit_outlined,
-            height: 44,
+            height: 42,
             onPressed: () => setState(() => _editing = true),
           ),
         if (_editable) ...[
-          SecondaryButton(key: const Key('cancel-plan'), label: 'Cancel', onPressed: _busy ? null : _cancel),
-          PrimaryButton(key: const Key('save-plan'), label: 'Save plan', busy: _busy, height: 44, onPressed: _dirty ? _save : null),
+          SecondaryButton(key: const Key('cancel-plan'), label: 'Cancel', height: 42, onPressed: _busy ? null : _cancel),
+          PrimaryButton(key: const Key('save-plan'), label: 'Save plan', busy: _busy, height: 42, onPressed: _dirty ? _save : null),
         ],
+      ],
+    );
+
+    final topBar = Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: HPSpace.md,
+      runSpacing: HPSpace.sm,
+      children: [
+        Wrap(
+          spacing: HPSpace.sm,
+          runSpacing: HPSpace.sm,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            searchBox,
+            if (_editable) ...[
+              addTableDropdown,
+              imageMenu,
+              FilterChip(key: const Key('snap'), label: const Text('Snap to grid'), selected: _snap, onSelected: (v) => setState(() => _snap = v)),
+              FilterChip(key: const Key('chair-mode'), label: const Text('Move chairs'), selected: _chairMode, onSelected: (v) => setState(() => _chairMode = v)),
+            ],
+          ],
+        ),
+        Wrap(
+          spacing: HPSpace.sm,
+          runSpacing: HPSpace.sm,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            zoomControls,
+            actions,
+          ],
+        ),
       ],
     );
 
@@ -505,9 +619,7 @@ class _FloorEditorState extends State<FloorEditor> {
               ]),
             ),
           ),
-        TextField(decoration: const InputDecoration(prefixIcon: Icon(Icons.search), labelText: 'Find a table by name or number'), onChanged: (v) => setState(() { _search = v; final i = _tables.indexWhere((t) => t.name.toLowerCase() == v.toLowerCase()); if (i >= 0) { _sel = i; final t = _tables[i]; _tc.value = Matrix4.identity()..translateByDouble(200-t.x, 200-t.y, 0, 1); } })),
-        const SizedBox(height: HPSpace.sm),
-        Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, spacing: HPSpace.md, runSpacing: HPSpace.sm, children: [toolbar, actions]),
+        topBar,
         if (_editable)
           Padding(padding: const EdgeInsets.only(top: HPSpace.sm), child: Text('Drag a table to move it with all its chairs. Turn on Move chairs to adjust individual chairs on the selected table. Choose Save plan to keep your changes.', style: HPType.body(p.muted))),
         const SizedBox(height: HPSpace.sm),
