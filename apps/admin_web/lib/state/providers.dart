@@ -131,6 +131,9 @@ final authProvider = NotifierProvider<AuthNotifier, AuthState>(AuthNotifier.new)
 /// Plans that can be sold right now (not archived) — used by registration, license changes and filters.
 final activePlansProvider = FutureProvider<List<Json>>((ref) async => (await ref.read(apiProvider).plans()).cast<Json>());
 
+/// Admin types (platform roles) for the sidebar's Admins sub-menu.
+final adminRolesProvider = FutureProvider<List<Json>>((ref) async => (await ref.read(apiProvider).roles()).cast<Json>());
+
 /// Light / dark / follow the device. Remembered on this device (browser storage on the web).
 class ThemeModeNotifier extends Notifier<ThemeMode> {
   // v2: the white (Light) theme became the default on 13 Oct 2026, so earlier "Auto" choices start over

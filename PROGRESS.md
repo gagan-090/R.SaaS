@@ -279,3 +279,15 @@ the "audit log is blank" report (the list is now hardened against the likeliest 
 9. Inventory: one "Add category" button. 10. Same buy/count unit needs no conversion (forced to 1 in UI and API; avg cost recomputed before stock moves); "Stock in hand now" on a new product is recorded as opening stock.
 11. Audit & records: actions in words ("Expense added"), roles/areas in words, field-by-field changes instead of JSON.
 Tests: admin_web 99 passed (new: client review group in console_test, review_labels_test); ui_kit 12 passed; API tsc + eslint clean; template round-trip through readSheet clean. API DB-backed specs (imports.spec updated) not run — no local Postgres.
+
+### Client notes: sidebar, admin types, APK, menu order — 2026-10-20
+- Sidebar "Admins" has an arrow that opens the admin types (All, Super Admin, Onboarding Admin, … from
+  `/platform/roles`); picking one shows only admins with that role (`/admins?role=…`).
+- Admins page: status filter (All / Active / Invited / Deactivated, with counts) at the top of the list.
+- Sidebar "Download POS app (APK)" opens the Android build link (`--dart-define=APK_URL`, default the Drive link).
+- Selected navigation is dark blue with white text in Light and Dark (a restaurant's own brand colour still wins).
+- Menu serving order: Water → Soft drinks → Mocktails/juices → Starters → Curries/mains → Breads → Rice →
+  Accompaniments → Desserts → Ice cream; the 40 standard categories (web + API seed) are listed in that order.
+- Tests: admin_web `flutter test` 101 passed + the 2 phone-width tests re-run green after a drawer-scroll fix
+  (103/103); ui_kit 12 passed; API `tsc --noEmit` clean; `flutter build web --release` built.
+  API DB-backed specs not run (no local Postgres; test DB is the cloud Neon DB).

@@ -49,16 +49,12 @@ const ItemBody = z
     quantity: z.number().int().positive().optional(),
   })
 export const STANDARD_CATEGORIES = [
-  'Soups', 'Veg Starters', 'Non-Veg Starters', 'Tandoori Items',
-  'Veg Main Course', 'Paneer Special', 'Dal Special', 'Non-Veg Main Course',
-  'Seafood', 'Indian Breads', 'Rice', 'Biryani', 'Pulao',
-  'Chinese Starters', 'Chinese Main Course', 'South Indian', 'North Indian',
-  'Continental', 'Italian', 'Fast Food', 'Street Food / Chaat',
-  'Breakfast', 'Snacks', 'Rolls & Wraps', 'Thali / Combos',
-  'Salads', 'Raita & Curd', 'Papad & Accompaniments', 'Desserts',
-  'Ice Cream', 'Cakes & Bakery', 'Hot Beverages', 'Cold Beverages',
-  'Shakes & Smoothies', 'Fresh Juices', 'Mocktails', 'Packaged Beverages',
-  'Kids Menu', 'Jain Food', 'Chef Specials',
+  'Packaged Beverages', 'Cold Beverages', 'Fresh Juices', 'Shakes & Smoothies', 'Mocktails', 'Hot Beverages',
+  'Soups', 'Veg Starters', 'Non-Veg Starters', 'Tandoori Items', 'Chinese Starters', 'Snacks', 'Street Food / Chaat',
+  'Rolls & Wraps', 'Salads', 'Veg Main Course', 'Paneer Special', 'Dal Special', 'Non-Veg Main Course', 'Seafood',
+  'Chinese Main Course', 'South Indian', 'North Indian', 'Continental', 'Italian', 'Fast Food', 'Breakfast',
+  'Thali / Combos', 'Kids Menu', 'Jain Food', 'Chef Specials', 'Indian Breads', 'Rice', 'Biryani', 'Pulao',
+  'Raita & Curd', 'Papad & Accompaniments', 'Desserts', 'Cakes & Bakery', 'Ice Cream',
 ];
 
 const QuickVariant = z.object({

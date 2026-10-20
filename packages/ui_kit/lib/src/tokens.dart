@@ -34,6 +34,9 @@ abstract final class HPColors {
   static const inkMuted = Color(0xFF6F6155);
   static const olive = Color(0xFF55663A);
   static const vegGreen = Color(0xFF4CAF50);
+  /// Console navigation highlight: dark blue with white text (light and dark look).
+  static const navy = Color(0xFF1E3A8A);
+  static const navyDark = Color(0xFF2346A8);
   // white theme (default light look)
   static const white = Color(0xFFFFFFFF);
   static const whiteRaised = Color(0xFFF4F5F7);

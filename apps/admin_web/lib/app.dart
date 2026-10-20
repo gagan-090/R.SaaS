@@ -19,6 +19,7 @@ import 'screens/console/tables_screen.dart';
 import 'screens/restaurants_screens.dart';
 import 'screens/verify_screen.dart';
 import 'state/providers.dart';
+import 'util/open_link.dart';
 import 'widgets/common.dart';
 
 /// One web app, two consoles: platform admins get the Super Admin console, restaurant owners / IT admins the
@@ -56,13 +57,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/verify-email', builder: (_, s) => VerifyEmailScreen(token: s.uri.queryParameters['token'])),
       GoRoute(path: '/set-pin', builder: (_, s) => SetPinScreen(token: s.uri.queryParameters['token'])),
       ShellRoute(
-        builder: (c, s, child) => ConsoleShell(location: s.matchedLocation, nav: platformNav, brand: 'Platform', child: child),
+        builder: (c, s, child) => ConsoleShell(location: s.matchedLocation, query: s.uri.queryParameters, nav: platformNav, brand: 'Platform', child: child),
         routes: [
           GoRoute(path: '/', pageBuilder: (_, s) => _fade(s, const DashboardScreen())),
           GoRoute(path: '/restaurants', pageBuilder: (_, s) => _fade(s, RestaurantsScreen(initialStatus: s.uri.queryParameters['status']))),
           GoRoute(path: '/restaurants/:id', pageBuilder: (_, s) => _fade(s, RestaurantDetailScreen(id: s.pathParameters['id']!))),
           GoRoute(path: '/plans', pageBuilder: (_, s) => _fade(s, const PlansScreen())),
-          GoRoute(path: '/admins', pageBuilder: (_, s) => _fade(s, const AdminsScreen())),
+          GoRoute(path: '/admins', pageBuilder: (_, s) => _fade(s, AdminsScreen(role: s.uri.queryParameters['role']))),
           GoRoute(path: '/audit', pageBuilder: (_, s) => _fade(s, const AuditScreen())),
         ],
       ),
@@ -122,6 +123,9 @@ class AdminApp extends ConsumerWidget {
 
 typedef NavItem = (String path, String label, IconData icon, String? permission);
 
+/// The Android POS app (cashier / waiter / kitchen). Override per deployment with --dart-define=APK_URL=…
+const apkUrl = String.fromEnvironment('APK_URL', defaultValue: 'https://drive.google.com/file/d/1v8AgxWVezOqZ8yGYYs9iDQBt-8Bw9-fT/view?usp=sharing');
+
 const platformNav = <NavItem>[
   ('/', 'Dashboard', Icons.space_dashboard_outlined, null),
   ('/restaurants', 'Restaurants', Icons.storefront_outlined, 'platform.restaurant.read'),
@@ -146,8 +150,9 @@ const restaurantNav = <NavItem>[
 /// Sidebar on wide screens, app bar + drawer on phones. Items the signed-in role cannot use are hidden
 /// (the API refuses them anyway).
 class ConsoleShell extends ConsumerWidget {
-  const ConsoleShell({super.key, required this.location, required this.nav, required this.brand, required this.child});
+  const ConsoleShell({super.key, required this.location, this.query = const {}, required this.nav, required this.brand, required this.child});
   final String location;
+  final Map<String, String> query;
   final List<NavItem> nav;
   final String brand;
   final Widget child;
@@ -194,17 +199,38 @@ class ConsoleShell extends ConsumerWidget {
                   for (var i = 0; i < items.length; i++)
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: HPSpace.md, vertical: 2),
-                      child: _NavTile(
-                        key: Key('nav-${items[i].$2}'),
-                        item: items[i],
-                        selected: i == idx,
-                        onTap: () {
-                          if (inDrawer) Navigator.of(context).pop();
-                          context.go(items[i].$1);
-                        },
-                      ),
+                      child: items[i].$1 == '/admins'
+                          // Admins opens a sub-menu of admin types: All, Super Admin, Onboarding Admin …
+                          ? _AdminsNavGroup(
+                              item: items[i],
+                              selected: i == idx,
+                              role: query['role'],
+                              onGo: (path) {
+                                if (inDrawer) Navigator.of(context).pop();
+                                context.go(path);
+                              },
+                            )
+                          : _NavTile(
+                              key: Key('nav-${items[i].$2}'),
+                              item: items[i],
+                              selected: i == idx,
+                              onTap: () {
+                                if (inDrawer) Navigator.of(context).pop();
+                                context.go(items[i].$1);
+                              },
+                            ),
                     ),
                 ]),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(HPSpace.md, 0, HPSpace.md, HPSpace.sm),
+                child: _NavTile(
+                  key: const Key('download-apk'),
+                  item: ('', 'Download POS app (APK)', Icons.android_rounded, null),
+                  selected: false,
+                  trailing: Icon(Icons.open_in_new_rounded, size: 16, color: _onSidebar(p).withValues(alpha: .6)),
+                  onTap: () => openLink(apkUrl),
+                ),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: HPSpace.lg),
@@ -212,8 +238,8 @@ class ConsoleShell extends ConsumerWidget {
                   data: Theme.of(context).copyWith(
                     segmentedButtonTheme: SegmentedButtonThemeData(
                       style: ButtonStyle(
-                        backgroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? HPColors.saffron : Colors.transparent),
-                        foregroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? HPColors.onSaffron : _onSidebar(p)),
+                        backgroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? navAccent(p) : Colors.transparent),
+                        foregroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? onNavAccent : _onSidebar(p)),
                         side: WidgetStatePropertyAll(BorderSide(color: _onSidebar(p).withValues(alpha: .3))),
                       ),
                     ),
@@ -227,8 +253,8 @@ class ConsoleShell extends ConsumerWidget {
                   child: Row(children: [
                     CircleAvatar(
                       radius: 18,
-                      backgroundColor: HPColors.saffron,
-                      child: Text('${me.me['name'] ?? '?'}'.characters.first.toUpperCase(), style: HPType.label(HPColors.onSaffron)),
+                      backgroundColor: navAccent(p),
+                      child: Text('${me.me['name'] ?? '?'}'.characters.first.toUpperCase(), style: HPType.label(onNavAccent)),
                     ),
                     const SizedBox(width: HPSpace.sm),
                     Expanded(
@@ -241,7 +267,7 @@ class ConsoleShell extends ConsumerWidget {
                       key: const Key('sign-out'),
                       tooltip: 'Sign out',
                       onPressed: () => ref.read(authProvider.notifier).logout(),
-                      icon: Icon(Icons.logout_rounded, color: HPColors.saffron, size: 20),
+                      icon: Icon(Icons.logout_rounded, color: _onSidebar(p), size: 20),
                     ),
                   ]),
                 ),
@@ -264,19 +290,94 @@ class ConsoleShell extends ConsumerWidget {
   }
 
   static Color _onSidebar(HPPalette p) => p.isDark || p.sidebar.computeLuminance() < .3 ? HPColors.paper : HPColors.ink;
+
+  /// Selected navigation: dark blue with white text in both looks; a restaurant's own brand colour when it has one.
+  static Color navAccent(HPPalette p) => HPColors.saffron != HPColors.amber ? HPColors.saffron : p.isDark ? HPColors.navyDark : HPColors.navy;
+  static Color get onNavAccent => HPColors.saffron != HPColors.amber ? HPColors.onSaffron : HPColors.white;
 }
 
-class _NavTile extends StatelessWidget {
-  const _NavTile({super.key, required this.item, required this.selected, required this.onTap});
+/// "Admins" with an arrow: opens the admin types (All, Super Admin, Onboarding Admin …); each shows only that kind.
+class _AdminsNavGroup extends ConsumerStatefulWidget {
+  const _AdminsNavGroup({required this.item, required this.selected, required this.role, required this.onGo});
   final NavItem item;
   final bool selected;
-  final VoidCallback onTap;
+  final String? role;
+  final ValueChanged<String> onGo;
+  @override
+  ConsumerState<_AdminsNavGroup> createState() => _AdminsNavGroupState();
+}
+
+class _AdminsNavGroupState extends ConsumerState<_AdminsNavGroup> {
+  late bool _open = widget.selected;
+
+  @override
+  void didUpdateWidget(covariant _AdminsNavGroup old) {
+    super.didUpdateWidget(old);
+    if (widget.selected && !old.selected) _open = true;
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = context.hp;
-    final fg = selected ? HPColors.onSaffron : ConsoleShell._onSidebar(p);
+    final fg = ConsoleShell._onSidebar(p);
+    final roles = _open ? ref.watch(adminRolesProvider).valueOrNull : null;
+    Widget sub(String label, String? role) {
+      final on = widget.selected && widget.role == role;
+      return Padding(
+        padding: const EdgeInsets.only(left: 36, top: 2),
+        child: Material(
+          color: on ? ConsoleShell.navAccent(p).withValues(alpha: p.isDark ? .45 : .12) : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          child: ListTile(
+            key: Key('nav-admins-${role ?? 'all'}'),
+            dense: true,
+            visualDensity: VisualDensity.compact,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            title: Text(label, overflow: TextOverflow.ellipsis, style: HPType.body(on && !p.isDark ? ConsoleShell.navAccent(p) : fg).copyWith(fontSize: 14, fontWeight: on ? FontWeight.w700 : FontWeight.w400)),
+            onTap: () => widget.onGo(role == null ? '/admins' : '/admins?role=${Uri.encodeQueryComponent(role)}'),
+          ),
+        ),
+      );
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      _NavTile(
+        key: Key('nav-${widget.item.$2}'),
+        item: widget.item,
+        selected: widget.selected,
+        trailing: IconButton(
+          key: const Key('nav-admins-toggle'),
+          tooltip: _open ? 'Hide admin types' : 'Show admin types',
+          visualDensity: VisualDensity.compact,
+          icon: Icon(_open ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+              color: widget.selected ? ConsoleShell.onNavAccent : fg),
+          onPressed: () => setState(() => _open = !_open),
+        ),
+        onTap: () {
+          setState(() => _open = true);
+          widget.onGo('/admins');
+        },
+      ),
+      if (_open) ...[
+        sub('All', null),
+        for (final r in roles ?? const <Map<String, dynamic>>[]) sub('${r['name']}', '${r['name']}'),
+      ],
+    ]);
+  }
+}
+
+class _NavTile extends StatelessWidget {
+  const _NavTile({super.key, required this.item, required this.selected, required this.onTap, this.trailing});
+  final NavItem item;
+  final bool selected;
+  final VoidCallback onTap;
+  final Widget? trailing;
+  @override
+  Widget build(BuildContext context) {
+    final p = context.hp;
+    final fg = selected ? ConsoleShell.onNavAccent : ConsoleShell._onSidebar(p);
     return Material(
-      color: selected ? HPColors.saffron : Colors.transparent,
+      color: selected ? ConsoleShell.navAccent(p) : Colors.transparent,
       borderRadius: BorderRadius.circular(12),
       child: ListTile(
         dense: true,
@@ -284,6 +385,7 @@ class _NavTile extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         leading: Icon(item.$3, color: fg, size: 20),
         title: Text(item.$2, style: HPType.label(fg)),
+        trailing: trailing,
         onTap: onTap,
       ),
     );

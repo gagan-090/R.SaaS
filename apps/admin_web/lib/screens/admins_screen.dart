@@ -9,8 +9,10 @@ import '../widgets/common.dart';
 import '../widgets/labels.dart';
 
 /// P9 Platform admins (direct creation, pending invite activation, roles, deactivate) and P10 MFA reset.
+/// [role] (from the sidebar's Admins sub-menu) shows only that admin type; the status filter sits at the top.
 class AdminsScreen extends ConsumerStatefulWidget {
-  const AdminsScreen({super.key});
+  const AdminsScreen({super.key, this.role});
+  final String? role;
   @override
   ConsumerState<AdminsScreen> createState() => _AdminsScreenState();
 }
@@ -28,7 +30,14 @@ class _AdminsScreenState extends ConsumerState<AdminsScreen> {
   @override
   void dispose() { _statusTimer?.cancel(); super.dispose(); }
 
-  void _reload() => setState(() => _load = _mk());
+  void _reload() {
+    ref.invalidate(adminRolesProvider);
+    setState(() => _load = _mk());
+  }
+
+  String? _status; // null = every status
+
+  static const _statuses = [('active', 'Active'), ('invited', 'Invited'), ('disabled', 'Deactivated')];
 
   Future<List<String>?> _pickRoles(List<dynamic> roles, Set<String> selected, String title) => showDialog<List<String>>(
         barrierDismissible: false,
@@ -110,19 +119,47 @@ class _AdminsScreenState extends ConsumerState<AdminsScreen> {
     return AsyncView<(List<dynamic>, List<dynamic>)>(
       load: _load,
       builder: (c, d, _) {
-        final (admins, roles) = d;
+        final (all, roles) = d;
+        final role = widget.role;
+        final ofRole = [for (final a in all.cast<Map<String, dynamic>>()) if (role == null || (a['roles'] as List).any((r) => r['name'] == role)) a];
+        final admins = [for (final a in ofRole) if (_status == null || a['status'] == _status) a];
+        int count(String? s) => ofRole.where((a) => s == null || a['status'] == s).length;
         return ListView(padding: EdgeInsets.all(isNarrowWeb(c) ? HPSpace.lg : HPSpace.x4), children: [
           Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, runSpacing: HPSpace.md, children: [
-            Text('Platform admins', style: Theme.of(c).textTheme.headlineMedium),
+            Text(role ?? 'Platform admins', key: const Key('admins-title'), style: Theme.of(c).textTheme.headlineMedium),
             // actions grouped on the right: refresh sits beside Add admin instead of floating mid-header
             Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, crossAxisAlignment: WrapCrossAlignment.center, children: [
               SizedBox(width: 140, child: SecondaryButton(key: const Key('refresh-admins'), label: 'Refresh', icon: Icons.refresh_rounded, height: 52, onPressed: _reload)),
               if (can('platform.admin.invite')) SizedBox(width: 200, child: PrimaryButton(key: const Key('add-platform-admin'), label: 'Add admin', icon: Icons.person_add_alt, height: 52, onPressed: _add)),
             ]),
           ]),
+          const SizedBox(height: HPSpace.lg),
+          // status filter on top of the list
+          Wrap(key: const Key('admin-status-filter'), spacing: HPSpace.sm, runSpacing: HPSpace.sm, children: [
+            for (final (v, l) in <(String?, String)>[(null, 'All'), ..._statuses])
+              ChoiceChip(
+                key: Key('admin-status-${v ?? 'all'}'),
+                label: Text('$l (${count(v)})'),
+                selected: _status == v,
+                onSelected: (_) => setState(() => _status = v),
+              ),
+          ]),
           const SizedBox(height: HPSpace.md),
-          Text('Add an admin with a name, email and password. For an Invited account, open its Actions menu and choose Set password & activate.', style: HPType.body(c.hp.muted)),
+          Text(
+            role == null
+                ? 'Add an admin with a name, email and password. For an Invited account, open its Actions menu and choose Set password & activate.'
+                : 'Showing admins with the $role role. Choose All under Admins in the sidebar to see everyone.',
+            style: HPType.body(c.hp.muted),
+          ),
           const SizedBox(height: HPSpace.x2),
+          if (admins.isEmpty)
+            EmptyState(
+              key: const Key('admins-empty'),
+              icon: Icons.manage_accounts_outlined,
+              title: 'No admins here',
+              message: _status == null ? 'Nobody has the $role role yet.' : 'No ${statusWord(_status)} admins${role == null ? '' : ' with the $role role'}.',
+            )
+          else
           Card(
             child: Column(children: [
               for (final a in admins.cast<Map<String, dynamic>>())
@@ -134,7 +171,7 @@ class _AdminsScreenState extends ConsumerState<AdminsScreen> {
                     Text('${a['email']} · ${(a['roles'] as List).map((r) => r['name']).join(', ')}', overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 6),
                     Wrap(spacing: HPSpace.sm, runSpacing: 4, children: [
-                      StatusChip(label: titleCase('${a['status']}'), tone: toneForStatus(a['status'] as String?)),
+                      StatusChip(label: titleCase(statusWord(a['status'])), tone: toneForStatus(a['status'] as String?)),
                       StatusChip(label: a['mfaEnabled'] == false ? 'MFA off' : a['mfaEnrolled'] == true ? 'MFA on' : 'MFA on · Setup needed', tone: a['mfaEnabled'] != false && a['mfaEnrolled'] == true ? HPTone.success : HPTone.saffron),
                     ]),
                   ]),
@@ -327,3 +364,6 @@ class _RoleOption extends StatelessWidget {
     );
   }
 }
+
+/// Admin account statuses in words ("disabled" reads "deactivated").
+String statusWord(Object? s) => switch ('$s') { 'disabled' => 'deactivated', final x => x };

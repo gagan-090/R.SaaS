@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rsaas_admin_web/api/api_client.dart';
 import 'package:rsaas_admin_web/app.dart';
 import 'package:rsaas_admin_web/state/providers.dart';
+import 'package:rsaas_admin_web/util/open_link.dart';
 import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 
 import 'fixture_api.dart';
@@ -309,5 +310,68 @@ void main() {
     await t.pumpAndSettle();
     expect(find.textContaining('platform.restaurant.read'), findsNothing);
     expect(find.textContaining('See restaurants'), findsWidgets);
+  });
+
+  group('sidebar: admin types, status filter, APK, dark blue highlight', () {
+    Map<String, dynamic> admin(String name, String status, String role) =>
+        {'id': 'id-$name', 'email': '$name@hp.test', 'name': name, 'status': status, 'mfaEnabled': true, 'mfaEnrolled': true, 'roles': [{'id': 'r-$role', 'name': role}]};
+    Future<void> openAdmins(WidgetTester t) async {
+      final fx = await pumpApp(t);
+      fx.overrides['GET /platform/roles'] = (200, [
+        {'id': 'r-sa', 'name': 'Super Admin', 'description': 'Everything', 'permissions': <String>[], 'isSystem': true},
+        {'id': 'r-ob', 'name': 'Onboarding Admin', 'description': 'Registers restaurants', 'permissions': <String>[], 'isSystem': true},
+      ]);
+      fx.overrides['GET /platform/admins'] = (200, [
+        admin('Asha', 'active', 'Super Admin'),
+        admin('Ravi', 'active', 'Onboarding Admin'),
+        admin('Meera', 'invited', 'Onboarding Admin'),
+        admin('Kabir', 'disabled', 'Onboarding Admin'),
+      ]);
+      await signIn(t);
+      await t.tap(find.byKey(const Key('nav-Admins')));
+      await t.pumpAndSettle();
+    }
+
+    testWidgets('Admins opens a drop-down of admin types; picking one shows only that type', (t) async {
+      await openAdmins(t);
+      expect(find.byKey(const Key('nav-admins-all')), findsOneWidget);
+      expect(find.byKey(const Key('nav-admins-Super Admin')), findsOneWidget);
+      expect(find.byKey(const Key('admin-Asha@hp.test')), findsOneWidget);
+      await t.tap(find.byKey(const Key('nav-admins-Onboarding Admin')));
+      await t.pumpAndSettle();
+      expect(find.byKey(const Key('admin-Asha@hp.test')), findsNothing);
+      expect(find.byKey(const Key('admin-Ravi@hp.test')), findsOneWidget);
+      expect(find.byKey(const Key('admin-Meera@hp.test')), findsOneWidget);
+      expect(t.widget<Text>(find.byKey(const Key('admins-title'))).data, 'Onboarding Admin');
+      // the arrow closes the list
+      await t.tap(find.byKey(const Key('nav-admins-toggle')));
+      await t.pumpAndSettle();
+      expect(find.byKey(const Key('nav-admins-all')), findsNothing);
+    });
+
+    testWidgets('status filter sits on top of the admins list', (t) async {
+      await openAdmins(t);
+      final filterTop = t.getRect(find.byKey(const Key('admin-status-filter'))).top;
+      expect(filterTop, lessThan(t.getRect(find.byKey(const Key('admin-Asha@hp.test'))).top));
+      expect(find.text('Deactivated (1)'), findsOneWidget);
+      await t.tap(find.byKey(const Key('admin-status-invited')));
+      await t.pumpAndSettle();
+      expect(find.byKey(const Key('admin-Meera@hp.test')), findsOneWidget);
+      expect(find.byKey(const Key('admin-Asha@hp.test')), findsNothing);
+      expect(find.byKey(const Key('admin-Kabir@hp.test')), findsNothing);
+    });
+
+    testWidgets('sidebar has a POS app download and a dark blue selected item with white text', (t) async {
+      await pumpApp(t);
+      await signIn(t);
+      await t.tap(find.byKey(const Key('download-apk')));
+      await t.pump();
+      expect(lastOpenedLink, apkUrl);
+      expect(apkUrl, contains('drive.google.com'));
+      final selected = t.widget<Material>(find.descendant(of: find.byKey(const Key('nav-Dashboard')), matching: find.byType(Material)).first);
+      expect(selected.color, HPColors.navy);
+      final label = t.widget<Text>(find.descendant(of: find.byKey(const Key('nav-Dashboard')), matching: find.text('Dashboard')));
+      expect(label.style?.color, HPColors.white);
+    });
   });
 }

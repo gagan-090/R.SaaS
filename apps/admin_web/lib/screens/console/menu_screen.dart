@@ -25,16 +25,12 @@ const _palettes = [
 
 /// Standard 40 professional categories from Restaurant_POS_Menu_With_Serving_Sizes.xlsx
 const standardMenuCategories = [
-  'Soups', 'Veg Starters', 'Non-Veg Starters', 'Tandoori Items',
-  'Veg Main Course', 'Paneer Special', 'Dal Special', 'Non-Veg Main Course',
-  'Seafood', 'Indian Breads', 'Rice', 'Biryani', 'Pulao',
-  'Chinese Starters', 'Chinese Main Course', 'South Indian', 'North Indian',
-  'Continental', 'Italian', 'Fast Food', 'Street Food / Chaat',
-  'Breakfast', 'Snacks', 'Rolls & Wraps', 'Thali / Combos',
-  'Salads', 'Raita & Curd', 'Papad & Accompaniments', 'Desserts',
-  'Ice Cream', 'Cakes & Bakery', 'Hot Beverages', 'Cold Beverages',
-  'Shakes & Smoothies', 'Fresh Juices', 'Mocktails', 'Packaged Beverages',
-  'Kids Menu', 'Jain Food', 'Chef Specials',
+  'Packaged Beverages', 'Cold Beverages', 'Fresh Juices', 'Shakes & Smoothies', 'Mocktails', 'Hot Beverages',
+  'Soups', 'Veg Starters', 'Non-Veg Starters', 'Tandoori Items', 'Chinese Starters', 'Snacks', 'Street Food / Chaat',
+  'Rolls & Wraps', 'Salads', 'Veg Main Course', 'Paneer Special', 'Dal Special', 'Non-Veg Main Course', 'Seafood',
+  'Chinese Main Course', 'South Indian', 'North Indian', 'Continental', 'Italian', 'Fast Food', 'Breakfast',
+  'Thali / Combos', 'Kids Menu', 'Jain Food', 'Chef Specials', 'Indian Breads', 'Rice', 'Biryani', 'Pulao',
+  'Raita & Curd', 'Papad & Accompaniments', 'Desserts', 'Cakes & Bakery', 'Ice Cream',
 ];
 
 const popularExcelCategories = [
@@ -486,7 +482,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     if (_cats == null) return const SkeletonGrid(maxExtent: 260, aspect: 1.4);
     final narrow = isNarrowWeb(context);
     final edit = _canEdit;
-    // Categories and "All dishes" are sorted by meal course order: Starters -> Drinks -> Mains -> Breads -> Rice -> Desserts
+    // Categories and "All dishes" follow the serving order: Water -> Soft drinks -> Mocktails -> Starters -> Curries -> Breads -> Rice -> Desserts -> Ice cream
     final orderedCats = sortByCourse(_cats!, (c) => '${c['name']}');
     final catPos = {for (final (i, c) in orderedCats.indexed) c['id']: i};
     final visible = _items!
@@ -1496,21 +1492,23 @@ class _ItemEditorState extends State<_ItemEditor> {
   }
 }
 
-/// Where a category sits in a meal:
-/// 0 soups, 1 starters & snacks, 2 drinks & beverages, 3 mains (anything unrecognised),
-/// 4 breads & rotis, 5 rice & biryani, 6 accompaniments, 7 desserts & sweets.
-/// Checked in this order, so "Chinese Starters" is a starter and "Cold Beverages" a drink.
+/// Where a category sits on the menu (the restaurant's serving order):
+/// 0 water, 1 soft & cold drinks, 2 mocktails, juices, shakes & hot drinks, 3 soups & starters,
+/// 4 curries & mains (anything unrecognised), 5 breads, 6 rice & biryani, 7 accompaniments, 8 desserts, 9 ice cream.
+/// Checked in this order, so "Chinese Starters" is a starter and "Ice Cream" is not a plain dessert.
 int courseRank(String category) {
   final n = category.toLowerCase();
   bool any(List<String> words) => words.any(n.contains);
-  if (any(['soup', 'shorba', 'broth'])) return 0;
-  if (any(['starter', 'appetiser', 'appetizer', 'tandoor', 'kebab', 'snack', 'chaat', 'street', 'roll', 'wrap', 'salad', 'breakfast', 'momo'])) return 1;
-  if (any(['beverage', 'drink', 'juice', 'shake', 'smoothie', 'mocktail', 'cocktail', 'lassi', 'chaas', 'tea', 'chai', 'coffee', 'water', 'soda', 'cooler', 'cola', 'coke', 'pepsi', 'sprite'])) return 2;
-  if (any(['bread', 'naan', 'roti', 'paratha', 'kulcha'])) return 4;
-  if (any(['rice', 'biryani', 'pulao', 'khichdi'])) return 5;
-  if (any(['raita', 'curd', 'papad', 'accompaniment', 'pickle', 'chutney'])) return 6;
-  if (any(['dessert', 'sweet', 'ice cream', 'kulfi', 'cake', 'bakery', 'pastry', 'mithai', 'halwa', 'kheer', 'brownie', 'pudding', 'custard'])) return 7;
-  return 3;
+  if (any(['ice cream', 'icecream', 'kulfi', 'sundae', 'gelato'])) return 9;
+  if (any(['water', 'packaged'])) return 0;
+  if (any(['soft drink', 'cold beverage', 'cold drink', 'soda', 'cola', 'coke', 'pepsi', 'sprite', 'aerated'])) return 1;
+  if (any(['beverage', 'drink', 'juice', 'shake', 'smoothie', 'mocktail', 'cocktail', 'lassi', 'chaas', 'tea', 'chai', 'coffee', 'cooler'])) return 2;
+  if (any(['soup', 'shorba', 'broth', 'starter', 'appetiser', 'appetizer', 'tandoor', 'kebab', 'snack', 'chaat', 'street', 'roll', 'wrap', 'salad', 'momo'])) return 3;
+  if (any(['bread', 'naan', 'roti', 'paratha', 'kulcha'])) return 5;
+  if (any(['rice', 'biryani', 'pulao', 'khichdi'])) return 6;
+  if (any(['raita', 'curd', 'papad', 'accompaniment', 'pickle', 'chutney'])) return 7;
+  if (any(['dessert', 'sweet', 'cake', 'bakery', 'pastry', 'mithai', 'halwa', 'kheer', 'brownie', 'pudding', 'custard'])) return 8;
+  return 4;
 }
 
 /// Stable sort by [courseRank]: same-course categories keep their relative order.

@@ -80,3 +80,4 @@ Format: date · decision · why · alternative rejected.
 - 2026-10-14 · Audit events carry actor role and name at the time and a request id; the restaurant audit view merges POS audit events from sync · auditors need context that survives renames · join to current users only.
 - 2026-10-14 · Web portals for cashier/waiter/chef are read views of synced data; order entry, billing and payments stay on the POS (offline-first single writer) · avoids two writers for live orders · web order entry through the cloud.
 
+- 2026-10-20 · The console sidebar links the Android POS APK through a public share URL set at build time (`--dart-define=APK_URL`, default the Drive link) · the client hosts the build on Google Drive; no file hosting in the repo · serving the APK from the API.

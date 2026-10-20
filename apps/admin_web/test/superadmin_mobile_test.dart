@@ -50,6 +50,9 @@ void main() {
       Future<void> go(String label) async {
         await t.tap(find.byKey(const Key('open-nav')));
         await t.pumpAndSettle();
+        // the open Admins sub-menu can push later items below the fold of the drawer
+        await t.scrollUntilVisible(find.byKey(Key('nav-$label')), 200, scrollable: find.descendant(of: find.byType(Drawer), matching: find.byType(Scrollable)).first);
+        await t.pumpAndSettle();
         await t.tap(find.byKey(Key('nav-$label')));
         await t.pumpAndSettle();
       }
