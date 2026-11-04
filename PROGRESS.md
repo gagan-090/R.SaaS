@@ -291,3 +291,34 @@ Tests: admin_web 99 passed (new: client review group in console_test, review_lab
 - Tests: admin_web `flutter test` 101 passed + the 2 phone-width tests re-run green after a drawer-scroll fix
   (103/103); ui_kit 12 passed; API `tsc --noEmit` clean; `flutter build web --release` built.
   API DB-backed specs not run (no local Postgres; test DB is the cloud Neon DB).
+
+### Web console in React (`apps/admin_react`) — 2026-10-23
+Owner asked for the admin panel in React with the same API and flows. Built a Vite + React 18 + TypeScript port of
+`apps/admin_web` (Flutter kept in place): ApiClient (same endpoints, session in sessionStorage, shared refresh on 401),
+auth state machine (password → MFA challenge / enrolment with QR + recovery codes; employee email + PIN, forgot PIN),
+the same hash routes and redirect rules, emailed links (`#/verify-email`, `#/set-pin`). Super Admin: dashboard,
+restaurants (filters, pagination, awaiting verification, register, resend / activate / cancel), restaurant detail
+(lifecycle, status, archive / restore / delete, licenses, payments, cold storage, history), plans + editor, admins
+(type sub-menu, status filter, create / activate, roles, MFA policy + reset with step-up, deactivate, remove), audit log.
+Restaurant console: role-aware home (owner dashboard with charts and bill drill-down; chef / cashier / waiter panels),
+menu (categories, course order, quick paste, standard categories, dish editor with sizes, photo, SKU, recipe, Excel
+import), floors & tables (list + visual floor editor with drag, rotate, chairs, snap, zoom, reservations, live status),
+inventory (stock, purchases, movements, alerts, requests, suppliers & places, valuation, Excel import), expenses, audit
+& records (log, sales, imports, CSV), staff (invite / PIN, web access, unlock, my PIN), roles (custom role editor),
+hubs & devices, settings (profile, plan, GST, branding with live preview). Money typed in rupees goes through
+`parseRupees` to integer paise everywhere (the Flutter expense/dish/stock-cost boxes used doubles).
+Verification: `pnpm --filter @rsaas/admin-react test` → **50 passed** (3 files: lib 31, session 5, whole-app flows 14
+on `packages/contracts/fixtures`), stable over 3 consecutive runs; `tsc --noEmit` clean; `vite build` built (152 kB gzip JS).
+Not verified: a live run against the R.SaaS API (not running locally — port 3000 was another project, no Postgres on
+5433) and a visual check in a browser.
+
+### Multi-platform release builds — 2026-11-04
+Owner asked for Android, iOS, Windows and web. All builds use `--dart-define=API_BASE_URL=https://rsaas-api.onrender.com/api/v1`.
+- pos_app: `flutter analyze` clean, `flutter test` **25 passed**.
+- Android: `flutter build apk --release` ✓ 68.7 MB, signed with the upload key (`CN=House Plating POS`, checked with apksigner).
+- iOS: `flutter build ios --release --no-codesign` ✓ `Runner.app` 23.2 MB (unsigned; needs a team + provisioning to install).
+- Web: pos_app `flutter build web --release` ✓; admin_react `pnpm test` **50 passed**, `vite build` ✓.
+- Windows: **not built here**: Flutter cannot cross-compile from macOS. Added CI job `build-windows` (windows-latest,
+  uploads the Release folder) and `build-pos-web` to `flutter.yml`; it runs on push but has not run yet.
+- Outputs in `release/2026-11-04/` (gitignored). Fix: pnpm now installs arm64 + x64 native binaries (`supportedArchitectures`),
+  because Node runs arm64 here and the existing install only had x64 rollup/esbuild, which broke vitest/vite.

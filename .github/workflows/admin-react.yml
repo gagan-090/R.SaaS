@@ -1,0 +1,25 @@
+name: admin-react
+on:
+  push:
+    paths: ['apps/admin_react/**', 'packages/contracts/fixtures/**', 'pnpm-lock.yaml', '.github/workflows/admin-react.yml']
+  pull_request:
+    paths: ['apps/admin_react/**', 'packages/contracts/fixtures/**', 'pnpm-lock.yaml', '.github/workflows/admin-react.yml']
+jobs:
+  test-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/admin_react
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+        env:
+          VITE_API_BASE_URL: https://api.example.com/api/v1
+      - uses: actions/upload-artifact@v4
+        with: { name: admin_react, path: apps/admin_react/dist }

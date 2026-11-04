@@ -41,7 +41,40 @@ jobs:
       - uses: subosito/flutter-action@v2
         with: { channel: stable, cache: true }
       # Debug-signed APK. Release signing needs ANDROID_KEYSTORE_* secrets (see MORNING.md).
-      - run: flutter build apk --debug
+      - run: flutter build apk --debug --dart-define=API_BASE_URL=https://rsaas-api.onrender.com/api/v1
         working-directory: apps/pos_app
       - uses: actions/upload-artifact@v4
         with: { name: pos_app-apk, path: apps/pos_app/build/app/outputs/flutter-apk/*.apk }
+  build-ios:
+    runs-on: macos-latest
+    needs: analyze-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, cache: true }
+      # Unsigned build: proves the iOS target compiles. Signing/TestFlight needs an Apple Developer team (see MORNING.md).
+      - run: flutter build ios --release --no-codesign --dart-define=API_BASE_URL=https://rsaas-api.onrender.com/api/v1
+        working-directory: apps/pos_app
+  build-windows:
+    runs-on: windows-latest
+    needs: analyze-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, cache: true }
+      # Unsigned release build (signing needs WINDOWS_CERT_PFX_* secrets, see MORNING.md). Zip = the whole Release folder.
+      - run: flutter build windows --release --dart-define=API_BASE_URL=https://rsaas-api.onrender.com/api/v1
+        working-directory: apps/pos_app
+      - uses: actions/upload-artifact@v4
+        with: { name: pos_app-windows, path: apps/pos_app/build/windows/x64/runner/Release }
+  build-pos-web:
+    runs-on: ubuntu-latest
+    needs: analyze-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, cache: true }
+      - run: flutter build web --release --dart-define=API_BASE_URL=https://rsaas-api.onrender.com/api/v1
+        working-directory: apps/pos_app
+      - uses: actions/upload-artifact@v4
+        with: { name: pos_app-web, path: apps/pos_app/build/web }

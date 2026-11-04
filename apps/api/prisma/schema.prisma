@@ -389,6 +389,7 @@ model PinToken {
 enum DevicePlatform {
   windows
   android
+  ios
   web
 }
 

@@ -14,7 +14,7 @@ import { SyncService } from './sync.service';
 const RegisterHubBody = z.object({
   branchId: z.string().uuid().optional(), // optional when the restaurant has exactly one branch (Standard / Professional)
   name: z.string().min(1).max(60),
-  platform: z.enum(['windows', 'android']),
+  platform: z.enum(['windows', 'android', 'ios']),
 });
 const PushBody = z.object({
   events: z

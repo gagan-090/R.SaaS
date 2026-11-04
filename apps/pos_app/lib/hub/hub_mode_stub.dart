@@ -1,6 +1,6 @@
 import 'hub_api.dart';
 
-/// Hub mode needs dart:io + SQLite: available on Windows/Android only.
+/// Hub mode needs dart:io + SQLite: available on Windows/Android only (not iOS or web).
 class HubHost {
   static bool get supported => false;
   PairingPayload? pairing;

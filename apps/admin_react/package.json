@@ -1,0 +1,33 @@
+{
+  "name": "@rsaas/admin-react",
+  "private": true,
+  "version": "0.1.0",
+  "description": "House Plating web console (Super Admin + Restaurant console) in React — same API and flows as apps/admin_web.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 8080",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --port 8080",
+    "typecheck": "tsc -b --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "lucide-react": "0.460.0",
+    "qrcode.react": "4.1.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-router-dom": "6.28.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "6.6.3",
+    "@testing-library/react": "16.0.1",
+    "@testing-library/user-event": "14.5.2",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "@vitejs/plugin-react": "4.3.3",
+    "jsdom": "25.0.1",
+    "typescript": "5.6.3",
+    "vite": "5.4.11",
+    "vitest": "2.1.5"
+  }
+}

@@ -12,8 +12,9 @@ class HubHostConfig {
 
 /// Hub mode: this device runs the branch hub (packages/hub_server) in-process — SQLite on disk,
 /// HTTPS + WebSocket on the LAN with a self-signed pinned certificate, and the cloud sync worker.
+/// Not on iOS: it suspends backgrounded apps, which would take the branch LAN server down.
 class HubHost {
-  static bool get supported => true;
+  static bool get supported => !Platform.isIOS;
 
   HubDatabase? _db;
   HubService? _hub;

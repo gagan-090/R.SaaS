@@ -171,7 +171,7 @@ class HubService {
         if (row == null || row['used_at'] != null || DateTime.parse(row['expires_at']! as String).isBefore(clock())) {
           throw unauthorized('invalid_pairing_code', 'Pairing code is invalid, used or expired');
         }
-        if (!['windows', 'android'].contains(platform)) throw badRequest('bad_platform', 'platform must be windows or android');
+        if (!['windows', 'android', 'ios'].contains(platform)) throw badRequest('bad_platform', 'platform must be windows, android or ios');
         final l = await license();
         final paired = (await db.selectOne('SELECT count(*) AS n FROM devices WHERE revoked_at IS NULL'))!['n']! as int;
         final limit = (l.payload?['limits'] as Map?)?['devicesPerBranch'];

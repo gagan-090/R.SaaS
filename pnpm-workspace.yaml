@@ -1,9 +1,15 @@
 packages:
   - apps/api
+  - apps/admin_react
 allowBuilds:
   argon2: true
   prisma: true
   '@prisma/client': true
   '@prisma/engines': true
   '@nestjs/core': true
+  esbuild: true
   '@scarf/scarf': false
+# This Mac runs Node as arm64 and Flutter under Rosetta (x64): install native binaries (rollup, esbuild) for both.
+supportedArchitectures:
+  os: [current]
+  cpu: [current, x64, arm64]

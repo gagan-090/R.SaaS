@@ -144,3 +144,13 @@ on your Windows PC; pick "This device is the hub" on first start. Tests: `pnpm -
 10. The handwritten notes mentioned in the request were not attached, so only the written requirements were used.
 11. Floor editor has no undo (Cancel reverts to the last save). Import error report is CSV, not .xlsx. Imports are
     capped at 5 MB / 20,000 rows per sheet.
+12. **iOS (pos_app)**: runs on the iPhone 18 Pro Max simulator (`flutter run -d <simulator id>`); analyze + 25 tests green.
+    `flutter build ios --simulator` (no device picked) fails because of an Xcode 27 `lipo` bug: `-verify_arch` with two
+    architectures errors with "requires exactly one input file". Run on a chosen simulator or device instead.
+    CI job `build-ios` builds unsigned for devices. To ship: set the Apple Developer team + bundle ID in Xcode, add an
+    app icon set, then archive. Apply migration `20261028090000_device_platform_ios` before iOS devices register.
+13. **Builds 2026-11-04** in `release/2026-11-04/`: Android APK (release-signed), iOS `Runner.app` (unsigned zip),
+    POS web + React admin console web zips. **Windows needs a Windows machine or CI** (`build-windows` job in
+    `.github/workflows/flutter.yml`, not run yet), or run `flutter build windows --release` on the Windows PC.
+    For an installable iOS build: open `apps/pos_app/ios/Runner.xcworkspace`, pick the Apple Development team, then
+    Product → Archive (TestFlight/App Store needs a paid Apple Developer account).

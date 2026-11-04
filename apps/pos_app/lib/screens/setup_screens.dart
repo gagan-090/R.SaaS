@@ -53,7 +53,11 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
   late bool _asHub = HubHost.supported;
   String? _challenge, _error;
 
-  String get _platform => Theme.of(context).platform == TargetPlatform.windows ? 'windows' : 'android';
+  String get _platform => switch (Theme.of(context).platform) {
+        TargetPlatform.windows => 'windows',
+        TargetPlatform.iOS => 'ios',
+        _ => 'android',
+      };
 
   Future<void> _pair() async {
     final p = PairingPayload.tryParse(_payload.text) ??
