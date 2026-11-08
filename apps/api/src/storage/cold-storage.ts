@@ -6,6 +6,14 @@ import { gunzipSync, gzipSync } from 'zlib';
 import { badRequest } from '../common/errors';
 
 /**
+ * JSON.stringify replacer for database rows: Prisma returns BigInt for `seq` cursors (every branch has one), which
+ * plain JSON.stringify rejects with "Do not know how to serialize a BigInt"; they are written as decimal strings.
+ */
+export function jsonSafe(_key: string, value: unknown) {
+  return typeof value === 'bigint' ? value.toString() : value;
+}
+
+/**
  * Cold storage for restaurant log archives and old audit events. Bundles are gzip-compressed JSON with a SHA-256
  * checksum recorded in the database, so a copy is verified before it is trusted again.
  *
@@ -32,7 +40,7 @@ export class ColdStorage {
   /** Stores a JSON document compressed; returns its key, size and checksum. */
   async put(key: string, doc: unknown): Promise<{ storage: string; key: string; sha256: string; sizeBytes: number }> {
     if (this.driver !== 'file') throw new NotImplementedException('S3 cold storage is not implemented yet; use COLD_STORAGE=file');
-    const bytes = gzipSync(Buffer.from(JSON.stringify(doc)));
+    const bytes = gzipSync(Buffer.from(JSON.stringify(doc, jsonSafe)));
     const file = this.safe(key);
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(file, bytes, { flag: 'wx' }); // never overwrite an existing archive

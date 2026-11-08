@@ -462,13 +462,14 @@ export class RestaurantsController {
 
       const [branches, users, licenses, payments, customRoles, auditEvents, syncEvents, devices, menuCategories, menuItems, floors, tables, reservations] = await Promise.all([
         tx.branch.findMany({ where: { tenantId: id } }),
-        tx.user.findMany({ where: { tenantId: id }, include: { roles: true } }),
+        // never copy credentials into an archive: password / PIN hashes stay out of the bundle
+        tx.user.findMany({ where: { tenantId: id }, include: { roles: true }, omit: { passwordHash: true, pinHash: true } }),
         tx.license.findMany({ where: { tenantId: id } }),
         tx.paymentRecord.findMany({ where: { tenantId: id } }),
         tx.customRole.findMany({ where: { tenantId: id } }),
         tx.auditEvent.findMany({ where: { tenantId: id }, orderBy: { at: 'asc' } }),
         tx.syncEvent.findMany({ where: { tenantId: id }, orderBy: { createdAt: 'asc' } }),
-        tx.device.findMany({ where: { tenantId: id } }),
+        tx.device.findMany({ where: { tenantId: id }, omit: { deviceTokenHash: true } }),
         tx.menuCategory.findMany({ where: { tenantId: id } }),
         tx.menuItem.findMany({ where: { tenantId: id }, include: { variants: true } }),
         tx.floor.findMany({ where: { tenantId: id } }),
