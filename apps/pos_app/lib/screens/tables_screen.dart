@@ -54,7 +54,7 @@ class _TableMapScreenState extends ConsumerState<TableMapScreen> {
         final picked = await showModalBottomSheet<String>(
           context: context,
           builder: (c) => SafeArea(
-            child: Padding(
+            child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(HPSpace.lg, 0, HPSpace.lg, HPSpace.lg),
               child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 Text('Who serves table $tableName?', style: HPType.titleCard(c.hp.text)),
@@ -135,13 +135,15 @@ class _TableMapScreenState extends ConsumerState<TableMapScreen> {
               final free = all.where((t) => t['status'] == 'free').length;
               final seated = all.where((t) => t['status'] == 'occupied').length;
               final billing = all.where((t) => t['status'] == 'bill_printed').length;
-              final pad = narrow ? HPSpace.lg : HPSpace.x2;
+              final pad = context.gutter;
+              final floor = floors.where((f) => f['id'] == floorId).firstOrNull;
+              final floorW = ((floor?['width'] as num?) ?? 1200).toDouble(), floorH = ((floor?['height'] as num?) ?? 800).toDouble();
               return CustomScrollView(slivers: [
                   SliverPadding(
                     padding: EdgeInsets.fromLTRB(pad, HPSpace.sm, pad, HPSpace.md),
                     sliver: SliverToBoxAdapter(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, children: [
+                        Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, crossAxisAlignment: WrapCrossAlignment.center, children: [
                           StatusChip(key: const Key('count-free'), label: '$free free', icon: Icons.event_seat_outlined),
                           StatusChip(label: '$seated seated', tone: HPTone.saffron, icon: Icons.restaurant_rounded),
                           if (billing > 0) StatusChip(label: '$billing billing', tone: HPTone.danger, icon: Icons.receipt_rounded),
@@ -179,14 +181,15 @@ class _TableMapScreenState extends ConsumerState<TableMapScreen> {
                       padding: EdgeInsets.symmetric(horizontal: pad),
                       sliver: SliverToBoxAdapter(
                         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                          SizedBox(
-                            height: narrow ? 380 : 520,
+                          // the plan keeps the floor's proportions, within what the window can show
+                          LayoutBuilder(builder: (c, box) => SizedBox(
+                            height: (box.maxWidth * floorH / floorW).clamp(240.0, (MediaQuery.sizeOf(c).height * .7).clamp(240.0, 720.0)),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(HPRadius.card),
                               child: FloorPlanView(
                                 key: ValueKey('plan-$floorId'),
-                                width: ((floors.where((f) => f['id'] == floorId).firstOrNull?['width'] as num?) ?? 1200).toDouble(),
-                                height: ((floors.where((f) => f['id'] == floorId).firstOrNull?['height'] as num?) ?? 800).toDouble(),
+                                width: floorW,
+                                height: floorH,
                                 tables: [for (final t in tables) HPFloorTable.fromJson(t)],
                                 onTap: (ft) {
                                   final t = tables.firstWhere((x) => x['id'] == ft.id);
@@ -194,7 +197,7 @@ class _TableMapScreenState extends ConsumerState<TableMapScreen> {
                                 },
                               ),
                             ),
-                          ),
+                          )),
                           const SizedBox(height: HPSpace.sm),
                           const FloorLegend(),
                         ]),
@@ -240,7 +243,7 @@ class _TableMapScreenState extends ConsumerState<TableMapScreen> {
                           Wrap(spacing: HPSpace.md, runSpacing: HPSpace.md, children: [
                             for (final o in takeaways)
                               SizedBox(
-                                width: narrow ? double.infinity : 340,
+                                width: narrow ? double.infinity : 360,
                                 child: OrderCard(
                                   key: Key('takeaway-${o['id']}'),
                                   leading: CircleAvatar(backgroundColor: HPColors.saffron.withValues(alpha: .2), child: Icon(Icons.shopping_bag_outlined, color: p.accentInk)),

@@ -249,19 +249,15 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     }).toList();
     final allowed = movementTypes.where((m) => _can(m.$3)).toList();
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Row(children: [
-        Expanded(child: HPSearchField(hint: 'Search name, SKU or category', onChanged: (v) => setState(() => _q = v.trim()))),
-        if (_can('inventory.manage')) ...[
-          const SizedBox(width: HPSpace.sm),
-          SecondaryButton(
-            key: const Key('inv-category-plus'),
-            label: 'Add category',
-            icon: Icons.add_rounded,
-            height: 48,
-            onPressed: _addCategoryPrompt,
-          ),
-        ],
-      ]),
+      LayoutBuilder(builder: (c, box) {
+        final search = HPSearchField(hint: 'Search name, SKU or category', onChanged: (v) => setState(() => _q = v.trim()));
+        final add = SecondaryButton(key: const Key('inv-category-plus'), label: 'Add category', icon: Icons.add_rounded, height: 48, onPressed: _addCategoryPrompt);
+        if (!_can('inventory.manage')) return search;
+        // very narrow: the button goes under the search box instead of squeezing it
+        return box.maxWidth < 380
+            ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [search, const SizedBox(height: HPSpace.sm), Align(alignment: Alignment.centerLeft, child: add)])
+            : Row(children: [Expanded(child: search), const SizedBox(width: HPSpace.sm), add]);
+      }),
       const SizedBox(height: HPSpace.sm),
       SizedBox(
         height: 38,
@@ -298,7 +294,24 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
           child: Column(children: [
             for (final (i, x) in shown.indexed) ...[
               if (i > 0) const Divider(height: 1),
-              ListTile(
+              _stockRow(context, x, allowed, narrowRows: MediaQuery.sizeOf(context).width < 600),
+            ],
+          ]),
+        ),
+    ]);
+  }
+
+  /// One product: name, SKU, category and cost; status, stock and actions on the right. Phones: status and stock
+  /// move under the name so the name keeps its width.
+  Widget _stockRow(BuildContext context, Json x, List<(String, String, String, IconData)> allowed, {required bool narrowRows}) {
+    final p = context.hp;
+    final badges = <Widget>[
+                  if (x['negative'] == true) const StatusChip(label: 'Below zero', tone: HPTone.danger)
+                  else if (x['low'] == true) const StatusChip(label: 'Low', tone: HPTone.saffron),
+                  if ((x['expiring'] as List).isNotEmpty) const StatusChip(label: 'Expiring', tone: HPTone.danger, icon: Icons.event_busy_outlined),
+                  Text(qtyText(x['stock'] as num, '${x['baseUnit']}'), key: Key('stock-${x['sku']}'), style: HPType.label(p.text)),
+    ];
+    return ListTile(
                 key: Key('product-${x['sku']}'),
                 contentPadding: const EdgeInsets.symmetric(horizontal: HPSpace.lg, vertical: HPSpace.xs),
                 title: Text('${x['name']}', style: HPType.label(x['active'] == true ? p.text : p.faint)),
@@ -319,7 +332,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                           decoration: BoxDecoration(color: p.raised, borderRadius: BorderRadius.circular(4), border: Border.all(color: p.faint.withValues(alpha: .4))),
                           child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            Text('${x['sku']}', style: HPType.mono(p.muted).copyWith(fontSize: 11, fontWeight: FontWeight.w600)),
+                            Flexible(child: Text('${x['sku']}', overflow: TextOverflow.ellipsis, style: HPType.mono(p.muted).copyWith(fontSize: 11, fontWeight: FontWeight.w600))),
                             const SizedBox(width: 4),
                             Icon(Icons.copy_rounded, size: 11, color: p.muted),
                           ]),
@@ -328,13 +341,11 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                     ),
                     if (x['category'] != null) Text('·  ${x['category']}', style: HPType.body(p.muted)),
                     Text('·  avg ${rupees(((x['avgCostPaise'] as num) * 1).round())}/${x['baseUnit']}', style: HPType.body(p.muted)),
+                    if (narrowRows) ...[const SizedBox(width: double.infinity, height: 4), ...badges],
                   ],
                 ),
                 trailing: Wrap(spacing: HPSpace.sm, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                  if (x['negative'] == true) const StatusChip(label: 'Below zero', tone: HPTone.danger)
-                  else if (x['low'] == true) const StatusChip(label: 'Low', tone: HPTone.saffron),
-                  if ((x['expiring'] as List).isNotEmpty) const StatusChip(label: 'Expiring', tone: HPTone.danger, icon: Icons.event_busy_outlined),
-                  Text(qtyText(x['stock'] as num, '${x['baseUnit']}'), key: Key('stock-${x['sku']}'), style: HPType.label(p.text)),
+                  if (!narrowRows) ...badges,
                   if (allowed.isNotEmpty || _can('inventory.manage'))
                     PopupMenuButton<String>(
                       key: Key('actions-${x['sku']}'),
@@ -356,11 +367,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                       ],
                     ),
                 ]),
-              ),
-            ],
-          ]),
-        ),
-    ]);
+              );
   }
 }
 
@@ -1031,9 +1038,9 @@ class _ValuationTabState extends State<_ValuationTab> {
     final p = context.hp;
     if (_v == null) return const SkeletonBox(height: 160);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Wrap(spacing: HPSpace.md, runSpacing: HPSpace.md, children: [
-        SizedBox(width: 260, child: KpiCard(key: const Key('stock-value'), label: 'Stock value', value: rupees(_v!['totalPaise'] as int), caption: '${_v!['method']}', icon: Icons.inventory_2_outlined)),
-        for (final c in (_v!['byCategory'] as List).cast<Json>()) SizedBox(width: 200, child: KpiCard(label: '${c['category']}', value: rupees(c['valuePaise'] as int), icon: Icons.category_outlined)),
+      KpiGrid(minTileWidth: 150, maxColumns: 6, children: [
+        KpiCard(key: const Key('stock-value'), label: 'Stock value', value: rupees(_v!['totalPaise'] as int), caption: '${_v!['method']}', icon: Icons.inventory_2_outlined),
+        for (final c in (_v!['byCategory'] as List).cast<Json>()) KpiCard(label: '${c['category']}', value: rupees(c['valuePaise'] as int), icon: Icons.category_outlined),
       ]),
       const SizedBox(height: HPSpace.lg),
       Text('Stock is valued at the moving weighted-average cost of each product: every receipt with a cost updates the average; what leaves stock is valued at the average at that moment.', style: HPType.body(p.muted)),

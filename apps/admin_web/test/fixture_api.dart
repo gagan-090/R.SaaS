@@ -42,6 +42,14 @@ class FixtureApi {
           // not in the recorded fixtures: an empty queue unless a test overrides it
           return http.Response.bytes(utf8.encode(jsonEncode({'counts': {'awaiting': 0, 'expired': 0}, 'items': []})), 200, headers: {'content-type': 'application/json'});
         }
+        if (req.method == 'GET' && RegExp(r'^/restaurants/[^/]+/owner$').hasMatch(path)) {
+          // not in the recorded fixtures: the owner support card's summary
+          return http.Response.bytes(
+            utf8.encode(jsonEncode({'id': 'u1', 'name': 'Owner', 'email': 'owner@example.test', 'status': 'active', 'hasPassword': true, 'mfaEnrolled': true, 'lockedUntil': null, 'passwordResetPendingUntil': null})),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
         if (req.method == 'GET' && path == '/platform/attention') {
           return http.Response.bytes(
             utf8.encode(jsonEncode({

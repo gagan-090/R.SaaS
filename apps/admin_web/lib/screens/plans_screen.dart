@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -87,6 +90,9 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
   @override
   Widget build(BuildContext context) {
     final edit = _canEdit;
+    final short = isShortScreen(context);
+    // phones: icon actions top right, the price toggle centred above the plans, small KPIs after them
+    final compact = compactLayout(context);
     return AsyncView<List<dynamic>>(
       key: ValueKey('$_reload-$_archived'),
       load: () => ref.read(apiProvider).plans(includeArchived: _archived),
@@ -100,55 +106,244 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
           if (tA != tB) return tA.compareTo(tB);
           return ((a['pricePaise'] as int?) ?? 0).compareTo((b['pricePaise'] as int?) ?? 0);
         });
-        final narrow = isNarrowWeb(context);
+        // KPIs describe the plans on sale, whichever list is showing
+        final onSale = data.cast<Json>().where((p) => p['archived'] != true).toList();
+        final restaurants = onSale.fold<int>(0, (n, p) => n + ((p['activeLicenses'] as int?) ?? 0));
+        final mrr = onSale.fold<int>(0, (n, p) => n + ((p['pricePaise'] as int? ?? 0) * ((p['activeLicenses'] as int?) ?? 0) ~/ (p['billingCycle'] == 'yearly' ? 12 : 1)));
+        final popular = onSale.isEmpty ? null : (onSale.toList()..sort((a, b) => ((b['activeLicenses'] as int?) ?? 0).compareTo((a['activeLicenses'] as int?) ?? 0))).first;
+        final kpis = [
+          KpiCard(key: const Key('plans-kpi-on-sale'), label: 'Plans on sale', value: '${onSale.length}', icon: Icons.workspace_premium_outlined, tone: HPTone.saffron),
+          KpiCard(key: const Key('plans-kpi-restaurants'), label: 'Restaurants on a plan', value: '$restaurants', icon: Icons.storefront_outlined, tone: HPTone.success),
+          KpiCard(key: const Key('plans-kpi-revenue'), label: 'Monthly revenue', value: formatPaise(mrr).replaceAll('.00', ''), caption: 'Yearly plans counted per month', icon: Icons.currency_rupee_rounded, tone: HPTone.success),
+          KpiCard(
+            key: const Key('plans-kpi-popular'),
+            label: 'Most popular',
+            value: popular == null || ((popular['activeLicenses'] as int?) ?? 0) == 0 ? '—' : '${popular['name']}',
+            caption: popular == null ? null : '${popular['activeLicenses'] ?? 0} restaurant(s)',
+            icon: Icons.trending_up_rounded,
+          ),
+        ];
+        final cycleToggle = SegmentedButton<String>(
+          key: const Key('plans-cycle'),
+          showSelectedIcon: false,
+          segments: const [ButtonSegment(value: 'monthly', label: Text('Monthly')), ButtonSegment(value: 'yearly', label: Text('Yearly'))],
+          selected: {_cycle},
+          onSelectionChanged: (v) => setState(() => _cycle = v.first),
+        );
+        final archivedToggle = compact
+            ? IconButton(
+                key: const Key('plans-archived'),
+                tooltip: _archived ? 'Show plans on sale' : 'Show archived plans',
+                isSelected: _archived,
+                onPressed: () => setState(() => _archived = !_archived),
+                icon: const Icon(Icons.inventory_2_outlined),
+                selectedIcon: const Icon(Icons.inventory_2_rounded),
+                style: IconButton.styleFrom(side: BorderSide(color: context.hp.line)),
+              )
+            : FilterChip(key: const Key('plans-archived'), label: const Text('Show archived'), selected: _archived, onSelected: (v) => setState(() => _archived = v));
         return PageFrame(
           title: 'Plans',
-          subtitle: 'Standard, Professional, and Premium subscription plans. Customers can purchase monthly or yearly.',
+          // the native phone app keeps the screen for the plans; the web build keeps the explanation
+          subtitle: compact && !kIsWeb ? null : 'Standard, Professional, and Premium subscription plans. Customers can purchase monthly or yearly.',
           actions: [
-            SegmentedButton<String>(
-              key: const Key('plans-cycle'),
-              showSelectedIcon: false,
-              segments: const [ButtonSegment(value: 'monthly', label: Text('Monthly')), ButtonSegment(value: 'yearly', label: Text('Yearly'))],
-              selected: {_cycle},
-              onSelectionChanged: (v) => setState(() => _cycle = v.first),
-            ),
-            FilterChip(key: const Key('plans-archived'), label: const Text('Show archived'), selected: _archived, onSelected: (v) => setState(() => _archived = v)),
-            if (edit) PrimaryButton(key: const Key('add-plan'), label: 'Add plan', icon: Icons.add_rounded, height: 48, onPressed: () => _edit()),
+            if (compact) archivedToggle,
+            if (edit)
+              compact
+                  ? IconButton.filled(key: const Key('add-plan'), tooltip: 'Add plan', onPressed: () => _edit(), icon: const Icon(Icons.add_rounded))
+                  : PrimaryButton(key: const Key('add-plan'), label: 'Add plan', icon: Icons.add_rounded, height: 48, onPressed: () => _edit()),
           ],
-          child: plans.isEmpty
-              ? EmptyState(title: _archived ? 'No archived plans' : 'No plans', icon: Icons.workspace_premium_outlined)
-              : LayoutBuilder(builder: (c, box) {
-                  // all plans side by side on one page, cards in a row the same height
-                  final cols = narrow ? 1 : plans.length.clamp(1, (box.maxWidth / 280).floor().clamp(1, 4));
-                  const gap = HPSpace.lg;
-                  // each plan lists only what it adds to the plan below it (Professional = Standard + …), so cards stay short
-                  Widget card(Json p) {
-                    final i = plans.indexOf(p);
-                    return _PlanCard(plan: p, base: i > 0 ? plans[i - 1] : null, cycle: _cycle, canEdit: edit, onEdit: () => _edit(p), onArchive: (v) => _archive(p, v));
-                  }
-                  return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    for (var i = 0; i < plans.length; i += cols) ...[
-                      if (i > 0) const SizedBox(height: gap),
-                      IntrinsicHeight(
-                        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                          for (var j = i; j < i + cols; j++) ...[
-                            if (j > i) const SizedBox(width: gap),
-                            Expanded(child: j < plans.length ? card(plans[j]) : const SizedBox.shrink()),
-                          ],
-                        ]),
-                      ),
+          // short screens (phones in landscape) and phones: the plans come first so they are on screen without scrolling
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            if (!short && !compact) ...[KpiGrid(children: kpis), const SizedBox(height: HPSpace.lg)],
+            if (compact)
+              Center(child: cycleToggle)
+            else
+              // the price toggle and filters come after the plan KPIs, right above the plans they change
+              Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, crossAxisAlignment: WrapCrossAlignment.center, children: [cycleToggle, archivedToggle]),
+            const SizedBox(height: HPSpace.lg),
+            if (plans.isEmpty)
+              EmptyState(title: _archived ? 'No archived plans' : 'No plans', icon: Icons.workspace_premium_outlined)
+            else
+              LayoutBuilder(builder: (c, box) {
+                const gap = HPSpace.lg;
+                // each plan lists only what it adds to the plan below it (Professional = Standard + …), so cards stay short
+                Widget card(int i, {bool fill = true}) =>
+                    _PlanCard(plan: plans[i], base: i > 0 ? plans[i - 1] : null, cycle: _cycle, canEdit: edit, fill: fill, onEdit: () => _edit(plans[i]), onArchive: (v) => _archive(plans[i], v));
+                // all plans side by side when they fit (about 300 px each); otherwise one at a time in a carousel
+                final fits = (box.maxWidth / 300).floor() >= plans.length;
+                if (!fits) {
+                  final pro = plans.indexWhere((p) => p['code'] == 'professional' || p['tier'] == 2);
+                  return PlanCarousel(
+                    key: ValueKey('carousel-$_archived-${plans.length}'),
+                    count: plans.length,
+                    initial: pro < 0 ? 0 : pro,
+                    label: (i) => '${plans[i]['name']}',
+                    builder: (i) => card(i),
+                  );
+                }
+                return IntrinsicHeight(
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    for (var j = 0; j < plans.length; j++) ...[
+                      if (j > 0) const SizedBox(width: gap),
+                      Expanded(child: card(j)),
                     ],
-                  ]);
-                }),
+                  ]),
+                );
+              }),
+            if (short || compact) ...[const SizedBox(height: HPSpace.lg), KpiGrid(dense: compact, children: kpis)],
+          ]),
         );
       },
     );
   }
 }
 
+/// One plan at a time, swiping (or the arrows) rotates through them and wraps around; dots show where you are.
+class PlanCarousel extends StatefulWidget {
+  const PlanCarousel({super.key, required this.count, required this.builder, required this.label, this.initial = 0});
+  final int count;
+  final int initial;
+  final Widget Function(int) builder;
+  final String Function(int) label;
+  @override
+  State<PlanCarousel> createState() => _PlanCarouselState();
+}
+
+class _PlanCarouselState extends State<PlanCarousel> {
+  late int _i = widget.initial.clamp(0, widget.count - 1);
+  final _scroll = ScrollController();
+  double _page = 0; // width of one card + gap: the snap step
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(() {
+      if (_page <= 0) return;
+      final i = (_scroll.offset / _page).round().clamp(0, widget.count - 1);
+      if (i != _i) setState(() => _i = i);
+    });
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _to(int i, {bool animate = true}) {
+    if (_page <= 0 || !_scroll.hasClients) return;
+    final target = (i * _page).clamp(0.0, _scroll.position.maxScrollExtent);
+    animate ? _scroll.animateTo(target, duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic) : _scroll.jumpTo(target);
+    setState(() => _i = i);
+  }
+
+  // the arrows wrap around (Premium → Standard); a swipe stops at either end
+  void _go(int step) => _to(((_i + step) % widget.count + widget.count) % widget.count);
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.hp;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Row(children: [
+        IconButton.outlined(key: const Key('plan-prev'), tooltip: 'Previous plan', onPressed: () => _go(-1), icon: const Icon(Icons.chevron_left_rounded)),
+        Expanded(
+          child: Column(children: [
+            Text(widget.label(_i), key: const Key('plan-carousel-current'), style: HPType.label(p.text), overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 6),
+            // a few plans: one dot each; many: "3 of 12" so the row never runs off a narrow screen
+            if (widget.count > 8)
+              Text('${_i + 1} of ${widget.count}', style: HPType.body(p.muted).copyWith(fontSize: 12))
+            else
+              Wrap(alignment: WrapAlignment.center, runSpacing: 4, children: [
+                for (var k = 0; k < widget.count; k++)
+                  GestureDetector(
+                    onTap: () => _to(k),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      width: k == _i ? 22 : 8,
+                      height: 8,
+                      decoration: BoxDecoration(color: k == _i ? p.accentInk : p.line, borderRadius: BorderRadius.circular(4)),
+                    ),
+                  ),
+              ]),
+          ]),
+        ),
+        IconButton.outlined(key: const Key('plan-next'), tooltip: 'Next plan', onPressed: () => _go(1), icon: const Icon(Icons.chevron_right_rounded)),
+      ]),
+      const SizedBox(height: HPSpace.md),
+      // swipeable: the cards follow the finger and snap to the nearest plan; the next card peeks in from the edge so
+      // it is obvious there is more. All cards share the tallest card's height.
+      LayoutBuilder(builder: (c, box) {
+        const gap = HPSpace.md;
+        final cardW = math.min(box.maxWidth * (box.maxWidth < 700 ? .86 : .6), 520.0);
+        final page = cardW + gap;
+        if (page != _page) {
+          _page = page;
+          WidgetsBinding.instance.addPostFrameCallback((_) => _to(_i, animate: false));
+        }
+        final side = (box.maxWidth - cardW) / 2; // the current card sits in the middle
+        return SingleChildScrollView(
+          key: const Key('plan-carousel-track'),
+          controller: _scroll,
+          scrollDirection: Axis.horizontal,
+          physics: _SnapPhysics(page),
+          padding: EdgeInsets.symmetric(horizontal: side),
+          child: IntrinsicHeight(
+            child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              for (var k = 0; k < widget.count; k++) ...[
+                if (k > 0) const SizedBox(width: gap),
+                SizedBox(
+                  width: cardW,
+                  child: AnimatedOpacity(duration: const Duration(milliseconds: 200), opacity: k == _i ? 1 : .55, child: widget.builder(k)),
+                ),
+              ],
+            ]),
+          ),
+        );
+      }),
+    ]);
+  }
+}
+
+/// Page-style snapping for a track whose pages are narrower than the viewport (the peeking carousel).
+class _SnapPhysics extends ScrollPhysics {
+  const _SnapPhysics(this.step, {super.parent});
+  final double step;
+  @override
+  _SnapPhysics applyTo(ScrollPhysics? ancestor) => _SnapPhysics(step, parent: buildParent(ancestor));
+
+  double _target(ScrollMetrics m, Tolerance t, double velocity) {
+    var page = m.pixels / step;
+    if (velocity < -t.velocity) {
+      page -= .5;
+    } else if (velocity > t.velocity) {
+      page += .5;
+    }
+    return (page.roundToDouble() * step).clamp(m.minScrollExtent, m.maxScrollExtent);
+  }
+
+  @override
+  Simulation? createBallisticSimulation(ScrollMetrics position, double velocity) {
+    if ((velocity <= 0 && position.pixels <= position.minScrollExtent) || (velocity >= 0 && position.pixels >= position.maxScrollExtent)) {
+      return super.createBallisticSimulation(position, velocity);
+    }
+    final t = toleranceFor(position);
+    final target = _target(position, t, velocity);
+    if (target == position.pixels) return null;
+    return ScrollSpringSimulation(spring, position.pixels, target, velocity, tolerance: t);
+  }
+
+  @override
+  bool get allowImplicitScrolling => false;
+}
+
 class _PlanCard extends StatelessWidget {
-  const _PlanCard({required this.plan, this.base, required this.cycle, required this.canEdit, required this.onEdit, required this.onArchive});
+  const _PlanCard({required this.plan, this.base, required this.cycle, required this.canEdit, required this.onEdit, required this.onArchive, this.fill = true});
   final Json plan;
+
+  /// In a row of equal-height cards the Edit button sits at the bottom; in the carousel the card is as tall as it needs.
+  final bool fill;
 
   /// The next plan down; when set, the card shows "Everything in [base], plus" and only the extra features.
   final Json? base;
@@ -241,15 +436,8 @@ class _PlanCard extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Text('Everything in ${base!['name']}${features.isEmpty ? '' : ', plus:'}', key: Key('plan-inherits-${plan['code']}'), style: HPType.label(p.text).copyWith(fontSize: 13)),
               ),
-            for (final f in features)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 1.5),
-                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Icon(Icons.check_rounded, size: 15, color: p.success),
-                  const SizedBox(width: 6),
-                  Expanded(child: Text(_label(f), style: HPType.body(p.text).copyWith(fontSize: 13))),
-                ]),
-              ),
+            // "✓ Tables, ✓ Dine-in orders, …" wraps like a sentence so the card stays short on every screen
+            if (features.isNotEmpty) InlineChecks([for (final f in features) _label(f)], key: Key('plan-features-${plan['code']}')),
             const SizedBox(height: HPSpace.md),
             Text('LIMITS', style: HPType.overline(p.muted)),
             const SizedBox(height: HPSpace.xs),
@@ -258,7 +446,7 @@ class _PlanCard extends StatelessWidget {
               style: HPType.body(p.muted).copyWith(fontSize: 12.5),
             ),
             if (canEdit) ...[
-              const Spacer(),
+              if (fill) const Spacer(),
               const SizedBox(height: HPSpace.lg),
               SecondaryButton(label: 'Edit', icon: Icons.edit_outlined, height: 44, onPressed: onEdit),
             ],

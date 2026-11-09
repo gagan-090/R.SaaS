@@ -15,7 +15,7 @@ export const PLATFORM_PERMISSIONS = {
   'platform.admin.invite': 'Create or invite platform admins; activate pending invitations',
   'platform.admin.roles': 'Assign roles to platform admins / create roles',
   'platform.admin.deactivate': 'Deactivate a platform admin',
-  'platform.mfa.reset': "Reset another admin's MFA (requires step-up)",
+  'platform.mfa.reset': "Reset another admin's or a restaurant owner's MFA, or send an owner a password reset link (requires step-up)",
   'platform.audit.read': 'Read the platform audit log',
 } as const;
 

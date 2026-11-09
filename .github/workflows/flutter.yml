@@ -78,3 +78,24 @@ jobs:
         working-directory: apps/pos_app
       - uses: actions/upload-artifact@v4
         with: { name: pos_app-web, path: apps/pos_app/build/web }
+  # Admin console (apps/admin_web) as a native app: same code as the web portal.
+  build-admin-native:
+    needs: analyze-test
+    strategy:
+      matrix:
+        include:
+          - { os: ubuntu-latest, cmd: 'apk --debug', out: 'apps/admin_web/build/app/outputs/flutter-apk/*.apk', name: admin_web-android }
+          - { os: macos-latest, cmd: 'ios --release --no-codesign', out: 'apps/admin_web/build/ios/iphoneos', name: admin_web-ios }
+          - { os: windows-latest, cmd: 'windows --release', out: 'apps/admin_web/build/windows/x64/runner/Release', name: admin_web-windows }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - if: matrix.os == 'ubuntu-latest'
+        uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, cache: true }
+      - run: flutter build ${{ matrix.cmd }} --dart-define=API_BASE_URL=https://rsaas-api.onrender.com/api/v1
+        working-directory: apps/admin_web
+      - uses: actions/upload-artifact@v4
+        with: { name: '${{ matrix.name }}', path: '${{ matrix.out }}' }

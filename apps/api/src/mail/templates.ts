@@ -48,3 +48,18 @@ export function staffPinEmail(o: { name: string; restaurantName: string; url: st
   );
   return { subject, text, html };
 }
+
+/** Support-initiated owner password reset (Super Admin → restaurant owner). */
+export function ownerPasswordResetEmail(o: { name: string; restaurantName: string; url: string }) {
+  const subject = `Reset your password for ${o.restaurantName}`;
+  const text =
+    `Hello ${o.name},\n\nSupport started a password reset for your owner account at ${o.restaurantName}. Choose a new password (at least 12 characters):` +
+    `\n\n${o.url}\n\nThe link works once and expires in 24 hours. Your current password keeps working until you choose a new one. We will never ask for your password.`;
+  const html = layout(
+    'Choose a new password',
+    `Support started a password reset for your owner account at <strong>${esc(o.restaurantName)}</strong>. If you did not ask for this, contact support; your current password keeps working until a new one is chosen.`,
+    { label: 'Choose a new password', url: o.url },
+    'This link works once and expires in 24 hours. We will never ask for your password.',
+  );
+  return { subject, text, html };
+}

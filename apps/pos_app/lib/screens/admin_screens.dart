@@ -42,12 +42,7 @@ class _ReportsDashboardScreenState extends ConsumerState<ReportsDashboardScreen>
   }
 
   Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _date,
-      firstDate: DateTime(2024),
-      lastDate: DateTime.now(),
-    );
+    final picked = await showDatePicker(context: context, initialDate: _date, firstDate: DateTime(2024), lastDate: DateTime.now());
     if (picked != null) {
       setState(() {
         _date = picked;
@@ -68,13 +63,7 @@ class _ReportsDashboardScreenState extends ConsumerState<ReportsDashboardScreen>
           PosTopBar(
             title: 'Sales & Reports',
             subtitle: _isToday ? 'Today · ${clock12(DateTime.now().toIso8601String())}' : '${_date.day}/${_date.month}/${_date.year}',
-            actions: [
-              IconButton(
-                tooltip: 'Refresh',
-                icon: const Icon(Icons.refresh_rounded),
-                onPressed: () => setState(() => _reloadKey++),
-              ),
-            ],
+            actions: [IconButton(tooltip: 'Refresh', icon: const Icon(Icons.refresh_rounded), onPressed: () => setState(() => _reloadKey++))],
           ),
           Expanded(
             child: FutureBuilder<List<Json>>(
@@ -82,10 +71,7 @@ class _ReportsDashboardScreenState extends ConsumerState<ReportsDashboardScreen>
               future: api.bills(_date),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
-                  return ErrorState(
-                    message: errText(snapshot.error!),
-                    onRetry: () => setState(() => _reloadKey++),
-                  );
+                  return ErrorState(message: errText(snapshot.error!), onRetry: () => setState(() => _reloadKey++));
                 }
                 if (!snapshot.hasData) return const LoadingState(label: 'Loading sales data…');
 
@@ -143,35 +129,27 @@ class _ReportsDashboardScreenState extends ConsumerState<ReportsDashboardScreen>
 
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 820),
+        constraints: const BoxConstraints(maxWidth: ContentWidth.dashboard),
         child: ListView(
-          padding: const EdgeInsets.all(HPSpace.lg),
+          padding: EdgeInsets.all(context.gutter),
           children: [
             // Date Filter Bar
             Card(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: HPSpace.md, vertical: HPSpace.sm),
-                child: Row(
+                child: Wrap(
+                  spacing: HPSpace.sm,
+                  runSpacing: HPSpace.xs,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    FilterChip(
-                      selected: _isToday,
-                      label: const Text('Today'),
-                      onSelected: (_) => _setToday(),
-                    ),
-                    const SizedBox(width: HPSpace.sm),
+                    FilterChip(selected: _isToday, label: const Text('Today'), onSelected: (_) => _setToday()),
                     FilterChip(
                       selected: !_isToday,
                       label: Text('${_date.day}/${_date.month}/${_date.year}'),
                       avatar: const Icon(Icons.calendar_today_rounded, size: 16),
                       onSelected: (_) => _pickDate(),
                     ),
-                    const Spacer(),
-                    if (!_isToday)
-                      TextButton.icon(
-                        icon: const Icon(Icons.history_toggle_off_rounded, size: 18),
-                        label: const Text('Yesterday'),
-                        onPressed: _setYesterday,
-                      ),
+                    if (!_isToday) TextButton.icon(icon: const Icon(Icons.history_toggle_off_rounded, size: 18), label: const Text('Yesterday'), onPressed: _setYesterday),
                   ],
                 ),
               ),
@@ -179,53 +157,12 @@ class _ReportsDashboardScreenState extends ConsumerState<ReportsDashboardScreen>
             const SizedBox(height: HPSpace.lg),
 
             // Top KPIs
-            Wrap(
-              spacing: HPSpace.md,
-              runSpacing: HPSpace.md,
+            KpiGrid(
               children: [
-                SizedBox(
-                  width: 180,
-                  child: KpiCard(
-                    key: const Key('kpi-sales'),
-                    label: 'Gross Sales',
-                    value: rupees(totalSalesPaise),
-                    caption: '$billCount bill(s)',
-                    icon: Icons.currency_rupee_rounded,
-                    tone: HPTone.saffron,
-                  ),
-                ),
-                SizedBox(
-                  width: 180,
-                  child: KpiCard(
-                    key: const Key('kpi-avg'),
-                    label: 'Average Bill',
-                    value: rupees(avgBillPaise),
-                    caption: 'Per customer',
-                    icon: Icons.analytics_outlined,
-                    tone: HPTone.success,
-                  ),
-                ),
-                SizedBox(
-                  width: 180,
-                  child: KpiCard(
-                    key: const Key('kpi-tax'),
-                    label: 'Taxes (GST)',
-                    value: rupees(taxPaise),
-                    caption: 'Collected',
-                    icon: Icons.account_balance_outlined,
-                  ),
-                ),
-                SizedBox(
-                  width: 180,
-                  child: KpiCard(
-                    key: const Key('kpi-tips'),
-                    label: 'Tips',
-                    value: rupees(tipPaise),
-                    caption: 'Staff gratuity',
-                    icon: Icons.volunteer_activism_rounded,
-                    tone: HPTone.pending,
-                  ),
-                ),
+                KpiCard(key: const Key('kpi-sales'), label: 'Gross Sales', value: rupees(totalSalesPaise), caption: '$billCount bill(s)', icon: Icons.currency_rupee_rounded, tone: HPTone.saffron),
+                KpiCard(key: const Key('kpi-avg'), label: 'Average Bill', value: rupees(avgBillPaise), caption: 'Per customer', icon: Icons.analytics_outlined, tone: HPTone.success),
+                KpiCard(key: const Key('kpi-tax'), label: 'Taxes (GST)', value: rupees(taxPaise), caption: 'Collected', icon: Icons.account_balance_outlined),
+                KpiCard(key: const Key('kpi-tips'), label: 'Tips', value: rupees(tipPaise), caption: 'Staff gratuity', icon: Icons.volunteer_activism_rounded, tone: HPTone.pending),
               ],
             ),
             const SizedBox(height: HPSpace.lg),
@@ -241,34 +178,14 @@ class _ReportsDashboardScreenState extends ConsumerState<ReportsDashboardScreen>
                     const SizedBox(height: HPSpace.sm),
                     Text('Settled payments breakdown for this period', style: HPType.body(p.muted)),
                     const SizedBox(height: HPSpace.md),
-                    Row(
+                    ResponsiveGrid(
+                      minTileWidth: 120,
+                      maxColumns: 3,
+                      spacing: HPSpace.sm,
                       children: [
-                        Expanded(
-                          child: _PaymentTile(
-                            title: 'Cash',
-                            amount: rupees(cashPaise),
-                            icon: Icons.payments_outlined,
-                            color: HPColors.saffron,
-                          ),
-                        ),
-                        const SizedBox(width: HPSpace.sm),
-                        Expanded(
-                          child: _PaymentTile(
-                            title: 'UPI',
-                            amount: rupees(upiPaise),
-                            icon: Icons.qr_code_2_rounded,
-                            color: HPColors.cardamom,
-                          ),
-                        ),
-                        const SizedBox(width: HPSpace.sm),
-                        Expanded(
-                          child: _PaymentTile(
-                            title: 'Card',
-                            amount: rupees(cardPaise),
-                            icon: Icons.credit_card_rounded,
-                            color: HPColors.chili,
-                          ),
-                        ),
+                        _PaymentTile(title: 'Cash', amount: rupees(cashPaise), icon: Icons.payments_outlined, color: HPColors.saffron),
+                        _PaymentTile(title: 'UPI', amount: rupees(upiPaise), icon: Icons.qr_code_2_rounded, color: HPColors.cardamom),
+                        _PaymentTile(title: 'Card', amount: rupees(cardPaise), icon: Icons.credit_card_rounded, color: HPColors.chili),
                       ],
                     ),
                     if (discountPaise > 0) ...[
@@ -276,9 +193,8 @@ class _ReportsDashboardScreenState extends ConsumerState<ReportsDashboardScreen>
                       Divider(color: p.line),
                       const SizedBox(height: HPSpace.xs),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('Total Discounts Applied', style: HPType.body(p.muted)),
+                          Expanded(child: Text('Total Discounts Applied', style: HPType.body(p.muted))),
                           Text(rupees(discountPaise), style: HPType.label(p.danger)),
                         ],
                       ),
@@ -299,7 +215,7 @@ class _ReportsDashboardScreenState extends ConsumerState<ReportsDashboardScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Dine-In', style: HPType.titleCard(p.text)),
+                          Text('Dine-In', style: HPType.titleCard(p.text), overflow: TextOverflow.ellipsis),
                           Text('$dineInCount bill(s)', style: HPType.body(p.muted)),
                         ],
                       ),
@@ -310,7 +226,7 @@ class _ReportsDashboardScreenState extends ConsumerState<ReportsDashboardScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Takeaway', style: HPType.titleCard(p.text)),
+                          Text('Takeaway', style: HPType.titleCard(p.text), overflow: TextOverflow.ellipsis),
                           Text('$takeawayCount bill(s)', style: HPType.body(p.muted)),
                         ],
                       ),
@@ -325,11 +241,7 @@ class _ReportsDashboardScreenState extends ConsumerState<ReportsDashboardScreen>
             Text('Bills (${bills.length})', style: HPType.titleCard(p.text)),
             const SizedBox(height: HPSpace.sm),
             if (bills.isEmpty)
-              const EmptyState(
-                icon: Icons.receipt_long_outlined,
-                title: 'No bills for this date',
-                message: 'Bills completed on this date will appear here.',
-              )
+              const EmptyState(icon: Icons.receipt_long_outlined, title: 'No bills for this date', message: 'Bills completed on this date will appear here.')
             else
               for (final b in bills.take(15))
                 Card(
@@ -342,15 +254,11 @@ class _ReportsDashboardScreenState extends ConsumerState<ReportsDashboardScreen>
                     title: Text(
                       'Bill #${b['bill_no'] ?? b['id']} · ${b['table_name'] != null ? 'Table ${b['table_name']}' : 'Takeaway'}',
                       style: HPType.label(p.text),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    subtitle: Text(
-                      '${b['waiter_name'] ?? 'Counter'} · ${b['closed_at'] == null ? 'Open' : clock12(b['closed_at'])}',
-                      style: HPType.body(p.muted).copyWith(fontSize: 12),
-                    ),
-                    trailing: Text(
-                      rupees((b['total_paise'] as int?) ?? 0),
-                      style: HPType.titleCard(p.text),
-                    ),
+                    subtitle: Text('${b['waiter_name'] ?? 'Counter'} · ${b['closed_at'] == null ? 'Open' : clock12(b['closed_at'])}', style: HPType.body(p.muted).copyWith(fontSize: 12)),
+                    trailing: Text(rupees((b['total_paise'] as int?) ?? 0), style: HPType.titleCard(p.text)),
                   ),
                 ),
           ],
@@ -384,11 +292,17 @@ class _PaymentTile extends StatelessWidget {
             children: [
               Icon(icon, size: 18, color: color),
               const SizedBox(width: HPSpace.xs),
-              Text(title, style: HPType.label(p.muted)),
+              Flexible(
+                child: Text(title, style: HPType.label(p.muted), overflow: TextOverflow.ellipsis),
+              ),
             ],
           ),
           const SizedBox(height: HPSpace.xs),
-          Text(amount, style: HPType.titleCard(p.text)),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(amount, style: HPType.titleCard(p.text)),
+          ),
         ],
       ),
     );
@@ -447,32 +361,29 @@ class _MenuManagementScreenState extends ConsumerState<MenuManagementScreen> {
           PosTopBar(
             title: 'Menu & Stock',
             subtitle: 'Dish availability & 86 management',
-            actions: [
-              IconButton(
-                tooltip: 'Refresh menu',
-                icon: const Icon(Icons.refresh_rounded),
-                onPressed: () => setState(() => _reloadKey++),
-              ),
-            ],
+            actions: [IconButton(tooltip: 'Refresh menu', icon: const Icon(Icons.refresh_rounded), onPressed: () => setState(() => _reloadKey++))],
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: HPSpace.lg, vertical: HPSpace.sm),
-            child: TextField(
-              controller: _searchCtl,
-              decoration: InputDecoration(
-                hintText: 'Search dishes by name or code…',
-                prefixIcon: const Icon(Icons.search_rounded),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear_rounded),
-                        onPressed: () {
-                          _searchCtl.clear();
-                          setState(() => _searchQuery = '');
-                        },
-                      )
-                    : null,
+            padding: EdgeInsets.symmetric(horizontal: context.gutter, vertical: HPSpace.sm),
+            child: CenteredContent(
+              maxWidth: ContentWidth.list,
+              child: TextField(
+                controller: _searchCtl,
+                decoration: InputDecoration(
+                  hintText: 'Search dishes by name or code…',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear_rounded),
+                          onPressed: () {
+                            _searchCtl.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        )
+                      : null,
+                ),
+                onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()),
               ),
-              onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()),
             ),
           ),
           Expanded(
@@ -481,10 +392,7 @@ class _MenuManagementScreenState extends ConsumerState<MenuManagementScreen> {
               future: api.menu(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
-                  return ErrorState(
-                    message: errText(snapshot.error!),
-                    onRetry: () => setState(() => _reloadKey++),
-                  );
+                  return ErrorState(message: errText(snapshot.error!), onRetry: () => setState(() => _reloadKey++));
                 }
                 if (!snapshot.hasData) return const LoadingState(label: 'Loading menu…');
 
@@ -507,141 +415,121 @@ class _MenuManagementScreenState extends ConsumerState<MenuManagementScreen> {
                   return true;
                 }).toList();
 
-                return Column(
-                  children: [
-                    // Category Chips Bar
-                    SizedBox(
-                      height: 48,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: HPSpace.lg),
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(right: HPSpace.sm),
-                            child: ChoiceChip(
-                              label: const Text('All Items'),
-                              selected: _selectedCategory == null,
-                              onSelected: (_) => setState(() => _selectedCategory = null),
-                            ),
-                          ),
-                          for (final cat in categories)
+                return CenteredContent(
+                  maxWidth: ContentWidth.list,
+                  child: Column(
+                    children: [
+                      // Category Chips Bar
+                      SizedBox(
+                        height: 48,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: HPSpace.lg),
+                          children: [
                             Padding(
                               padding: const EdgeInsets.only(right: HPSpace.sm),
-                              child: ChoiceChip(
-                                label: Text('${cat['name']}'),
-                                selected: _selectedCategory == cat['id'],
-                                onSelected: (_) => setState(() => _selectedCategory = cat['id'] as String),
-                              ),
+                              child: ChoiceChip(label: const Text('All Items'), selected: _selectedCategory == null, onSelected: (_) => setState(() => _selectedCategory = null)),
                             ),
-                        ],
+                            for (final cat in categories)
+                              Padding(
+                                padding: const EdgeInsets.only(right: HPSpace.sm),
+                                child: ChoiceChip(label: Text('${cat['name']}'), selected: _selectedCategory == cat['id'], onSelected: (_) => setState(() => _selectedCategory = cat['id'] as String)),
+                              ),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: HPSpace.sm),
+                      const SizedBox(height: HPSpace.sm),
 
-                    // Items List
-                    Expanded(
-                      child: filtered.isEmpty
-                          ? const EmptyState(
-                              icon: Icons.restaurant_menu_rounded,
-                              title: 'No matching dishes',
-                              message: 'Try selecting another category or clearing your search.',
-                            )
-                          : ListView.builder(
-                              padding: const EdgeInsets.all(HPSpace.lg),
-                              itemCount: filtered.length,
-                              itemBuilder: (context, idx) {
-                                final it = filtered[idx];
-                                final isAvail = it['available'] == 1 || it['available'] == true;
-                                final isVeg = it['is_veg'] == 1 || it['is_veg'] == true;
-                                final id = it['id'] as String;
-                                final name = '${it['name']}';
-                                final busy = _toggling.contains(id);
+                      // Items List
+                      Expanded(
+                        child: filtered.isEmpty
+                            ? const EmptyState(icon: Icons.restaurant_menu_rounded, title: 'No matching dishes', message: 'Try selecting another category or clearing your search.')
+                            : ListView.builder(
+                                padding: const EdgeInsets.all(HPSpace.lg),
+                                itemCount: filtered.length,
+                                itemBuilder: (context, idx) {
+                                  final it = filtered[idx];
+                                  final isAvail = it['available'] == 1 || it['available'] == true;
+                                  final isVeg = it['is_veg'] == 1 || it['is_veg'] == true;
+                                  final id = it['id'] as String;
+                                  final name = '${it['name']}';
+                                  final busy = _toggling.contains(id);
 
-                                return Card(
-                                  margin: const EdgeInsets.only(bottom: HPSpace.sm),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(HPSpace.md),
-                                    child: Row(
-                                      children: [
-                                        // Veg / Non-veg dot
-                                        Container(
-                                          width: 18,
-                                          height: 18,
-                                          decoration: BoxDecoration(
-                                            border: Border.all(
-                                              color: isVeg ? Colors.green.shade700 : Colors.red.shade800,
-                                              width: 2,
-                                            ),
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          alignment: Alignment.center,
-                                          child: Container(
-                                            width: 8,
-                                            height: 8,
+                                  return Card(
+                                    margin: const EdgeInsets.only(bottom: HPSpace.sm),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(HPSpace.md),
+                                      child: Row(
+                                        children: [
+                                          // Veg / Non-veg dot
+                                          Container(
+                                            width: 18,
+                                            height: 18,
                                             decoration: BoxDecoration(
-                                              color: isVeg ? Colors.green.shade700 : Colors.red.shade800,
-                                              shape: BoxShape.circle,
+                                              border: Border.all(color: isVeg ? Colors.green.shade700 : Colors.red.shade800, width: 2),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            alignment: Alignment.center,
+                                            child: Container(
+                                              width: 8,
+                                              height: 8,
+                                              decoration: BoxDecoration(color: isVeg ? Colors.green.shade700 : Colors.red.shade800, shape: BoxShape.circle),
                                             ),
                                           ),
-                                        ),
-                                        const SizedBox(width: HPSpace.md),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(name, style: HPType.label(p.text)),
-                                              Row(
-                                                children: [
-                                                  Text(
-                                                    rupees(it['price_paise'] as int? ?? 0),
-                                                    style: HPType.body(p.accentInk).copyWith(fontWeight: FontWeight.w600),
-                                                  ),
-                                                  if (it['code'] != null && '${it['code']}'.isNotEmpty) ...[
-                                                    const SizedBox(width: HPSpace.sm),
-                                                    Text('· ${it['code']}', style: HPType.body(p.muted).copyWith(fontSize: 12)),
-                                                  ],
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        // 86 Toggle button
-                                        if (busy)
-                                          const SizedBox(
-                                            width: 32,
-                                            height: 32,
-                                            child: CircularProgressIndicator(strokeWidth: 2),
-                                          )
-                                        else
-                                          FilledButton.tonal(
-                                            key: Key('toggle-avail-$id'),
-                                            style: FilledButton.styleFrom(
-                                              backgroundColor: isAvail
-                                                  ? Colors.green.withValues(alpha: .15)
-                                                  : Colors.red.withValues(alpha: .15),
-                                              foregroundColor: isAvail ? Colors.green.shade800 : Colors.red.shade800,
-                                            ),
-                                            onPressed: () => _toggleAvailability(id, name),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
+                                          const SizedBox(width: HPSpace.md),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
-                                                Icon(
-                                                  isAvail ? Icons.check_circle_rounded : Icons.block_rounded,
-                                                  size: 16,
+                                                Text(name, style: HPType.label(p.text), maxLines: 2, overflow: TextOverflow.ellipsis),
+                                                Wrap(
+                                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                                  children: [
+                                                    Text(rupees(it['price_paise'] as int? ?? 0), style: HPType.body(p.accentInk).copyWith(fontWeight: FontWeight.w600)),
+                                                    if (it['code'] != null && '${it['code']}'.isNotEmpty) ...[
+                                                      const SizedBox(width: HPSpace.sm),
+                                                      Text('· ${it['code']}', style: HPType.body(p.muted).copyWith(fontSize: 12)),
+                                                    ],
+                                                  ],
                                                 ),
-                                                const SizedBox(width: HPSpace.xs),
-                                                Text(isAvail ? 'In Stock' : '86 / Out'),
                                               ],
                                             ),
                                           ),
-                                      ],
+                                          // 86 Toggle button
+                                          if (busy)
+                                            const SizedBox(width: 32, height: 32, child: CircularProgressIndicator(strokeWidth: 2))
+                                          else
+                                            FilledButton.tonal(
+                                              key: Key('toggle-avail-$id'),
+                                              style: FilledButton.styleFrom(
+                                                backgroundColor: isAvail ? Colors.green.withValues(alpha: .15) : Colors.red.withValues(alpha: .15),
+                                                foregroundColor: isAvail ? Colors.green.shade800 : Colors.red.shade800,
+                                              ),
+                                              onPressed: () => _toggleAvailability(id, name),
+                                              // tiny screens: the icon alone (the tooltip and colour still say which)
+                                              child: Tooltip(
+                                                message: isAvail ? 'In stock — tap to mark 86 / out' : '86 / out — tap to mark in stock',
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(isAvail ? Icons.check_circle_rounded : Icons.block_rounded, size: 16),
+                                                    if (MediaQuery.sizeOf(context).width >= 340) ...[
+                                                      const SizedBox(width: HPSpace.xs),
+                                                      Text(isAvail ? 'In Stock' : '86 / Out'),
+                                                    ],
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                );
-                              },
-                            ),
-                    ),
-                  ],
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  ),
                 );
               },
             ),
@@ -659,6 +547,10 @@ class _MenuManagementScreenState extends ConsumerState<MenuManagementScreen> {
 class StaffManagementScreen extends ConsumerWidget {
   const StaffManagementScreen({super.key});
 
+  static Widget _pinChip(Json u) => u['hasPin'] == true
+      ? const StatusChip(label: 'PIN active', tone: HPTone.success, icon: Icons.lock_outline_rounded)
+      : const StatusChip(label: 'No PIN set', tone: HPTone.danger, icon: Icons.lock_open_rounded);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final api = ref.watch(hubApiProvider);
@@ -668,10 +560,7 @@ class StaffManagementScreen extends ConsumerWidget {
     return Scaffold(
       body: Column(
         children: [
-          const PosTopBar(
-            title: 'Staff & Team',
-            subtitle: 'Roles and terminal PIN status',
-          ),
+          const PosTopBar(title: 'Staff & Team', subtitle: 'Roles and terminal PIN status'),
           Expanded(
             child: FutureBuilder<List<Json>>(
               future: api.staff(),
@@ -693,21 +582,19 @@ class StaffManagementScreen extends ConsumerWidget {
                             margin: const EdgeInsets.only(bottom: HPSpace.sm),
                             child: ListTile(
                               leading: CircleAvatar(
-                                backgroundColor: roleColor(context, (u['roles'] as List?)?.firstOrNull?.toString())
-                                    .withValues(alpha: .22),
-                                child: Text(
-                                  '${u['name']}'.characters.first.toUpperCase(),
-                                  style: HPType.label(p.text),
-                                ),
+                                backgroundColor: roleColor(context, (u['roles'] as List?)?.firstOrNull?.toString()).withValues(alpha: .22),
+                                child: Text('${u['name']}'.characters.first.toUpperCase(), style: HPType.label(p.text)),
                               ),
-                              title: Text('${u['name']}'.split(' (').first, style: HPType.label(p.text)),
-                              subtitle: Text(
-                                roleLabel(u['roles'] as List? ?? const []),
-                                style: HPType.body(p.muted),
+                              title: Text('${u['name']}'.split(' (').first, style: HPType.label(p.text), maxLines: 2, overflow: TextOverflow.ellipsis),
+                              // phones: the PIN chip goes under the name instead of squeezing it
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(roleLabel(u['roles'] as List? ?? const []), style: HPType.body(p.muted)),
+                                  if (context.isNarrow) ...[const SizedBox(height: HPSpace.xs), _pinChip(u)],
+                                ],
                               ),
-                              trailing: u['hasPin'] == true
-                                  ? StatusChip(label: 'PIN active', tone: HPTone.success, icon: Icons.lock_outline_rounded)
-                                  : StatusChip(label: 'No PIN set', tone: HPTone.danger, icon: Icons.lock_open_rounded),
+                              trailing: context.isNarrow ? null : _pinChip(u),
                             ),
                           ),
                         const SizedBox(height: HPSpace.lg),
@@ -723,7 +610,7 @@ class StaffManagementScreen extends ConsumerWidget {
                                   children: [
                                     Icon(Icons.shield_outlined, color: p.accentInk),
                                     const SizedBox(width: HPSpace.sm),
-                                    Text('Roles & Responsibilities', style: HPType.titleCard(p.text)),
+                                    Expanded(child: Text('Roles & Responsibilities', style: HPType.titleCard(p.text))),
                                   ],
                                 ),
                                 const SizedBox(height: HPSpace.sm),
@@ -769,10 +656,7 @@ class FloorsOverviewScreen extends ConsumerWidget {
     return Scaffold(
       body: Column(
         children: [
-          const PosTopBar(
-            title: 'Floors & Capacity',
-            subtitle: 'Floor plans, table counts and occupancy',
-          ),
+          const PosTopBar(title: 'Floors & Capacity', subtitle: 'Floor plans, table counts and occupancy'),
           Expanded(
             child: FutureBuilder<Json>(
               future: api.state(),
@@ -795,54 +679,23 @@ class FloorsOverviewScreen extends ConsumerWidget {
 
                 return Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 720),
+                    constraints: const BoxConstraints(maxWidth: ContentWidth.dashboard),
                     child: ListView(
-                      padding: const EdgeInsets.all(HPSpace.lg),
+                      padding: EdgeInsets.all(context.gutter),
                       children: [
                         // KPI row
-                        Wrap(
-                          spacing: HPSpace.md,
-                          runSpacing: HPSpace.md,
+                        KpiGrid(
                           children: [
-                            SizedBox(
-                              width: 160,
-                              child: KpiCard(
-                                label: 'Total Tables',
-                                value: '$totalTables',
-                                caption: '$totalSeats total seats',
-                                icon: Icons.table_restaurant_rounded,
-                              ),
+                            KpiCard(label: 'Total Tables', value: '$totalTables', caption: '$totalSeats total seats', icon: Icons.table_restaurant_rounded),
+                            KpiCard(
+                              label: 'Occupied',
+                              value: '$occupiedTables',
+                              caption: totalTables > 0 ? '${((occupiedTables / totalTables) * 100).toInt()}% occupancy' : '0%',
+                              icon: Icons.people_alt_outlined,
+                              tone: occupiedTables > 0 ? HPTone.saffron : HPTone.neutral,
                             ),
-                            SizedBox(
-                              width: 160,
-                              child: KpiCard(
-                                label: 'Occupied',
-                                value: '$occupiedTables',
-                                caption: totalTables > 0 ? '${((occupiedTables / totalTables) * 100).toInt()}% occupancy' : '0%',
-                                icon: Icons.people_alt_outlined,
-                                tone: occupiedTables > 0 ? HPTone.saffron : HPTone.neutral,
-                              ),
-                            ),
-                            SizedBox(
-                              width: 160,
-                              child: KpiCard(
-                                label: 'Free',
-                                value: '$freeTables',
-                                caption: 'Ready for guests',
-                                icon: Icons.check_circle_outline_rounded,
-                                tone: HPTone.success,
-                              ),
-                            ),
-                            SizedBox(
-                              width: 160,
-                              child: KpiCard(
-                                label: 'Reserved',
-                                value: '$reservedTables',
-                                caption: 'Booked tables',
-                                icon: Icons.bookmark_border_rounded,
-                                tone: HPTone.pending,
-                              ),
-                            ),
+                            KpiCard(label: 'Free', value: '$freeTables', caption: 'Ready for guests', icon: Icons.check_circle_outline_rounded, tone: HPTone.success),
+                            KpiCard(label: 'Reserved', value: '$reservedTables', caption: 'Booked tables', icon: Icons.bookmark_border_rounded, tone: HPTone.pending),
                           ],
                         ),
                         const SizedBox(height: HPSpace.lg),
@@ -856,13 +709,12 @@ class FloorsOverviewScreen extends ConsumerWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Text('${fl['name']}', style: HPType.titleCard(p.text)),
-                                      StatusChip(
-                                        label: '${tables.where((t) => t['floor_id'] == fl['id']).length} tables',
-                                        tone: HPTone.neutral,
+                                      Expanded(
+                                        child: Text('${fl['name']}', style: HPType.titleCard(p.text), overflow: TextOverflow.ellipsis),
                                       ),
+                                      const SizedBox(width: HPSpace.sm),
+                                      StatusChip(label: '${tables.where((t) => t['floor_id'] == fl['id']).length} tables', tone: HPTone.neutral),
                                     ],
                                   ),
                                   const SizedBox(height: HPSpace.md),
@@ -876,19 +728,12 @@ class FloorsOverviewScreen extends ConsumerWidget {
                                           decoration: BoxDecoration(
                                             color: p.raised,
                                             borderRadius: BorderRadius.circular(10),
-                                            border: Border.all(
-                                              color: t['status'] == 'occupied'
-                                                  ? HPColors.saffron
-                                                  : (t['status'] == 'bill_printed' ? HPColors.cardamom : p.line),
-                                            ),
+                                            border: Border.all(color: t['status'] == 'occupied' ? HPColors.saffron : (t['status'] == 'bill_printed' ? HPColors.cardamom : p.line)),
                                           ),
                                           child: Column(
                                             children: [
                                               Text('Table ${t['name']}', style: HPType.label(p.text)),
-                                              Text(
-                                                '${t['seats']} seats · ${t['status']}',
-                                                style: HPType.body(p.muted).copyWith(fontSize: 11),
-                                              ),
+                                              Text('${t['seats']} seats · ${t['status']}', style: HPType.body(p.muted).copyWith(fontSize: 11)),
                                             ],
                                           ),
                                         ),
@@ -930,10 +775,7 @@ class RestaurantProfileScreen extends ConsumerWidget {
     return Scaffold(
       body: Column(
         children: [
-          const PosTopBar(
-            title: 'Restaurant & License',
-            subtitle: 'Profile, subscription tier and sync details',
-          ),
+          const PosTopBar(title: 'Restaurant & License', subtitle: 'Profile, subscription tier and sync details'),
           Expanded(
             child: FutureBuilder<Json>(
               future: api.branch(),
@@ -965,10 +807,7 @@ class RestaurantProfileScreen extends ConsumerWidget {
                                     Container(
                                       width: 48,
                                       height: 48,
-                                      decoration: BoxDecoration(
-                                        color: HPColors.saffron.withValues(alpha: .18),
-                                        borderRadius: BorderRadius.circular(14),
-                                      ),
+                                      decoration: BoxDecoration(color: HPColors.saffron.withValues(alpha: .18), borderRadius: BorderRadius.circular(14)),
                                       child: Icon(Icons.storefront_rounded, color: p.accentInk),
                                     ),
                                     const SizedBox(width: HPSpace.md),
@@ -976,7 +815,7 @@ class RestaurantProfileScreen extends ConsumerWidget {
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Text('${tenant['name'] ?? 'Restaurant'}', style: HPType.titleCard(p.text)),
+                                          Text('${tenant['name'] ?? 'Restaurant'}', style: HPType.titleCard(p.text), maxLines: 2, overflow: TextOverflow.ellipsis),
                                           Text('Branch: ${branch['name'] ?? branch['code'] ?? 'Main'}', style: HPType.body(p.muted)),
                                         ],
                                       ),
@@ -988,10 +827,8 @@ class RestaurantProfileScreen extends ConsumerWidget {
                                 const SizedBox(height: HPSpace.sm),
                                 _infoRow(p, 'Restaurant Code', '${tenant['code'] ?? 'R000000'}'),
                                 _infoRow(p, 'Branch Code', '${branch['code'] ?? 'BR01'}'),
-                                if (tenant['gstin'] != null && '${tenant['gstin']}'.isNotEmpty)
-                                  _infoRow(p, 'GSTIN', '${tenant['gstin']}'),
-                                if (tenant['address'] != null && '${tenant['address']}'.isNotEmpty)
-                                  _infoRow(p, 'Address', '${tenant['address']}'),
+                                if (tenant['gstin'] != null && '${tenant['gstin']}'.isNotEmpty) _infoRow(p, 'GSTIN', '${tenant['gstin']}'),
+                                if (tenant['address'] != null && '${tenant['address']}'.isNotEmpty) _infoRow(p, 'Address', '${tenant['address']}'),
                               ],
                             ),
                           ),
@@ -1005,13 +842,21 @@ class RestaurantProfileScreen extends ConsumerWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
+                                Wrap(
+                                  spacing: HPSpace.sm,
+                                  runSpacing: HPSpace.sm,
+                                  alignment: WrapAlignment.spaceBetween,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
                                   children: [
-                                    Icon(Icons.workspace_premium_rounded, color: p.accentInk),
-                                    const SizedBox(width: HPSpace.sm),
-                                    Text('Subscription Plan', style: HPType.titleCard(p.text)),
-                                    const Spacer(),
-                                    StatusChip(label: 'Active · Premium', tone: HPTone.success),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.workspace_premium_rounded, color: p.accentInk),
+                                        const SizedBox(width: HPSpace.sm),
+                                        Flexible(child: Text('Subscription Plan', style: HPType.titleCard(p.text))),
+                                      ],
+                                    ),
+                                    const StatusChip(label: 'Active · Premium', tone: HPTone.success),
                                   ],
                                 ),
                                 const SizedBox(height: HPSpace.md),
@@ -1042,7 +887,7 @@ class RestaurantProfileScreen extends ConsumerWidget {
                                       children: [
                                         Icon(Icons.cloud_done_rounded, color: p.accentInk),
                                         const SizedBox(width: HPSpace.sm),
-                                        Text('Cloud Connection', style: HPType.titleCard(p.text)),
+                                        Expanded(child: Text('Cloud Connection', style: HPType.titleCard(p.text))),
                                       ],
                                     ),
                                     const SizedBox(height: HPSpace.sm),
@@ -1051,8 +896,7 @@ class RestaurantProfileScreen extends ConsumerWidget {
                                       _infoRow(p, 'Events Synced', '${syncData['pushed'] ?? 0}'),
                                       _infoRow(p, 'Pending Sync', '${syncData['pending'] ?? 0}'),
                                       _infoRow(p, 'Failed', '${syncData['failed'] ?? 0}'),
-                                      if (syncData['lastPullAt'] != null)
-                                        _infoRow(p, 'Last Updated', clock12(syncData['lastPullAt'])),
+                                      if (syncData['lastPullAt'] != null) _infoRow(p, 'Last Updated', clock12(syncData['lastPullAt'])),
                                     ],
                                   ],
                                 ),
@@ -1073,13 +917,18 @@ class RestaurantProfileScreen extends ConsumerWidget {
   }
 
   Widget _infoRow(HPPalette p, String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label, style: HPType.body(p.muted)),
-            Text(value, style: HPType.label(p.text)),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    // a long value (address, server URL) wraps instead of overflowing
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Flexible(flex: 2, child: Text(label, style: HPType.body(p.muted))),
+        const SizedBox(width: HPSpace.md),
+        Expanded(
+          flex: 3,
+          child: Text(value, style: HPType.label(p.text), textAlign: TextAlign.end),
         ),
-      );
+      ],
+    ),
+  );
 }

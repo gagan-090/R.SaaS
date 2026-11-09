@@ -42,7 +42,7 @@ class MoreScreen extends ConsumerWidget {
                     const SizedBox(width: HPSpace.lg),
                     Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(s.name, style: HPType.titleCard(p.text)),
+                        Text(s.name, style: HPType.titleCard(p.text), maxLines: 2, overflow: TextOverflow.ellipsis),
                         Text(roleLabel(s.roles), style: HPType.body(p.muted)),
                       ]),
                     ),
@@ -130,7 +130,8 @@ class TipsScreen extends ConsumerWidget {
               if (!s.hasData) return const LoadingState();
               if (s.data!.isEmpty) return const EmptyState(icon: Icons.volunteer_activism_outlined, title: 'No tips yet');
               final total = s.data!.fold<int>(0, (n, r) => n + (r['tip_paise'] as int));
-              return ListView(padding: const EdgeInsets.all(HPSpace.lg), children: [
+              return ListView(padding: EdgeInsets.all(context.gutter), children: [
+                CenteredContent(maxWidth: ContentWidth.list, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 KpiCard(label: 'Tips', value: rupees(total), caption: '${s.data!.length} waiter(s)', icon: Icons.volunteer_activism_rounded, tone: HPTone.success),
                 const SizedBox(height: HPSpace.lg),
                 for (final r in s.data!)
@@ -145,6 +146,7 @@ class TipsScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
+                ])),
               ]);
             },
           ),

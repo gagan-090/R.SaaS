@@ -169,10 +169,10 @@ class _TodaySalesState extends State<_TodaySales> {
       title: 'Today\'s bills & payments',
       child: sum == null
           ? const SkeletonBox(height: 80)
-          : Wrap(spacing: HPSpace.md, runSpacing: HPSpace.md, children: [
-              SizedBox(width: 200, child: KpiCard(key: const Key('today-sales'), label: 'Collected', value: rupees(sum['salesPaise'] as int), caption: '${sum['paidBills']} paid bills', icon: Icons.payments_outlined)),
-              for (final m in (sum['paymentsByMode'] as Json).entries) SizedBox(width: 160, child: KpiCard(label: m.key.toUpperCase(), value: rupees(m.value as int), icon: Icons.account_balance_wallet_outlined)),
-              SizedBox(width: 160, child: KpiCard(label: 'Discounts', value: rupees(sum['discountsPaise'] as int), icon: Icons.local_offer_outlined)),
+          : KpiGrid(minTileWidth: 150, maxColumns: 6, children: [
+              KpiCard(key: const Key('today-sales'), label: 'Collected', value: rupees(sum['salesPaise'] as int), caption: '${sum['paidBills']} paid bills', icon: Icons.payments_outlined),
+              for (final m in (sum['paymentsByMode'] as Json).entries) KpiCard(label: m.key.toUpperCase(), value: rupees(m.value as int), icon: Icons.account_balance_wallet_outlined),
+              KpiCard(label: 'Discounts', value: rupees(sum['discountsPaise'] as int), icon: Icons.local_offer_outlined),
             ]),
     );
   }

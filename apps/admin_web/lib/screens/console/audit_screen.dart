@@ -264,12 +264,12 @@ class _SalesTabState extends State<_SalesTab> {
       if (s == null)
         const SkeletonBox(height: 200)
       else ...[
-        Wrap(spacing: HPSpace.md, runSpacing: HPSpace.md, children: [
-          SizedBox(width: 220, child: KpiCard(key: const Key('sales-total'), label: 'Sales (paid)', value: rupees((s['summary'] as Json)['salesPaise'] as int), caption: '${(s['summary'] as Json)['paidBills']} bills', icon: Icons.payments_outlined)),
-          SizedBox(width: 200, child: KpiCard(label: 'Discounts', value: rupees((s['summary'] as Json)['discountsPaise'] as int), icon: Icons.local_offer_outlined)),
-          SizedBox(width: 200, child: KpiCard(label: 'Refunds & corrections', value: rupees(((s['summary'] as Json)['refundsPaise'] as int).abs()), icon: Icons.undo_rounded)),
-          SizedBox(width: 200, child: KpiCard(label: 'Voided lines', value: '${(s['summary'] as Json)['voids']}', caption: rupees((s['summary'] as Json)['voidsPaise'] as int), icon: Icons.remove_circle_outline)),
-          for (final m in ((s['summary'] as Json)['paymentsByMode'] as Json).entries) SizedBox(width: 160, child: KpiCard(label: m.key.toUpperCase(), value: rupees(m.value as int), icon: Icons.account_balance_wallet_outlined)),
+        KpiGrid(minTileWidth: 150, maxColumns: 6, children: [
+          KpiCard(key: const Key('sales-total'), label: 'Sales (paid)', value: rupees((s['summary'] as Json)['salesPaise'] as int), caption: '${(s['summary'] as Json)['paidBills']} bills', icon: Icons.payments_outlined),
+          KpiCard(label: 'Discounts', value: rupees((s['summary'] as Json)['discountsPaise'] as int), icon: Icons.local_offer_outlined),
+          KpiCard(label: 'Refunds & corrections', value: rupees(((s['summary'] as Json)['refundsPaise'] as int).abs()), icon: Icons.undo_rounded),
+          KpiCard(label: 'Voided lines', value: '${(s['summary'] as Json)['voids']}', caption: rupees((s['summary'] as Json)['voidsPaise'] as int), icon: Icons.remove_circle_outline),
+          for (final m in ((s['summary'] as Json)['paymentsByMode'] as Json).entries) KpiCard(label: m.key.toUpperCase(), value: rupees(m.value as int), icon: Icons.account_balance_wallet_outlined),
         ]),
         const SizedBox(height: HPSpace.lg),
         SectionCard(

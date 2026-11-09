@@ -19,15 +19,18 @@ class PosApp extends ConsumerWidget {
     final brand = ref.watch(posLookProvider).valueOrNull?.brand;
     HPBrand.activate(brand);
     return MaterialApp(
-      title: 'House Plating POS',
+      title: 'BhojMitra',
       debugShowCheckedModeBanner: false,
       theme: HPTheme.service(brightness: Brightness.light, brand: brand),
       darkTheme: HPTheme.service(brand: brand),
       themeMode: ref.watch(themeModeProvider), // white (Light) by default; Auto or Dark can be chosen in More
       builder: (context, child) {
-        final page = PullToRefresh(child: child ?? const SizedBox.shrink());
+        // touching anywhere outside a text field closes the on-screen keyboard (Android / iOS keep it open otherwise)
+        final page = DismissKeyboardOnTapOutside(child: PullToRefresh(child: child ?? const SizedBox.shrink()));
         if (brand == null || brand.textScale == 1) return page;
-        return MediaQuery(data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(brand.textScale)), child: page);
+        // the brand's size multiplies the person's accessibility setting; it never replaces it
+        final system = MediaQuery.textScalerOf(context).scale(100) / 100;
+        return MediaQuery(data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(system * brand.textScale)), child: page);
       },
       home: AnimatedSwitcher(
         duration: const Duration(milliseconds: 220),

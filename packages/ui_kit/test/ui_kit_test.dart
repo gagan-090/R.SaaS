@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
@@ -13,6 +14,56 @@ Widget hostTheme(Widget child, ThemeData theme) => MaterialApp(theme: theme, hom
 
 void main() {
   setUpAll(() => HPType.useGoogleFonts = false);
+
+  testWidgets('a finger tap anywhere outside the text field closes the keyboard (button, list row, empty space)', (t) async {
+    var pressed = 0;
+    final focus = FocusNode();
+    addTearDown(focus.dispose);
+    await t.pumpWidget(MaterialApp(
+      builder: (c, child) => DismissKeyboardOnTapOutside(child: child!),
+      home: Scaffold(
+        body: Column(children: [
+          TextField(key: const Key('field'), focusNode: focus),
+          ElevatedButton(key: const Key('button'), onPressed: () => pressed++, child: const Text('Save')),
+          SizedBox(height: 200, child: ListView(children: [for (var i = 0; i < 20; i++) ListTile(key: Key('row-$i'), title: Text('Row $i'), onTap: () {})])),
+          const Expanded(child: SizedBox.expand(key: Key('empty'))),
+        ]),
+      ),
+    ));
+    for (final target in ['button', 'row-1', 'empty']) {
+      await t.tap(find.byKey(const Key('field')));
+      await t.pump();
+      expect(focus.hasFocus, isTrue);
+      await t.tap(find.byKey(Key(target)), kind: PointerDeviceKind.touch);
+      await t.pump();
+      expect(focus.hasFocus, isFalse, reason: 'touching $target closes the keyboard');
+    }
+    expect(pressed, 1, reason: 'the button still does its job');
+    // tapping inside the field keeps it open
+    await t.tap(find.byKey(const Key('field')));
+    await t.pump();
+    await t.tap(find.byKey(const Key('field')), kind: PointerDeviceKind.touch);
+    await t.pump();
+    expect(focus.hasFocus, isTrue);
+  });
+
+  testWidgets('KpiGrid fits four KPIs in a row on a portrait tablet and never leaves a 3 + 1 orphan', (t) async {
+    Future<Set<double>> rowsAt(double w) async {
+      await t.pumpWidget(host(SizedBox(
+          width: w,
+          child: KpiGrid(children: [
+            for (final l in ['Plans on sale', 'Restaurants on a plan', 'Monthly revenue', 'Most popular'])
+              KpiCard(key: Key(l), label: l, value: '₹13,996', caption: 'Yearly plans counted per month', icon: Icons.star),
+          ])), dark: false));
+      expect(t.takeException(), isNull);
+      return {for (final l in ['Plans on sale', 'Restaurants on a plan', 'Monthly revenue', 'Most popular']) t.getTopLeft(find.byKey(Key(l))).dy};
+    }
+    expect((await rowsAt(1100)).length, 1); // landscape tablet / desktop: one row
+    expect((await rowsAt(620)).length, 1); // portrait tablet: still one row of four
+    expect((await rowsAt(500)).length, 2); // would fit 3 → 2 + 2, not 3 + 1
+    expect((await rowsAt(328)).length, 2); // phone portrait: 2 + 2
+    expect((await rowsAt(200)).length, 4); // very narrow: stacked
+  });
 
   testWidgets('primary button fires and disables while busy', (t) async {
     var taps = 0;

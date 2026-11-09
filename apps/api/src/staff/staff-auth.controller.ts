@@ -90,7 +90,8 @@ export class StaffAuthController {
 
   private async findToken(token: string) {
     const row = await this.db.platform((tx) => tx.pinToken.findUnique({ where: { tokenHash: sha256(token) }, include: { user: { include: { tenant: true } } } }));
-    if (!row || row.usedAt || row.expiresAt < new Date()) throw badRequest('invalid_link', 'This link has expired or was already used. Ask the owner for a new one.');
+    // PIN links only: owner password-reset links share the table but never set a PIN
+    if (!row || !['invite', 'reset'].includes(row.purpose) || row.usedAt || row.expiresAt < new Date()) throw badRequest('invalid_link', 'This link has expired or was already used. Ask the owner for a new one.');
     if (row.user.status !== 'active') throw badRequest('inactive_account', 'Your account is turned off. Ask the owner.');
     return row;
   }

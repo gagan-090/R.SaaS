@@ -14,6 +14,7 @@ import { LicenseService } from './licensing/license.service';
 import { mailerProvider } from './mail/mail.service';
 import { PlatformController } from './platform/platform.controller';
 import { PlansController } from './restaurants/plans.controller';
+import { OwnerPasswordLinkController, OwnerSupportController } from './restaurants/owner-support.controller';
 import { RestaurantsController } from './restaurants/restaurants.controller';
 import { SyncController } from './sync/sync.controller';
 import { SyncService } from './sync/sync.service';
@@ -33,7 +34,7 @@ import { ColdStorage } from './storage/cold-storage';
 
 @Module({
   imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: loadEnv().API_RATE_LIMIT_PER_MIN }])],
-  controllers: [HealthController, AuthController, PlatformController, RestaurantsController, PlansController, TenantController, ConsoleController, StaffController, StaffAuthController, MenuController, LayoutController, InventoryController, ExpensesController, ImportsController, RecordsController, SyncController],
+  controllers: [HealthController, AuthController, PlatformController, RestaurantsController, OwnerSupportController, OwnerPasswordLinkController, PlansController, TenantController, ConsoleController, StaffController, StaffAuthController, MenuController, LayoutController, InventoryController, ExpensesController, ImportsController, RecordsController, SyncController],
   providers: [
     DbService, TokensService, AuthService, AuditService, LicenseService, SyncService, InventoryService, ColdStorage, mailerProvider,
     // Order matters: rate limit → authenticate → authorise → plan/license gate.

@@ -93,9 +93,9 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
       subtitle: 'Rent, utilities, repairs and other spending',
       actions: [if (_canWrite) PrimaryButton(key: const Key('add-expense'), label: 'Add expense', icon: Icons.add_rounded, height: 48, onPressed: _add)],
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Wrap(spacing: HPSpace.md, runSpacing: HPSpace.md, children: [
-          SizedBox(width: 240, child: KpiCard(key: const Key('expense-total'), label: 'Total', value: rupees(_data!['totalPaise'] as int), icon: Icons.payments_outlined)),
-          for (final c in (_data!['byCategory'] as List).cast<Json>()) SizedBox(width: 200, child: KpiCard(label: '${c['category']}', value: rupees(c['amountPaise'] as int), icon: Icons.category_outlined)),
+        KpiGrid(minTileWidth: 150, maxColumns: 6, children: [
+          KpiCard(key: const Key('expense-total'), label: 'Total', value: rupees(_data!['totalPaise'] as int), icon: Icons.payments_outlined),
+          for (final c in (_data!['byCategory'] as List).cast<Json>()) KpiCard(label: '${c['category']}', value: rupees(c['amountPaise'] as int), icon: Icons.category_outlined),
         ]),
         Align(
           alignment: Alignment.centerLeft,

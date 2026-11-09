@@ -161,14 +161,13 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(HPSpace.x2),
+            padding: EdgeInsets.all(context.gutter),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 520),
               child: AutofillGroup(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  Row(children: [
+                  Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, spacing: HPSpace.md, runSpacing: HPSpace.sm, children: [
                     const _Brand(),
-                    const Spacer(),
                     ThemeModeSwitch(compact: true, value: ref.watch(themeModeProvider), onChanged: ref.read(themeModeProvider.notifier).set),
                   ]),
                   const SizedBox(height: HPSpace.x2),
@@ -216,7 +215,7 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
 
   Widget _hubForm(HPPalette p) => Card(
         child: Padding(
-          padding: const EdgeInsets.all(HPSpace.x2),
+          padding: EdgeInsets.all(context.isNarrow ? HPSpace.lg : HPSpace.x2),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Text('This device runs the restaurant', style: HPType.titleCard(p.text)),
             const SizedBox(height: 4),
@@ -279,7 +278,7 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
 
   Widget _pairForm(HPPalette p) => Card(
         child: Padding(
-          padding: const EdgeInsets.all(HPSpace.x2),
+          padding: EdgeInsets.all(context.isNarrow ? HPSpace.lg : HPSpace.x2),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Text('Join the restaurant\'s hub', style: HPType.titleCard(p.text)),
             const SizedBox(height: 4),
@@ -295,7 +294,7 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
               child: !_manual
                   ? const SizedBox(width: double.infinity)
                   : Column(children: [
-                      Row(children: [
+                      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Expanded(flex: 3, child: TextField(controller: _ip, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'Hub IP'))),
                         const SizedBox(width: HPSpace.sm),
                         Expanded(flex: 2, child: TextField(controller: _port, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Port'))),
@@ -373,10 +372,10 @@ class _HubStatusScreenState extends ConsumerState<HubStatusScreen> {
                         Container(
                           padding: const EdgeInsets.all(HPSpace.md),
                           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(HPRadius.card)),
-                          child: QrImageView(data: pairing.encode(), size: 200),
+                          child: QrImageView(data: pairing.encode(), size: MediaQuery.sizeOf(context).width < 360 ? 160 : 200),
                         ),
                         const SizedBox(height: HPSpace.lg),
-                        Text(pairing.code.split('').join(' '), style: HPType.displayTotal(p.text).copyWith(fontSize: 36, letterSpacing: 4)),
+                        FittedBox(fit: BoxFit.scaleDown, child: Text(pairing.code.split('').join(' '), style: HPType.displayTotal(p.text).copyWith(fontSize: 36, letterSpacing: 4))),
                         Text('${pairing.host}:${pairing.port}', style: HPType.mono(p.muted)),
                         const SizedBox(height: HPSpace.md),
                         Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, alignment: WrapAlignment.center, children: [
@@ -626,7 +625,7 @@ class _StaffLoginScreenState extends ConsumerState<StaffLoginScreen> with Single
         Wrap(spacing: HPSpace.md, runSpacing: HPSpace.md, alignment: WrapAlignment.center, children: [
           for (final u in staff)
             SizedBox(
-              width: narrow ? 100 : 140,
+              width: MediaQuery.sizeOf(context).width < 360 ? 88 : (narrow ? 100 : 140),
               child: Material(
                 color: p.surface,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(HPRadius.card), side: BorderSide(color: p.line)),
@@ -639,8 +638,8 @@ class _StaffLoginScreenState extends ConsumerState<StaffLoginScreen> with Single
                     child: Column(children: [
                       _Avatar(name: '${u['name']}', role: (u['roles'] as List).isEmpty ? null : '${(u['roles'] as List).first}', radius: narrow ? 22 : 28),
                       const SizedBox(height: HPSpace.sm),
-                      Text('${u['name']}'.split(' (').first, style: HPType.label(p.text), overflow: TextOverflow.ellipsis),
-                      Text(roleLabel(u['roles'] as List), style: HPType.body(p.muted).copyWith(fontSize: 12), overflow: TextOverflow.ellipsis),
+                      Text('${u['name']}'.split(' (').first, style: HPType.label(p.text), overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
+                      Text(roleLabel(u['roles'] as List), style: HPType.body(p.muted).copyWith(fontSize: 12), overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
                       if (u['hasPin'] == false) Text('No PIN yet', style: HPType.body(p.danger).copyWith(fontSize: 12, fontWeight: FontWeight.w700)),
                     ]),
                   ),
@@ -656,10 +655,12 @@ class _StaffLoginScreenState extends ConsumerState<StaffLoginScreen> with Single
       key: const ValueKey('pin'),
       width: 340,
       child: Column(children: [
-        _Avatar(name: name, role: (_user!['roles'] as List).isEmpty ? null : '${(_user!['roles'] as List).first}', radius: 34),
-        const SizedBox(height: HPSpace.md),
-        Text('Hello, $name', style: HPType.titleScreen(p.text).copyWith(fontSize: 26), textAlign: TextAlign.center),
-        const SizedBox(height: HPSpace.lg),
+        if (!context.isShort) ...[
+          _Avatar(name: name, role: (_user!['roles'] as List).isEmpty ? null : '${(_user!['roles'] as List).first}', radius: 34),
+          const SizedBox(height: HPSpace.md),
+        ],
+        Text('Hello, $name', style: HPType.titleScreen(p.text).copyWith(fontSize: 26), textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
+        SizedBox(height: context.isShort ? HPSpace.sm : HPSpace.lg),
         AnimatedBuilder(
           animation: _shake,
           builder: (c, child) => Transform.translate(offset: Offset(math.sin(_shake.value * math.pi * 6) * 10 * (1 - _shake.value), 0), child: child),
@@ -682,7 +683,7 @@ class _StaffLoginScreenState extends ConsumerState<StaffLoginScreen> with Single
             ],
           ),
         ),
-        SizedBox(height: 32, child: Center(child: _error == null ? null : Text(_error!, style: HPType.body(p.danger)))),
+        ConstrainedBox(constraints: const BoxConstraints(minHeight: 32), child: Center(child: _error == null ? null : Text(_error!, style: HPType.body(p.danger), textAlign: TextAlign.center))),
         NumericKeypad(onKey: _key, onBackspace: () => setState(() => _pin = _pin.isEmpty ? '' : _pin.substring(0, _pin.length - 1)), onClear: () => setState(() => _pin = '')),
         const SizedBox(height: HPSpace.lg),
         PrimaryButton(label: 'Sign in', busy: _busy, onPressed: _pin.length >= 4 ? _submit : null),

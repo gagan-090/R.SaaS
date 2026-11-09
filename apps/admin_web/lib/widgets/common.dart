@@ -24,6 +24,135 @@ void showDone(BuildContext context, String msg) => ScaffoldMessenger.of(context)
 /// Narrow = phone browser: one column, drawer navigation, 16 px gutters.
 bool isNarrowWeb(BuildContext c) => MediaQuery.sizeOf(c).width < 900;
 
+/// Short = little height to spare (a phone in landscape, a small split-screen window): pages must scroll as one
+/// piece instead of pinning headers and filters above a list that would be left with no room.
+bool isShortScreen(BuildContext c) => MediaQuery.sizeOf(c).height < 600;
+
+/// Phone-style layout: narrow OR short. One scrolling column, tabs instead of side-by-side panels.
+bool compactLayout(BuildContext c) => isNarrowWeb(c) || isShortScreen(c);
+
+/// "✓ Tables, ✓ Dine-in orders, ✓ Takeaway" — a feature list that wraps like a sentence instead of one per line.
+class InlineChecks extends StatelessWidget {
+  const InlineChecks(this.labels, {super.key, this.fontSize = 13});
+  final List<String> labels;
+  final double fontSize;
+  @override
+  Widget build(BuildContext context) {
+    final p = context.hp;
+    return Text.rich(
+      TextSpan(
+        children: [
+          for (var i = 0; i < labels.length; i++) ...[
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 3),
+                child: Icon(Icons.check_rounded, size: fontSize + 2, color: p.success),
+              ),
+            ),
+            TextSpan(text: labels[i]),
+            if (i < labels.length - 1) const TextSpan(text: ',  '),
+          ],
+        ],
+      ),
+      style: HPType.body(p.text).copyWith(fontSize: fontSize, height: 1.6),
+    );
+  }
+}
+
+/// Tabs for phone layouts: a row of choice chips that scrolls sideways; the page shows the selected section below.
+class ChipTabs<T> extends StatelessWidget {
+  const ChipTabs({super.key, required this.tabs, required this.value, required this.onChanged});
+  final List<(T, String, IconData)> tabs;
+  final T value;
+  final ValueChanged<T> onChanged;
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: Row(
+      children: [
+        for (final (v, label, icon) in tabs)
+          Padding(
+            padding: const EdgeInsets.only(right: HPSpace.xs),
+            child: Builder(
+              builder: (chipContext) => ChoiceChip(
+                key: Key('tab-$label'),
+                avatar: Icon(icon, size: 16),
+                label: Text(label),
+                selected: v == value,
+                showCheckmark: false,
+                onSelected: (_) {
+                  onChanged(v);
+                  // a tab half off either edge slides just far enough to be fully in view
+                  Scrollable.ensureVisible(chipContext, alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd, duration: const Duration(milliseconds: 150));
+                  Scrollable.ensureVisible(chipContext, alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart, duration: const Duration(milliseconds: 150));
+                },
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+/// Collapsible panels where opening one closes the others (tablet / phone dashboards).
+class OneOpenAccordion extends StatefulWidget {
+  const OneOpenAccordion({super.key, required this.panels, this.initiallyOpen = 0});
+  final List<(String title, IconData icon, Widget body)> panels;
+  final int? initiallyOpen;
+  @override
+  State<OneOpenAccordion> createState() => _OneOpenAccordionState();
+}
+
+class _OneOpenAccordionState extends State<OneOpenAccordion> {
+  late int? _open = widget.initiallyOpen;
+  @override
+  Widget build(BuildContext context) {
+    final p = context.hp;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < widget.panels.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: HPSpace.sm),
+            child: Card(
+              key: Key('panel-${widget.panels[i].$1}'),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ListTile(
+                    key: Key('panel-toggle-${widget.panels[i].$1}'),
+                    leading: Icon(widget.panels[i].$2, color: _open == i ? p.accentInk : p.muted),
+                    title: Text(widget.panels[i].$1.toUpperCase(), style: HPType.overline(_open == i ? p.text : p.muted)),
+                    trailing: Icon(_open == i ? Icons.expand_less_rounded : Icons.expand_more_rounded),
+                    // tapping the open panel keeps it open; it closes only when another panel is opened
+                    onTap: _open == i ? null : () => setState(() => _open = i),
+                  ),
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOut,
+                    alignment: Alignment.topCenter,
+                    child: _open == i ? Padding(padding: const EdgeInsets.fromLTRB(HPSpace.lg, 0, HPSpace.lg, HPSpace.lg), child: widget.panels[i].$3) : const SizedBox(width: double.infinity),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// The title the phone app bar is showing, so a page under it does not repeat it as a heading.
+class AppBarTitle extends InheritedWidget {
+  const AppBarTitle({super.key, required this.title, required super.child});
+  final String title;
+  static String? of(BuildContext c) => c.dependOnInheritedWidgetOfExactType<AppBarTitle>()?.title;
+  @override
+  bool updateShouldNotify(AppBarTitle old) => old.title != title;
+}
+
 /// Page frame used by every console screen: Fraunces title, subtitle, actions, responsive padding, scrolling body.
 class PageFrame extends StatelessWidget {
   const PageFrame({super.key, required this.title, this.subtitle, this.actions = const [], required this.child, this.scroll = true, this.maxWidth = 1240});
@@ -36,21 +165,51 @@ class PageFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final narrow = isNarrowWeb(context);
-    final pad = narrow ? HPSpace.lg : HPSpace.x4;
-    final header = Wrap(
-      alignment: WrapAlignment.spaceBetween,
-      crossAxisAlignment: WrapCrossAlignment.end,
-      runSpacing: HPSpace.md,
-      spacing: HPSpace.lg,
-      children: [
-        Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-          Text(HPType.heading(title), style: HPType.titleScreen(context.hp.text).copyWith(fontSize: narrow ? 28 : 36)),
-          if (subtitle != null) ...[const SizedBox(height: 4), Text(subtitle!, style: HPType.body(context.hp.muted).copyWith(fontSize: 15))],
-        ]),
-        if (actions.isNotEmpty) Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, children: actions),
+    // short = phone in landscape: the app bar already names the page, so the heading shrinks and padding tightens
+    final short = isShortScreen(context);
+    final pad = short ? HPSpace.md : (narrow ? HPSpace.lg : HPSpace.x4);
+    // the phone app bar already names the page: no second "Dashboard" heading under it
+    final showTitle = !(narrow && AppBarTitle.of(context) == title);
+    final titleBlock = Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          if (showTitle) Text(HPType.heading(title), style: HPType.titleScreen(context.hp.text).copyWith(fontSize: short ? 22 : (narrow ? 28 : 36))),
+          if (subtitle != null) ...[if (showTitle) const SizedBox(height: 4), Text(subtitle!, style: HPType.body(context.hp.muted).copyWith(fontSize: short ? 13 : 15))],
+        ]);
+    final noHeading = !showTitle && subtitle == null;
+    // title and actions share a row whenever there is room (tablets, landscape phones); stacked only on narrow phones
+    final header = LayoutBuilder(
+      builder: (c, box) {
+        if (actions.isEmpty) return titleBlock;
+        final actionsWrap = Wrap(alignment: WrapAlignment.end, spacing: HPSpace.sm, runSpacing: HPSpace.sm, children: actions);
+        // no heading left to show: the actions sit alone at the top right
+        if (noHeading) return Align(alignment: Alignment.centerRight, child: actionsWrap);
+        if (box.maxWidth < 560 && showTitle) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              titleBlock,
+              const SizedBox(height: HPSpace.md),
+              actionsWrap,
       ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(child: titleBlock),
+            const SizedBox(width: HPSpace.lg),
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: box.maxWidth * .55),
+              child: actionsWrap,
+            ),
+          ],
+        );
+      },
     );
-    final body = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [header, SizedBox(height: narrow ? HPSpace.lg : HPSpace.x2), if (scroll) child else Expanded(child: child)]);
+    final headerGap = (noHeading || !showTitle) ? HPSpace.md : (short ? HPSpace.md : (narrow ? HPSpace.lg : HPSpace.x2));
+    final body = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      if (!(noHeading && actions.isEmpty)) ...[header, SizedBox(height: headerGap)],
+      if (scroll) child else Expanded(child: child),
+    ]);
     return Align(
       alignment: Alignment.topCenter,
       child: ConstrainedBox(
@@ -159,10 +318,16 @@ class SectionCard extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(HPSpace.x2),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Expanded(child: Text(title.toUpperCase(), style: HPType.overline(context.hp.muted))),
-              ...actions,
-            ]),
+          // title and its actions share a line when they fit, otherwise the actions wrap underneath
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: HPSpace.sm,
+            children: [
+              Text(title.toUpperCase(), style: HPType.overline(context.hp.muted)),
+              if (actions.isNotEmpty) Wrap(spacing: HPSpace.xs, children: actions),
+            ],
+          ),
             const SizedBox(height: HPSpace.lg),
             child,
           ]),

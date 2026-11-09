@@ -41,7 +41,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final s = ref.read(authProvider);
       final loc = state.matchedLocation;
-      if (loc == '/verify-email' || loc == '/set-pin') return null; // emailed links work whether or not someone is signed in
+      if (loc == '/verify-email' || loc == '/set-pin' || loc == '/reset-password') return null; // emailed links work whether or not someone is signed in
       return switch (s) {
         RestoringSession() => null, // preserve current matched route during session restoration
         SignedOut() => loc == '/login' ? null : '/login',
@@ -56,6 +56,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/mfa', builder: (_, _) => const MfaScreen()),
       GoRoute(path: '/verify-email', builder: (_, s) => VerifyEmailScreen(token: s.uri.queryParameters['token'])),
       GoRoute(path: '/set-pin', builder: (_, s) => SetPinScreen(token: s.uri.queryParameters['token'])),
+      GoRoute(path: '/reset-password', builder: (_, s) => ResetPasswordScreen(token: s.uri.queryParameters['token'])),
       ShellRoute(
         builder: (c, s, child) => ConsoleShell(location: s.matchedLocation, query: s.uri.queryParameters, nav: platformNav, brand: 'Platform', child: child),
         routes: [
@@ -95,13 +96,18 @@ class AdminApp extends ConsumerWidget {
     HPBrand.activate(brand);
     final authState = ref.watch(authProvider);
     return MaterialApp.router(
-      title: 'House Plating',
+      title: 'BhojMitra Admin',
       debugShowCheckedModeBanner: false,
       theme: HPTheme.backOffice(brand: brand),
       darkTheme: HPTheme.backOffice(brightness: Brightness.dark, brand: brand),
       themeMode: ref.watch(themeModeProvider), // white (Light) by default; Auto follows the device; Dark if chosen
       routerConfig: ref.watch(routerProvider),
-      builder: (c, child) {
+      // touching anywhere outside a text field closes the on-screen keyboard (Android / iOS keep it open otherwise)
+      builder: (c, child) => DismissKeyboardOnTapOutside(child: _appBody(c, child, authState, brand)),
+    );
+  }
+
+  Widget _appBody(BuildContext c, Widget? child, AuthState authState, HPBrand? brand) {
         if (authState is RestoringSession) {
           return const Scaffold(
             body: Center(
@@ -116,8 +122,6 @@ class AdminApp extends ConsumerWidget {
         return brand == null || brand.textScale == 1
             ? child!
             : MediaQuery(data: MediaQuery.of(c).copyWith(textScaler: TextScaler.linear(brand.textScale)), child: child!);
-      },
-    );
   }
 }
 
@@ -170,13 +174,16 @@ class ConsoleShell extends ConsumerWidget {
     final look = ref.watch(restaurantLookProvider).valueOrNull;
     final logoId = look?.brand?.logoImageId;
     Widget sidebar({required bool inDrawer}) => SizedBox(
+        key: const Key('sidebar'),
         width: inDrawer ? null : 248,
         child: Material(
           color: p.sidebar,
           shape: inDrawer || p.isDark ? null : Border(right: BorderSide(color: p.line)),
           child: SafeArea(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Padding(
+            // tall: menu list between a fixed header and footer; short (phone in landscape): the whole sidebar
+            // scrolls as one list instead of squeezing the menu to nothing
+            child: LayoutBuilder(builder: (c, box) {
+              final header = <Widget>[Padding(
                 padding: const EdgeInsets.fromLTRB(HPSpace.x2, HPSpace.x2, HPSpace.x2, HPSpace.x3),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   if (logoId != null) ...[
@@ -193,9 +200,8 @@ class ConsoleShell extends ConsumerWidget {
                   const SizedBox(height: HPSpace.sm),
                   Text('$brand console'.toUpperCase(), style: HPType.overline(_onSidebar(p).withValues(alpha: .65)).copyWith(fontSize: 10)),
                 ]),
-              ),
-              Expanded(
-                child: ListView(children: [
+              )];
+              final nav = <Widget>[
                   for (var i = 0; i < items.length; i++)
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: HPSpace.md, vertical: 2),
@@ -220,8 +226,8 @@ class ConsoleShell extends ConsumerWidget {
                               },
                             ),
                     ),
-                ]),
-              ),
+              ];
+              final footer = <Widget>[
               Padding(
                 padding: const EdgeInsets.fromLTRB(HPSpace.md, 0, HPSpace.md, HPSpace.sm),
                 child: _NavTile(
@@ -271,7 +277,11 @@ class ConsoleShell extends ConsumerWidget {
                     ),
                   ]),
                 ),
-            ]),
+              ];
+              return box.maxHeight >= 560
+                  ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [...header, Expanded(child: ListView(children: nav)), ...footer])
+                  : ListView(children: [...header, ...nav, const SizedBox(height: HPSpace.lg), ...footer]);
+            }),
           ),
         ),
       );
@@ -279,11 +289,12 @@ class ConsoleShell extends ConsumerWidget {
     if (narrow) {
       return Scaffold(
         appBar: AppBar(
-          title: Text(idx >= 0 ? items[idx].$2 : 'House Plating'),
+          title: Text(idx >= 0 ? items[idx].$2 : 'BhojMitra Admin'),
           leading: Builder(builder: (c) => IconButton(key: const Key('open-nav'), tooltip: 'Menu', icon: const Icon(Icons.menu_rounded), onPressed: () => Scaffold.of(c).openDrawer())),
         ),
         drawer: Drawer(backgroundColor: p.sidebar, child: sidebar(inDrawer: true)),
-        body: SafeArea(top: false, child: child),
+        // pages skip their own heading when it would repeat the app bar title (Dashboard / Dashboard)
+        body: SafeArea(top: false, child: AppBarTitle(title: idx >= 0 ? items[idx].$2 : 'BhojMitra Admin', child: child)),
       );
     }
     return Scaffold(body: Row(children: [sidebar(inDrawer: false), Expanded(child: child)]));

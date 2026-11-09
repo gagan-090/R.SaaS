@@ -4,14 +4,19 @@ import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 
 import '../hub/hub_api.dart';
 import '../state/app_state.dart';
+import 'responsive.dart';
 
-/// Phones and small tablets get single-column layouts below this width.
-const narrowBreakpoint = 720.0;
-bool isNarrow(BuildContext c) => MediaQuery.sizeOf(c).width < narrowBreakpoint;
+export 'responsive.dart';
+
+/// Phones and small tablets get single-column layouts below this width (see [Breakpoints]).
+const narrowBreakpoint = Breakpoints.twoPane;
+bool isNarrow(BuildContext c) => c.isNarrow;
 
 /// Short message at the bottom. A new message replaces the current one, so staff never read a stale toast.
 void toast(BuildContext c, String msg, {bool error = false}) {
   final p = c.hp;
+  final size = MediaQuery.sizeOf(c);
+  final landscapePhone = size.width < narrowBreakpoint && size.width > size.height && size.height < Breakpoints.shortHeight;
   ScaffoldMessenger.of(c)
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(
@@ -22,8 +27,11 @@ void toast(BuildContext c, String msg, {bool error = false}) {
       ]),
       backgroundColor: error ? p.danger : null,
       duration: Duration(seconds: error ? 4 : 2),
-      // tablets / PCs: a compact pill in the middle, clear of the order panel's buttons on the right
-      width: MediaQuery.sizeOf(c).width >= narrowBreakpoint ? 420 : null,
+      // tablets / PCs: a compact pill in the middle, clear of the order panel's buttons on the right;
+      // phones in landscape (order panel on the right too): float over the menu side only
+      behavior: landscapePhone ? SnackBarBehavior.floating : null,
+      width: size.width >= narrowBreakpoint ? 420 : null,
+      margin: landscapePhone ? EdgeInsets.fromLTRB(HPSpace.lg, 0, sidePanelWidth(size.width, min: 260) + HPSpace.lg, HPSpace.sm) : null,
     ));
 }
 

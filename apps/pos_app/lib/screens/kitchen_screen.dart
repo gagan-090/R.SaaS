@@ -59,7 +59,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
     if (s == null) return const SizedBox.shrink();
     ref.watch(hubTickProvider);
     final canUpdate = s.can('kds.update');
-    final wide = MediaQuery.sizeOf(context).width >= 900;
+    final wide = MediaQuery.sizeOf(context).width >= Breakpoints.threePane;
     final p = context.hp;
     return Scaffold(
       body: Column(children: [
@@ -78,8 +78,11 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
               Widget card(Json t) => _TicketCard(key: Key('ticket-${t['kotNo']}'), ticket: t, canUpdate: canUpdate, busy: _busy.contains(t['id']), onMove: (st) => _move(api, t, st));
               const columns = [('new', 'New'), ('preparing', 'Preparing'), ('ready', 'Ready to serve')];
               if (wide) {
-                return Padding(
-                  padding: const EdgeInsets.all(HPSpace.lg),
+                // a board readable from 2 m; on ultrawide monitors the columns stop growing and the board centres
+                return CenteredContent(
+                  maxWidth: ContentWidth.board,
+                  child: Padding(
+                  padding: EdgeInsets.all(context.isShort ? HPSpace.sm : HPSpace.lg),
                   child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     for (final (st, label) in columns) ...[
                       Expanded(
@@ -95,7 +98,7 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
                       if (st != 'ready') const SizedBox(width: HPSpace.lg),
                     ],
                   ]),
-                );
+                ));
               }
               final shown = tickets.where((t) => _filter == 'all' || t['status'] == _filter).toList();
               return Column(children: [
@@ -154,8 +157,8 @@ class _TicketCard extends StatelessWidget {
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('${ticket['where']}', style: HPType.titleCard(p.text).copyWith(fontSize: 26)),
-                  Text('KOT #${ticket['kotNo']} · ${ticket['waiter'] ?? 'No waiter'}', style: HPType.body(p.muted)),
+                  Text('${ticket['where']}', style: HPType.titleCard(p.text).copyWith(fontSize: 26), maxLines: 2, overflow: TextOverflow.ellipsis),
+                  Text('KOT #${ticket['kotNo']} · ${ticket['waiter'] ?? 'No waiter'}', style: HPType.body(p.muted), maxLines: 2, overflow: TextOverflow.ellipsis),
                 ]),
               ),
               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [

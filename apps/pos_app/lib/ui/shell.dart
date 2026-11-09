@@ -181,7 +181,11 @@ class _PosShellState extends ConsumerState<PosShell> {
     }
 
     final body = IndexedStack(index: i, children: [for (final d in dest) KeyedSubtree(key: ValueKey('${d.$1}-${_visits[d.$1] ?? 0}'), child: d.$5)]);
-    if (isNarrow(context)) {
+    // phones in portrait: bottom bar. A phone in landscape is short, so it gets the side rail instead and keeps
+    // its little height for the content
+    final screen = MediaQuery.sizeOf(context);
+    final landscapePhone = screen.width > screen.height && screen.height < Breakpoints.shortHeight;
+    if (isNarrow(context) && !landscapePhone) {
       return Scaffold(
         body: body,
         bottomNavigationBar: NavigationBar(
@@ -191,34 +195,49 @@ class _PosShellState extends ConsumerState<PosShell> {
         ),
       );
     }
-    return Scaffold(
-      body: Row(children: [
-        NavigationRail(
-          selectedIndex: i,
-          onDestinationSelected: (v) => _select(dest, v),
-          labelType: NavigationRailLabelType.all,
-          minWidth: 88,
-          leading: Padding(
-            padding: const EdgeInsets.symmetric(vertical: HPSpace.lg),
-            child: BrandLogo(
-              height: 44,
-              maxWidth: 72,
-              fallback: Container(
-                width: 44,
+    // tablets / PCs: a rail; wide desktops: a labelled sidebar. Short windows (phones in landscape) scroll the rail
+    // and drop the logo so every destination stays reachable.
+    final size = MediaQuery.sizeOf(context);
+    final extended = size.width >= Breakpoints.sidebar;
+    final short = size.height < Breakpoints.shortHeight;
+    final rail = NavigationRail(
+      selectedIndex: i,
+      onDestinationSelected: (v) => _select(dest, v),
+      extended: extended,
+      labelType: extended ? NavigationRailLabelType.none : (short ? NavigationRailLabelType.selected : NavigationRailLabelType.all),
+      minWidth: short ? 72 : 88,
+      minExtendedWidth: 220,
+      groupAlignment: -1,
+      leading: short
+          ? null
+          : Padding(
+              padding: const EdgeInsets.symmetric(vertical: HPSpace.lg),
+              child: BrandLogo(
                 height: 44,
-                decoration: BoxDecoration(color: HPColors.saffron, shape: BoxShape.circle),
-                child: Icon(Icons.restaurant_rounded, color: HPColors.onSaffron),
+                maxWidth: extended ? 180 : 72,
+                fallback: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(color: HPColors.saffron, shape: BoxShape.circle),
+                  child: Icon(Icons.restaurant_rounded, color: HPColors.onSaffron),
+                ),
               ),
             ),
+      destinations: [
+        for (final d in dest)
+          NavigationRailDestination(
+            icon: KeyedSubtree(key: Key('nav-${d.$1}'), child: icon(d)),
+            selectedIcon: KeyedSubtree(key: Key('nav-${d.$1}'), child: icon(d, selected: true)),
+            label: Text(d.$2),
           ),
-          destinations: [
-            for (final d in dest)
-              NavigationRailDestination(
-                icon: KeyedSubtree(key: Key('nav-${d.$1}'), child: icon(d)),
-                selectedIcon: KeyedSubtree(key: Key('nav-${d.$1}'), child: icon(d, selected: true)),
-                label: Text(d.$2),
-              ),
-          ],
+      ],
+    );
+    return Scaffold(
+      body: Row(children: [
+        LayoutBuilder(
+          builder: (c, box) => SingleChildScrollView(
+            child: ConstrainedBox(constraints: BoxConstraints(minHeight: box.maxHeight), child: IntrinsicHeight(child: rail)),
+          ),
         ),
         VerticalDivider(width: 1, color: context.hp.line),
         Expanded(child: body),

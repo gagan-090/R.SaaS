@@ -58,16 +58,26 @@ void main() {
       }
 
       await go('Restaurants');
-      await t.tap(find.descendant(of: find.byKey(const Key('restaurants-tabs')), matching: find.text('Awaiting verification')));
+      await t.tap(find.descendant(of: find.byKey(const Key('restaurants-tabs')), matching: find.text('Awaiting')));
       await t.pumpAndSettle();
       expect(find.byKey(const Key('registration-A Very Long Restaurant Name That Wraps')), findsOneWidget);
-      await t.tap(find.descendant(of: find.byKey(const Key('restaurants-tabs')), matching: find.text('Restaurants')));
+      await t.ensureVisible(find.byKey(const Key('tab-Restaurants')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const Key('tab-Restaurants')));
       await t.pumpAndSettle();
       final first = (FixtureApi.fixture('GET_restaurants.json')! as Map)['items'][0] as Map;
       await t.tap(find.byKey(Key('row-${first['code']}')));
       await t.pumpAndSettle();
       expect(find.byTooltip('Back to restaurants'), findsOneWidget);
-      await t.scrollUntilVisible(find.text('HISTORY'), 400, scrollable: find.byType(Scrollable).first);
+      // phones: every action sits at the top, the sections are tabs
+      expect(find.byKey(const Key('restaurant-actions')), findsOneWidget);
+      expect(find.text('Suspend'), findsOneWidget);
+      for (final tab in ['Profile', 'Plan & license', 'Owner account', 'Payments', 'Branches & devices', 'History']) {
+        await t.ensureVisible(find.byKey(Key('tab-$tab')));
+        await t.pumpAndSettle();
+        await t.tap(find.byKey(Key('tab-$tab')));
+        await t.pumpAndSettle();
+      }
       expect(find.text('HISTORY'), findsOneWidget);
 
       await go('Plans');

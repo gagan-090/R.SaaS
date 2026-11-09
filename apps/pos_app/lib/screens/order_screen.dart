@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -99,7 +101,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen> {
     final saved = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
-      builder: (s) => Padding(
+      builder: (s) => SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(HPSpace.lg, 0, HPSpace.lg, MediaQuery.viewInsetsOf(s).bottom + HPSpace.lg),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Text('Note for the kitchen · ${line['name_snapshot']}', style: HPType.titleCard(s.hp.text)),
@@ -180,7 +182,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen> {
     final to = await showModalBottomSheet<String>(
       context: context,
       builder: (c) => SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(HPSpace.lg, 0, HPSpace.lg, HPSpace.lg),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Text('Move to which table?', style: HPType.titleCard(c.hp.text)),
@@ -258,16 +260,21 @@ class _OrderScreenState extends ConsumerState<OrderScreen> {
       actions: [if (canTransfer) IconButton(key: const Key('transfer'), tooltip: 'Move to another table', icon: const Icon(Icons.swap_horiz_rounded), onPressed: _transfer)],
     );
 
-    if (!narrow) {
+    // a phone in landscape is wide but short: menu and order side by side, like a tablet, instead of a dish grid
+    // squeezed between the top bar and the cart bar
+    final screen = MediaQuery.sizeOf(context);
+    final landscapePhone = narrow && screen.width > screen.height && context.isShort && screen.width >= 540;
+    if (!narrow || landscapePhone) {
       return Scaffold(
         body: Column(children: [
           top,
           Expanded(
-            child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Expanded(child: _menuPane(session, narrow: false)),
-              VerticalDivider(width: 1, color: context.hp.line),
-              SizedBox(width: 420, child: _orderPanel(context)),
-            ]),
+            child: TwoPane(
+              start: _menuPane(session, narrow: landscapePhone),
+              divider: VerticalDivider(width: 1, color: context.hp.line),
+              endWidth: landscapePhone ? sidePanelWidth(screen.width, min: 260) : sidePanelWidth(screen.width),
+              end: _orderPanel(context),
+            ),
           ),
         ]),
       );
@@ -294,7 +301,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen> {
     final all = (_menu!['items'] as List).cast<Json>();
     final items = _q.isNotEmpty ? all.where((i) => '${i['name']}'.toLowerCase().contains(_q.toLowerCase())).toList() : all.where((i) => i['category_id'] == cat).toList();
     return Padding(
-      padding: EdgeInsets.fromLTRB(narrow ? HPSpace.md : HPSpace.lg, HPSpace.sm, narrow ? HPSpace.md : HPSpace.lg, 0),
+      padding: EdgeInsets.fromLTRB(narrow ? HPSpace.md : HPSpace.lg, context.isShort ? HPSpace.xs : HPSpace.sm, narrow ? HPSpace.md : HPSpace.lg, 0),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         HPSearchField(key: const Key('menu-search'), hint: 'Search ${all.length} dishes', onChanged: (v) => setState(() => _q = v.trim())),
         const SizedBox(height: HPSpace.md),
@@ -313,23 +320,28 @@ class _OrderScreenState extends ConsumerState<OrderScreen> {
         Expanded(
           child: items.isEmpty
               ? EmptyState(title: _q.isEmpty ? 'No dishes in this category' : 'No dish matches "$_q"', icon: Icons.search_off_rounded)
-              : GridView.builder(
-                  padding: const EdgeInsets.only(bottom: HPSpace.lg),
-                  gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: narrow ? 200 : 210,
-                    mainAxisSpacing: narrow ? HPSpace.sm : HPSpace.md,
-                    crossAxisSpacing: narrow ? HPSpace.sm : HPSpace.md,
-                    childAspectRatio: narrow ? .98 : .95,
-                  ),
-                  itemCount: items.length,
-                  itemBuilder: (c, i) => MenuDishCard(
-                    key: Key('dish-${items[i]['name']}'),
-                    item: items[i],
-                    qty: _qtyFor(items[i]['id'] as String),
-                    enabled: editable,
-                    onTap: () => _add(items[i]),
-                  ),
-                ),
+              : LayoutBuilder(builder: (c, box) {
+                  // as many ~200 px tiles as fit; each tile is never shorter than its photo, two-line name and
+                  // price need (tiny cover screens, large system text), so nothing is clipped
+                  final gap = narrow ? HPSpace.sm : HPSpace.md;
+                  final maxW = narrow ? 200.0 : 210.0;
+                  final cols = ((box.maxWidth + gap) / (maxW + gap)).ceil().clamp(1, 12);
+                  final tileW = (box.maxWidth - gap * (cols - 1)) / cols;
+                  final textScale = MediaQuery.textScalerOf(c).scale(1).clamp(1.0, 1.6);
+                  final height = math.max(tileW / (narrow ? .98 : .95), (tileW < 170 ? 142.0 : 168.0) * textScale);
+                  return GridView.builder(
+                    padding: const EdgeInsets.only(bottom: HPSpace.lg),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: cols, mainAxisSpacing: gap, crossAxisSpacing: gap, mainAxisExtent: height),
+                    itemCount: items.length,
+                    itemBuilder: (c, i) => MenuDishCard(
+                      key: Key('dish-${items[i]['name']}'),
+                      item: items[i],
+                      qty: _qtyFor(items[i]['id'] as String),
+                      enabled: editable,
+                      onTap: () => _add(items[i]),
+                    ),
+                  );
+                }),
         ),
       ]),
     );
@@ -352,7 +364,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen> {
 
     return Container(
       color: inSheet ? null : p.surface,
-      padding: EdgeInsets.fromLTRB(HPSpace.lg, inSheet ? 0 : HPSpace.lg, HPSpace.lg, HPSpace.lg),
+      padding: EdgeInsets.fromLTRB(HPSpace.lg, inSheet || context.isShort ? 0 : HPSpace.lg, HPSpace.lg, context.isShort ? HPSpace.sm : HPSpace.lg),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         if (inSheet) Text(o['table_id'] == null ? 'Takeaway' : 'Table ${o['table_name'] ?? ''}', style: HPType.titleScreen(p.text).copyWith(fontSize: 26)),
         if (ready.isNotEmpty)
@@ -376,6 +388,8 @@ class _OrderScreenState extends ConsumerState<OrderScreen> {
             ),
         ]),
         const SizedBox(height: HPSpace.sm),
+        // short windows (phones in landscape): totals scroll with the lines so the list keeps the panel's height;
+        // otherwise the totals stay pinned above the buttons
         Expanded(
           child: ListView(controller: scroll, children: [
             if (sent.isNotEmpty) ...[
@@ -403,23 +417,69 @@ class _OrderScreenState extends ConsumerState<OrderScreen> {
                 ),
             ],
             if (lines.isEmpty) const Padding(padding: EdgeInsets.only(top: HPSpace.x4), child: EmptyState(title: 'Nothing ordered yet', message: 'Tap dishes on the menu to add them.', icon: Icons.restaurant_rounded)),
+            if (context.isShort) ...[
+            Divider(color: p.line),
+            // short windows (phones in landscape): the tax split folds into one line so the list keeps some room
+            if (context.isShort)
+              _TotalRow('Subtotal + GST', (totals['subtotalPaise'] as int) + (totals['cgstPaise'] as int) + (totals['sgstPaise'] as int))
+            else ...[
+              _TotalRow('Subtotal', totals['subtotalPaise'] as int),
+              _TotalRow('CGST', totals['cgstPaise'] as int),
+              _TotalRow('SGST', totals['sgstPaise'] as int),
+            ],
+            if (totals['roundOffPaise'] != 0) _TotalRow('Round-off', totals['roundOffPaise'] as int),
+            Row(children: [
+              Text('To pay', style: HPType.label(p.muted)),
+              const SizedBox(width: HPSpace.md),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  // keep the amount on the right edge (the default layout centres it)
+                  layoutBuilder: (current, previous) => Stack(alignment: Alignment.centerRight, children: [...previous, ?current]),
+                  transitionBuilder: (c, a) => FadeTransition(opacity: a, child: SlideTransition(position: Tween(begin: const Offset(0, .3), end: Offset.zero).animate(a), child: c)),
+                  child: FittedBox(
+                    key: ValueKey(totals['totalPaise']),
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: Text(formatPaise(totals['totalPaise'] as int), style: HPType.displayTotal(p.accentInk).copyWith(fontSize: context.isShort ? 26 : 34)),
+                  ),
+                ),
+              ),
+            ]),
+            ],
           ]),
         ),
-        Divider(color: p.line),
-        _TotalRow('Subtotal', totals['subtotalPaise'] as int),
-        _TotalRow('CGST', totals['cgstPaise'] as int),
-        _TotalRow('SGST', totals['sgstPaise'] as int),
-        if (totals['roundOffPaise'] != 0) _TotalRow('Round-off', totals['roundOffPaise'] as int),
-        Row(children: [
-          Text('To pay', style: HPType.label(p.muted)),
-          const Spacer(),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            transitionBuilder: (c, a) => FadeTransition(opacity: a, child: SlideTransition(position: Tween(begin: const Offset(0, .3), end: Offset.zero).animate(a), child: c)),
-            child: Text(formatPaise(totals['totalPaise'] as int), key: ValueKey(totals['totalPaise']), style: HPType.displayTotal(p.accentInk).copyWith(fontSize: 34)),
-          ),
-        ]),
-        const SizedBox(height: HPSpace.md),
+        if (!context.isShort) ...[
+          Divider(color: p.line),
+          // short windows (phones in landscape): the tax split folds into one line so the list keeps some room
+          if (context.isShort)
+            _TotalRow('Subtotal + GST', (totals['subtotalPaise'] as int) + (totals['cgstPaise'] as int) + (totals['sgstPaise'] as int))
+          else ...[
+            _TotalRow('Subtotal', totals['subtotalPaise'] as int),
+            _TotalRow('CGST', totals['cgstPaise'] as int),
+            _TotalRow('SGST', totals['sgstPaise'] as int),
+          ],
+          if (totals['roundOffPaise'] != 0) _TotalRow('Round-off', totals['roundOffPaise'] as int),
+          Row(children: [
+            Text('To pay', style: HPType.label(p.muted)),
+            const SizedBox(width: HPSpace.md),
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                // keep the amount on the right edge (the default layout centres it)
+                layoutBuilder: (current, previous) => Stack(alignment: Alignment.centerRight, children: [...previous, ?current]),
+                transitionBuilder: (c, a) => FadeTransition(opacity: a, child: SlideTransition(position: Tween(begin: const Offset(0, .3), end: Offset.zero).animate(a), child: c)),
+                child: FittedBox(
+                  key: ValueKey(totals['totalPaise']),
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(formatPaise(totals['totalPaise'] as int), style: HPType.displayTotal(p.accentInk).copyWith(fontSize: context.isShort ? 26 : 34)),
+                ),
+              ),
+            ),
+          ]),
+        ],
+        SizedBox(height: context.isShort ? HPSpace.sm : HPSpace.md),
         Row(children: [
           if (session.can('order.write')) ...[
             Expanded(
@@ -485,7 +545,7 @@ class _CartBar extends StatelessWidget {
                     Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
                         Text(rupees(totalPaise), key: const Key('cart-total'), style: HPType.titleCard(p.text).copyWith(fontSize: 20)),
-                        Text(count == 0 ? 'Order is empty' : 'View order · $count items', style: HPType.body(p.muted).copyWith(fontSize: 12)),
+                        Text(count == 0 ? 'Order is empty' : 'View order · $count items', style: HPType.body(p.muted).copyWith(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
                       ]),
                     ),
                     Icon(Icons.keyboard_arrow_up_rounded, color: p.muted),
@@ -495,7 +555,7 @@ class _CartBar extends StatelessWidget {
             ),
             if (canSend)
               SizedBox(
-                width: 150,
+                width: MediaQuery.sizeOf(context).width < 360 ? 124 : 150,
                 child: PrimaryButton(
                   key: const Key('cart-send-kot'),
                   label: pendingLines == 0 ? 'Send KOT' : 'Send · $pendingLines',
@@ -536,19 +596,29 @@ class _LineRow extends StatelessWidget {
         onTap: onNote,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: HPSpace.xs, horizontal: 2),
-          child: Row(children: [
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('${isNew ? '' : '${line['qty']} × '}${line['name_snapshot']}', style: HPType.label(isNew ? p.text : p.muted)),
-                if (notes.isNotEmpty) Text(notes, style: HPType.note(p.note))
-                else if (onNote != null) Text('Add note', style: HPType.body(p.faint).copyWith(fontSize: 12)),
-              ]),
-            ),
-            ?stepper,
-            const SizedBox(width: HPSpace.sm),
-            Text(rupees(amount), style: HPType.label(p.text)),
-            if (onReverse != null) IconButton(key: Key('reverse-${line['name_snapshot']}'), tooltip: 'Reverse item', icon: const Icon(Icons.undo_rounded, size: 18), onPressed: onReverse),
-          ]),
+          child: LayoutBuilder(builder: (c, box) {
+            final name = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${isNew ? '' : '${line['qty']} × '}${line['name_snapshot']}', style: HPType.label(isNew ? p.text : p.muted)),
+              if (notes.isNotEmpty) Text(notes, style: HPType.note(p.note))
+              else if (onNote != null) Text('Add note', style: HPType.body(p.faint).copyWith(fontSize: 12)),
+            ]);
+            final price = Text(rupees(amount), style: HPType.label(p.text));
+            final reverse = onReverse == null ? null : IconButton(key: Key('reverse-${line['name_snapshot']}'), tooltip: 'Reverse item', icon: const Icon(Icons.undo_rounded, size: 18), onPressed: onReverse);
+            if (stepper != null && box.maxWidth < 380) {
+              return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Row(children: [Expanded(child: name), ?reverse]),
+                // stepper and price share the line when they fit, otherwise the price drops under the stepper
+                Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, spacing: HPSpace.sm, runSpacing: 4, children: [stepper!, Padding(padding: const EdgeInsets.only(right: HPSpace.sm), child: price)]),
+              ]);
+            }
+            return Row(children: [
+              Expanded(child: name),
+              ?stepper,
+              const SizedBox(width: HPSpace.sm),
+              price,
+              ?reverse,
+            ]);
+          }),
         ),
       ),
     );
@@ -562,7 +632,11 @@ class _TotalRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(children: [Text(label, style: HPType.body(context.hp.muted)), const Spacer(), Text(formatPaise(paise), style: HPType.body(context.hp.muted))]),
+        child: Row(children: [
+          Expanded(child: Text(label, style: HPType.body(context.hp.muted), overflow: TextOverflow.ellipsis)),
+          const SizedBox(width: HPSpace.sm),
+          Text(formatPaise(paise), style: HPType.body(context.hp.muted)),
+        ]),
       );
 }
 
@@ -599,7 +673,7 @@ class _SizePicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.hp;
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(HPSpace.lg, 0, HPSpace.lg, HPSpace.lg),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Text('${item['name']}', style: HPType.titleCard(p.text)),

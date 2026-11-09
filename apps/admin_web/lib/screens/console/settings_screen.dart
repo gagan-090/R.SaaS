@@ -117,9 +117,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final plan = SectionCard(
       title: 'Your plan',
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
+        Wrap(spacing: HPSpace.md, runSpacing: HPSpace.xs, crossAxisAlignment: WrapCrossAlignment.center, children: [
           Text('${lic['planName'] ?? '—'}', style: HPType.titleCard(p.text).copyWith(fontSize: 26)),
-          const SizedBox(width: HPSpace.md),
           StatusChip(label: statusLabel(lic['state']), tone: toneForStatus('${lic['state']}')),
         ]),
         const SizedBox(height: 4),
@@ -151,7 +150,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Expanded(flex: 3, child: profile),
                 const SizedBox(width: HPSpace.lg),
-                Expanded(flex: 2, child: Column(children: [plan, const SizedBox(height: HPSpace.lg), taxes])),
+                Expanded(flex: 2, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [plan, const SizedBox(height: HPSpace.lg), taxes])),
               ]),
         const SizedBox(height: HPSpace.lg),
         const BrandingCard(),

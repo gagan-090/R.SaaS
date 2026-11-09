@@ -1,12 +1,80 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show BoxParentData, RenderShiftedBox;
 import 'package:flutter/services.dart';
 
 import 'theme.dart';
 import 'tokens.dart';
 
 // ------------------------------------------------------------------ buttons
+
+/// Closes the on-screen keyboard when the person touches anywhere outside the focused text field — on a button, a
+/// list, a card, empty space or while starting a scroll. Flutter's default only does this for a mouse click, so on
+/// Android / iOS the keyboard otherwise stays open. Put it once around the whole app (MaterialApp.builder).
+class DismissKeyboardOnTapOutside extends StatelessWidget {
+  const DismissKeyboardOnTapOutside({super.key, required this.child});
+  final Widget child;
+  @override
+  Widget build(BuildContext context) => Actions(
+        actions: <Type, Action<Intent>>{
+          EditableTextTapOutsideIntent: CallbackAction<EditableTextTapOutsideIntent>(onInvoke: (i) {
+            i.focusNode.unfocus();
+            return null;
+          }),
+        },
+        child: child,
+      );
+}
+
+/// Horizontal padding of up to [max] per side, but never more than 8% of the width on offer.
+class _SidePadding extends SingleChildRenderObjectWidget {
+  const _SidePadding({required this.max, super.child});
+  final double max;
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderSidePadding(max);
+  @override
+  void updateRenderObject(BuildContext context, _RenderSidePadding r) => r.max = max;
+}
+
+class _RenderSidePadding extends RenderShiftedBox {
+  _RenderSidePadding(this._max) : super(null);
+  double _max;
+  set max(double v) {
+    if (v == _max) return;
+    _max = v;
+    markNeedsLayout();
+  }
+
+  double _pad(double maxWidth) => maxWidth.isFinite ? math.min(_max, maxWidth * .08) : _max;
+  @override
+  double computeMinIntrinsicWidth(double h) => (child?.getMinIntrinsicWidth(h) ?? 0) + 2 * _max;
+  @override
+  double computeMaxIntrinsicWidth(double h) => (child?.getMaxIntrinsicWidth(h) ?? 0) + 2 * _max;
+  @override
+  double computeMinIntrinsicHeight(double w) => child?.getMinIntrinsicHeight(math.max(0, w - 2 * _pad(w))) ?? 0;
+  @override
+  double computeMaxIntrinsicHeight(double w) => child?.getMaxIntrinsicHeight(math.max(0, w - 2 * _pad(w))) ?? 0;
+  @override
+  Size computeDryLayout(BoxConstraints c) {
+    final pad = _pad(c.maxWidth);
+    if (child == null) return c.constrain(Size(2 * pad, 0));
+    final s = child!.getDryLayout(c.deflate(EdgeInsets.symmetric(horizontal: pad)));
+    return c.constrain(Size(s.width + 2 * pad, s.height));
+  }
+
+  @override
+  void performLayout() {
+    final pad = _pad(constraints.maxWidth);
+    if (child == null) {
+      size = constraints.constrain(Size(2 * pad, 0));
+      return;
+    }
+    child!.layout(constraints.deflate(EdgeInsets.symmetric(horizontal: pad)), parentUsesSize: true);
+    (child!.parentData! as BoxParentData).offset = Offset(pad, 0);
+    size = constraints.constrain(Size(child!.size.width + 2 * pad, child!.size.height));
+  }
+}
 
 class _HPButton extends StatefulWidget {
   const _HPButton({required this.label, required this.onPressed, required this.fill, required this.textColor, this.icon, this.trailing, this.border, this.glow = false, this.height = 56, this.busy = false});
@@ -63,8 +131,10 @@ class _HPButtonState extends State<_HPButton> {
                       }
                     : null,
                 onHighlightChanged: (v) => setState(() => _down = v),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: HPSpace.x2),
+                // narrow buttons (two side by side on a phone or a tablet's order panel) give the label the room
+                // instead of the padding, so it keeps its size rather than shrinking
+                child: _SidePadding(
+                  max: HPSpace.x2,
                   // scaleDown: a long label in a narrow slot shrinks instead of overflowing
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
@@ -251,11 +321,15 @@ class HPDialog extends StatelessWidget {
   final Widget child;
   final List<Widget> actions;
   @override
-  Widget build(BuildContext context) => Dialog(
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final small = size.width < 400 || size.height < 500;
+    return Dialog(
+        insetPadding: EdgeInsets.symmetric(horizontal: size.width < 400 ? HPSpace.lg : 40, vertical: size.height < 500 ? HPSpace.md : 24),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 480),
           child: Padding(
-            padding: const EdgeInsets.all(HPSpace.x2),
+            padding: EdgeInsets.all(small ? HPSpace.lg : HPSpace.x2),
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Text(title, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontSize: 24)),
               const SizedBox(height: HPSpace.lg),
@@ -270,6 +344,7 @@ class HPDialog extends StatelessWidget {
           ),
         ),
       );
+  }
 }
 
 /// Every destructive action asks for a reason (≥ 3 characters) before it can be confirmed.
@@ -627,8 +702,8 @@ class OrderCard extends StatelessWidget {
               ),
               const SizedBox(width: HPSpace.sm),
               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                Text(total, style: HPType.titleCard(context.hp.text)),
-                const SizedBox(height: HPSpace.xs),
+                // no total (e.g. a restaurant row): the chip centres on the card instead of sitting under a blank line
+                if (total.isNotEmpty) ...[Text(total, style: HPType.titleCard(context.hp.text)), const SizedBox(height: HPSpace.xs)],
                 StatusChip(label: status, tone: tone),
               ]),
             ]),
@@ -656,6 +731,7 @@ class SectionHeader extends StatelessWidget {
 }
 
 /// KPI card for dashboards: label, big Fraunces value, optional caption and icon.
+/// Compacts itself (padding, value size, two-line label) when its tile is narrow, so a row of four fits a portrait tablet.
 class KpiCard extends StatelessWidget {
   const KpiCard({super.key, required this.label, required this.value, this.caption, this.icon, this.tone = HPTone.neutral});
   final String label;
@@ -666,26 +742,72 @@ class KpiCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.hp;
+    // the grid tells its cards when tiles are narrow (no LayoutBuilder here: rows measure intrinsic heights)
+    final scope = context.dependOnInheritedWidgetOfExactType<_KpiCompact>();
+    final dense = scope?.dense ?? false;
+    final compact = dense || (scope?.compact ?? false);
+    final pad = dense ? HPSpace.sm + 2 : (compact ? HPSpace.md : HPSpace.lg);
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(HPSpace.lg),
+        padding: EdgeInsets.all(pad),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-          Row(children: [
-            Expanded(child: Text(label.toUpperCase(), style: HPType.overline(p.muted), overflow: TextOverflow.ellipsis)),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(child: Text(label.toUpperCase(), style: dense ? HPType.overline(p.muted).copyWith(fontSize: 10) : HPType.overline(p.muted), maxLines: dense ? 1 : 2, overflow: TextOverflow.ellipsis)),
             if (icon != null)
               Container(
-                padding: const EdgeInsets.all(6),
+                padding: EdgeInsets.all(dense ? 3 : (compact ? 4 : 6)),
                 decoration: BoxDecoration(color: p.tone(tone).withValues(alpha: .14), borderRadius: BorderRadius.circular(10)),
-                child: Icon(icon, size: 18, color: p.tone(tone)),
+                child: Icon(icon, size: dense ? 14 : (compact ? 16 : 18), color: p.tone(tone)),
               ),
           ]),
-          const SizedBox(height: HPSpace.sm),
-          FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(value, style: HPType.displayTotal(p.text).copyWith(fontSize: 32))),
-          if (caption != null) ...[const SizedBox(height: 2), Text(caption!, style: HPType.body(p.muted), overflow: TextOverflow.ellipsis)],
+          SizedBox(height: compact ? HPSpace.xs : HPSpace.sm),
+          FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(value, style: HPType.displayTotal(p.text).copyWith(fontSize: dense ? 18 : (compact ? 24 : 28)))),
+          // dense tiles (phone strips) drop the caption: label + value only
+          if (caption != null && !dense) ...[const SizedBox(height: 2), Text(caption!, style: HPType.body(p.muted).copyWith(fontSize: compact ? 12 : null), maxLines: 2, overflow: TextOverflow.ellipsis)],
         ]),
       ),
     );
   }
+}
+
+class _KpiCompact extends InheritedWidget {
+  const _KpiCompact({required this.compact, this.dense = false, required super.child});
+  final bool compact, dense;
+  @override
+  bool updateShouldNotify(_KpiCompact old) => old.compact != compact || old.dense != dense;
+}
+
+/// Responsive row of [KpiCard]s: as many columns as fit [minTileWidth] (up to [maxColumns]), never leaving a lone
+/// orphan on the last row (four cards go 4 → 2 → 1, never 3 + 1). Works the same in portrait and landscape.
+class KpiGrid extends StatelessWidget {
+  const KpiGrid({super.key, required this.children, this.minTileWidth = 140, this.maxColumns = 4, this.spacing = HPSpace.md, this.dense = false});
+  final List<Widget> children;
+  final double minTileWidth, spacing;
+  final int maxColumns;
+  /// Small tiles (tighter padding, smaller value, no caption) for phone screens where the KPIs are secondary.
+  final bool dense;
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(builder: (c, box) {
+        final n = children.length;
+        if (n == 0) return const SizedBox.shrink();
+        var cols = ((box.maxWidth + spacing) / (minTileWidth + spacing)).floor().clamp(1, maxColumns < n ? maxColumns : n);
+        // avoid ragged rows: step down until the cards split evenly (or one row holds them all)
+        while (cols > 1 && n % cols != 0 && n > cols && cols * 2 > n) {
+          cols--;
+        }
+        final w = ((box.maxWidth - spacing * (cols - 1)) / cols).floorToDouble();
+        // rows of equal-height cards: a long caption in one card no longer leaves its neighbours short
+        return _KpiCompact(compact: w < 220, dense: dense, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          for (var r = 0; r < n; r += cols) ...[
+            if (r > 0) SizedBox(height: spacing),
+            IntrinsicHeight(
+              child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                for (var i = r; i < r + cols && i < n; i++) ...[if (i > r) SizedBox(width: spacing), SizedBox(width: w, child: children[i])],
+              ]),
+            ),
+          ],
+        ]));
+      });
 }
 
 /// Rounded search field with a clear button.

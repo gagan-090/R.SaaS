@@ -89,8 +89,9 @@ void main() {
     // people read words, not system codes
     final features = ((detail['entitlement'] as Map?)?['features'] as List? ?? const []).cast<String>();
     if (features.contains('orders.dinein')) {
-      expect(find.text('Dine-in orders'), findsOneWidget);
-      expect(find.text('orders.dinein'), findsNothing);
+      // features read as an inline "✓ Dine-in orders,  ✓ …" sentence
+      expect(find.textContaining('Dine-in orders', findRichText: true), findsOneWidget);
+      expect(find.textContaining('orders.dinein', findRichText: true), findsNothing);
     }
     expect(find.text('${detail['status']}'), findsNothing, reason: 'status shown in Title Case');
     await t.tap(find.text('Suspend'));

@@ -172,9 +172,86 @@ void main() {
     await superAdminOnPlans(t, api: fx);
     expect(find.text('Everything in Standard, plus:'), findsOneWidget);
     expect(find.text('Everything in Professional, plus:'), findsOneWidget);
-    expect(find.text('Menu, categories, tax'), findsOneWidget); // listed once, on Standard only
-    expect(find.text('Kitchen display'), findsOneWidget);
+    // features read like a sentence ("✓ Tables,  ✓ Menu, categories, tax …"), each listed once, on the lowest plan with it
+    expect(find.textContaining('Menu, categories, tax', findRichText: true), findsOneWidget);
+    expect(find.textContaining('Kitchen display', findRichText: true), findsOneWidget);
     final h = {for (final c in ['standard', 'professional', 'premium']) t.getRect(find.byKey(Key('plan-$c'))).height};
     expect(h.length, 1);
+  });
+
+  group('plans fit every screen', () {
+    Map<String, dynamic> tiered(String code, String name, int tier, List<String> flags, int licenses) =>
+        {...plan(code, name, 99900 * tier), 'tier': tier, 'featureFlags': flags, 'activeLicenses': licenses};
+    FixtureApi threePlans() => FixtureApi()
+      ..overrides['GET /plans'] = (200, [
+        tiered('standard', 'Standard', 1, ['tables', 'menu', 'billing'], 1),
+        tiered('professional', 'Professional', 2, ['tables', 'menu', 'billing', 'floors', 'waiter_app'], 3),
+        tiered('premium', 'Premium', 3, ['tables', 'menu', 'billing', 'floors', 'waiter_app', 'kds', 'inventory'], 2),
+      ]);
+
+    testWidgets('KPIs for the plans on sale come first, then the monthly / yearly toggle', (t) async {
+      await superAdminOnPlans(t, api: threePlans());
+      expect(find.descendant(of: find.byKey(const Key('plans-kpi-on-sale')), matching: find.text('3')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const Key('plans-kpi-restaurants')), matching: find.text('6')), findsOneWidget);
+      // 1 × 999 + 3 × 1,998 + 2 × 2,997 = ₹12,987 a month
+      expect(find.descendant(of: find.byKey(const Key('plans-kpi-revenue')), matching: find.textContaining('12,987')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const Key('plans-kpi-popular')), matching: find.text('Professional')), findsOneWidget);
+      expect(t.getTopLeft(find.byKey(const Key('plans-cycle'))).dy, greaterThan(t.getBottomLeft(find.byKey(const Key('plans-kpi-on-sale'))).dy));
+      // wide screen: all three side by side, no carousel
+      expect(find.byType(PlanCarousel), findsNothing);
+    });
+
+    for (final (name, size) in [('phone portrait', Size(390, 844)), ('phone landscape', Size(844, 390)), ('tablet portrait', Size(800, 1280))]) {
+      testWidgets('[$name] plans rotate in a carousel that opens on Professional', (t) async {
+        await superAdminOnPlans(t, api: threePlans());
+        t.view.physicalSize = size;
+        await t.pumpAndSettle();
+        if (find.byKey(const Key('nav-Plans')).evaluate().isEmpty && find.byType(PlanCarousel).evaluate().isEmpty) {
+          await t.tap(find.byKey(const Key('open-nav')));
+          await t.pumpAndSettle();
+          await t.tap(find.byKey(const Key('nav-Plans')));
+          await t.pumpAndSettle();
+        }
+        expect(find.byType(PlanCarousel), findsOneWidget);
+        String current() => (t.widget<Text>(find.byKey(const Key('plan-carousel-current')))).data!;
+        expect(current(), 'Professional');
+        expect(find.byKey(const Key('plan-professional')), findsOneWidget);
+        await t.ensureVisible(find.byKey(const Key('plan-next')));
+        await t.tap(find.byKey(const Key('plan-next')));
+        await t.pumpAndSettle();
+        expect(current(), 'Premium');
+        await t.tap(find.byKey(const Key('plan-next'))); // wraps around
+        await t.pumpAndSettle();
+        expect(current(), 'Standard');
+        await t.tap(find.byKey(const Key('plan-prev')));
+        await t.pumpAndSettle();
+        expect(current(), 'Premium');
+        await t.tap(find.byKey(const Key('plan-prev')));
+        await t.pumpAndSettle();
+        expect(current(), 'Professional');
+        // swipe: the cards follow the finger and snap to the next plan
+        await t.ensureVisible(find.byKey(const Key('plan-carousel-track')));
+        await t.pumpAndSettle();
+        await t.fling(find.byKey(const Key('plan-carousel-track')), Offset(-size.width * .5, 0), 800);
+        await t.pumpAndSettle();
+        expect(current(), 'Premium', reason: 'swiping left from Professional shows Premium');
+        await t.fling(find.byKey(const Key('plan-carousel-track')), Offset(size.width * .5, 0), 800);
+        await t.pumpAndSettle();
+        expect(current(), 'Professional');
+        await t.fling(find.byKey(const Key('plan-carousel-track')), Offset(size.width * .5, 0), 800);
+        await t.pumpAndSettle();
+        expect(current(), 'Standard');
+        await t.ensureVisible(find.byKey(const Key('plan-prev')));
+        await t.pumpAndSettle();
+        await t.tap(find.byKey(const Key('plan-prev'))); // the arrows still wrap around
+        await t.pumpAndSettle();
+        expect(current(), 'Premium');
+        // the whole card is readable: features and Edit are on the page (it scrolls)
+        expect(find.byKey(const Key('plan-features-premium')), findsOneWidget);
+        final edit = find.descendant(of: find.byKey(const Key('plan-premium')), matching: find.widgetWithText(SecondaryButton, 'Edit'));
+        await t.scrollUntilVisible(edit, 200, scrollable: find.byWidgetPredicate((w) => w is Scrollable && w.axisDirection == AxisDirection.down).first);
+        expect(edit, findsOneWidget);
+      });
+    }
   });
 }

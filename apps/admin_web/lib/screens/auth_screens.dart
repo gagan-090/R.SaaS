@@ -42,7 +42,7 @@ class _AuthFrame extends ConsumerWidget {
                         child: Icon(Icons.restaurant_rounded, size: 20, color: HPColors.onSaffron),
                       ),
                       const SizedBox(width: HPSpace.sm),
-                      Text('HOUSE PLATING', style: HPType.overline(context.hp.accentInk)),
+                      Flexible(child: Text('HOUSE PLATING', style: HPType.overline(context.hp.accentInk), overflow: TextOverflow.ellipsis)),
                     ]),
                     const SizedBox(height: HPSpace.lg),
                     Text(title, style: HPType.titleScreen(context.hp.text)),
@@ -299,6 +299,92 @@ class _SetPinScreenState extends ConsumerState<SetPinScreen> {
         const SizedBox(height: HPSpace.lg),
         PrimaryButton(key: const Key('save-pin'), label: 'Save PIN', busy: _busy, onPressed: _save),
       ]),
+    );
+  }
+}
+
+/// The owner's side of a support password reset (emailed `#/reset-password?token=…`): choose a new password.
+class ResetPasswordScreen extends ConsumerStatefulWidget {
+  const ResetPasswordScreen({super.key, required this.token});
+  final String? token;
+  @override
+  ConsumerState<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
+}
+
+class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
+  final _pw = TextEditingController(), _again = TextEditingController();
+  Json? _info;
+  String? _error;
+  bool _busy = false, _done = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _check();
+  }
+
+  Future<void> _check() async {
+    if (widget.token == null || widget.token!.isEmpty) return setState(() => _error = 'This link is incomplete. Open it again from your email.');
+    try {
+      final r = await ref.read(apiProvider).passwordLinkCheck(widget.token!);
+      if (mounted) setState(() => _info = r);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Cannot reach the server. Check your connection.');
+    }
+  }
+
+  Future<void> _save() async {
+    final pw = _pw.text;
+    final problem = pw.length < 12 ? 'Use at least 12 characters' : pw != _again.text ? 'The two passwords do not match' : null;
+    if (problem != null) return setState(() => _error = problem);
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await ref.read(apiProvider).passwordLinkComplete(widget.token!, pw);
+      if (mounted) setState(() => _done = true);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.hp;
+    if (_done) {
+      return _AuthFrame(
+        title: 'Password changed',
+        subtitle: 'Sign in with your email and the new password. Other devices were signed out.',
+        child: PrimaryButton(key: const Key('to-login'), label: 'Go to sign in', onPressed: () => GoRouter.of(context).go('/login')),
+      );
+    }
+    if (_info == null) {
+      return _AuthFrame(
+        title: 'Choose a new password',
+        subtitle: _error ?? 'Checking your link…',
+        child: _error == null ? const LinearProgressIndicator() : const SizedBox.shrink(),
+      );
+    }
+    return _AuthFrame(
+      title: 'Choose a new password',
+      subtitle: '${_info!['email']} · ${_info!['restaurantName']}',
+      child: AutofillGroup(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text('At least 12 characters. A short sentence is easy to remember and hard to guess.', style: HPType.body(p.muted)),
+          const SizedBox(height: HPSpace.md),
+          TextField(key: const Key('new-password'), controller: _pw, obscureText: true, autofillHints: const [AutofillHints.newPassword], decoration: const InputDecoration(labelText: 'New password')),
+          const SizedBox(height: HPSpace.sm),
+          TextField(key: const Key('new-password-again'), controller: _again, obscureText: true, autofillHints: const [AutofillHints.newPassword], decoration: const InputDecoration(labelText: 'Type it again'), onSubmitted: (_) => _save()),
+          if (_error != null) ...[const SizedBox(height: HPSpace.sm), Text(_error!, key: const Key('reset-password-error'), style: HPType.body(p.danger))],
+          const SizedBox(height: HPSpace.lg),
+          PrimaryButton(key: const Key('save-password'), label: 'Save password', busy: _busy, onPressed: _save),
+        ]),
+      ),
     );
   }
 }

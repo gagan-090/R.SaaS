@@ -154,3 +154,11 @@ on your Windows PC; pick "This device is the hub" on first start. Tests: `pnpm -
     `.github/workflows/flutter.yml`, not run yet), or run `flutter build windows --release` on the Windows PC.
     For an installable iOS build: open `apps/pos_app/ios/Runner.xcworkspace`, pick the Apple Development team, then
     Product → Archive (TestFlight/App Store needs a paid Apple Developer account).
+14. **Admin console as an app** (`apps/admin_web`): `release/2026-11-04/BhojMitra-Console-android.apk` (POS: `BhojMitra-POS-android.apk`; both apps are named BhojMitra), iOS unsigned zip,
+    web zip. Windows: `cd apps/admin_web && flutter build windows --release --dart-define=API_BASE_URL=https://rsaas-api.onrender.com/api/v1`
+    on the Windows PC, or the CI job. On the apps you sign in again after closing them (session kept in memory only).
+15. **2026-11-06 client review — needs a deploy**: the archive fix and the owner password / MFA reset are API changes;
+    the apps call them on `rsaas-api.onrender.com`, so redeploy the API (no migration needed) before testing them on the
+    phones. Also set `CONSOLE_URL` on the API to the console's real URL so emailed reset links open the right page.
+    Not done: the React console (`apps/admin_react`) has no owner-reset UI or the new responsive layouts;
+    `packages/contracts/openapi.json` is stale (its generator fails on many routes added before today) and was not regenerated.

@@ -75,7 +75,34 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           _Kpi('Monthly revenue', formatPaise(mrr).replaceAll('.00', ''), HPTone.success, Icons.currency_rupee_rounded, () => c.go('/plans')),
         ];
 
-        Widget section(String title, Widget child, {List<Widget> actions = const []}) => SectionCard(title: title, actions: actions, child: child);
+        // inside the phone / tablet panels the panel header already names the section: no card in a card
+        // sections lose their own card only inside the accordion (phones, short screens), which draws the header
+        final panels = MediaQuery.sizeOf(context).width < 600 || isShortScreen(context);
+        Widget section(String title, Widget child, {List<Widget> actions = const []}) => panels
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (actions.isNotEmpty)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Wrap(children: actions),
+                    ),
+                  child,
+                ],
+              )
+            : SectionCard(title: title, actions: actions, child: child);
+        final kpiGrid = LayoutBuilder(
+          builder: (c2, box) {
+            final cols = box.maxWidth < 560 ? 2 : 3;
+            const gap = HPSpace.md;
+            final w = (box.maxWidth - gap * (cols - 1)) / cols;
+            return Wrap(
+              spacing: gap,
+              runSpacing: gap,
+              children: [for (final k in kpis) SizedBox(width: w, child: k)],
+            );
+          },
+        );
 
         final attentionSection = section(
           'Needs your attention',
@@ -138,19 +165,28 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   Expanded(child: Text('${pl['name']}', style: HPType.label(p.text), overflow: TextOverflow.ellipsis)),
                   Text('${pl['activeLicenses'] ?? 0}', style: HPType.titleCard(p.text).copyWith(fontSize: 18)),
                   const SizedBox(width: HPSpace.md),
-                  SizedBox(width: 120, child: Text('${formatPaise(pl['pricePaise'] as int).replaceAll('.00', '')}/mo · ${formatPaise(pl['yearlyPricePaise'] as int? ?? (pl['pricePaise'] as int) * 10).replaceAll('.00', '')}/yr', textAlign: TextAlign.right, style: HPType.body(p.muted).copyWith(fontSize: 12))),
-                ]),
+                  SizedBox(width: 120, child: Text('${formatPaise(pl['pricePaise'] as int).replaceAll('.00', '')}/mo · ${formatPaise(pl['yearlyPricePaise'] as int? ?? (pl['pricePaise'] as int) * 10).replaceAll('.00', '')}/yr', textAlign: TextAlign.right, style: HPType.body(p.muted).copyWith(fontSize: 12),
+                        ),
               ),
-          ]),
+          ],
+                  ),
+                ),
+            ],
+          ),
           actions: [TextButton(onPressed: () => c.go('/plans'), child: const Text('Plans'))],
         );
 
         final activity = section(
           'Recent activity',
           Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Row(children: [
-              Expanded(
-                child: SingleChildScrollView(
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: HPSpace.sm,
+                runSpacing: HPSpace.xs,
+                children: [
+                  // category chips scroll sideways; the retention note wraps under them on narrow screens
+                  SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(children: [
                     for (final (cat, label) in const [
@@ -169,7 +205,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           visualDensity: VisualDensity.compact,
                         ),
                       ),
-                  ]),
+                  ],
                 ),
               ),
               Container(
@@ -197,21 +233,32 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             subtitle: 'Your restaurants and platform status at a glance',
             actions: [IconButton(tooltip: 'Refresh', onPressed: reload, icon: const Icon(Icons.refresh_rounded))],
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              LayoutBuilder(builder: (c2, box) {
-                final cols = box.maxWidth < 560 ? 2 : 3;
-                const gap = HPSpace.md;
-                final w = (box.maxWidth - gap * (cols - 1)) / cols;
-                return Wrap(spacing: gap, runSpacing: gap, children: [for (final k in kpis) SizedBox(width: w, child: k)]);
-              }),
+                // phones and short screens: the KPIs open first, every other section is a collapsed panel, and opening
+                // one closes the others. Tablets in portrait have the height to show every section, one under another.
+                if (panels)
+                  OneOpenAccordion(
+                    key: const Key('dashboard-accordion'),
+                    panels: [
+                      ('Overview', Icons.insights_rounded, kpiGrid),
+                      ('Needs your attention', Icons.notification_important_outlined, attentionSection),
+                      ('Restaurants by plan', Icons.workspace_premium_outlined, planMix),
+                      ('Recent activity', Icons.history_rounded, activity),
+                    ])
+                else if (narrow) ...[
+                  kpiGrid,
               const SizedBox(height: HPSpace.lg),
-              if (narrow) ...[attentionSection, const SizedBox(height: HPSpace.lg), planMix, const SizedBox(height: HPSpace.lg), activity]
-              else
-                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  attentionSection, const SizedBox(height: HPSpace.lg), planMix, const SizedBox(height: HPSpace.lg), activity]
+              else ...[
+                  kpiGrid,
+                  const SizedBox(height: HPSpace.lg),
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Expanded(flex: 3, child: Column(children: [attentionSection, const SizedBox(height: HPSpace.lg), activity])),
                   const SizedBox(width: HPSpace.lg),
                   Expanded(flex: 2, child: planMix),
                 ]),
-            ]),
+            ],
+              ],
+            ),
           ),
         );
       },
@@ -323,29 +370,71 @@ class _RestaurantsScreenState extends ConsumerState<RestaurantsScreen> {
 
   /// "pending" restaurants are registrations awaiting the owner's email: they live in their own tab.
   late bool _awaitingTab = widget.initialStatus == 'pending';
+  bool _searchTab = false; // phones: search & filters are a tab of their own
   int _awaitingReload = 0;
+
+  Future<void> _register() async {
+    if (await showDialog<bool>(barrierDismissible: false, context: context, builder: (_) => const RegisterRestaurantDialog()) == true) {
+      // a new registration waits for the owner's email: show it there
+      setState(() {
+        _awaitingTab = true;
+        _searchTab = false;
+        _awaitingReload++;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
     final canCreate = auth is SignedIn && auth.can('platform.restaurant.create');
     final narrow = isNarrowWeb(context);
-    return Padding(
-      padding: EdgeInsets.all(narrow ? HPSpace.lg : HPSpace.x4),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, runSpacing: HPSpace.md, children: [
+    final compact = compactLayout(context);
+    final header = Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, runSpacing: HPSpace.md,
+      spacing: HPSpace.md, children: [
           Text('Restaurants', style: Theme.of(context).textTheme.headlineMedium),
           if (canCreate)
-            SizedBox(width: 240, child: PrimaryButton(key: const Key('register-restaurant'), label: 'Register restaurant', icon: Icons.add_rounded, height: 52, onPressed: () async {
-              if (await showDialog<bool>(barrierDismissible: false, context: context, builder: (_) => const RegisterRestaurantDialog()) == true) {
-                // a new registration waits for the owner's email: show it there
-                setState(() {
-                  _awaitingTab = true;
-                  _awaitingReload++;
-                });
-              }
-            })),
-        ]),
+            SizedBox(width: 240, child: PrimaryButton(key: const Key('register-restaurant'), label: 'Register restaurant', icon: Icons.add_rounded, height: 52, onPressed: _register),
+          ),
+      ],
+    );
+    if (compact) {
+      // phones and short (landscape) screens: the whole page scrolls as one, so nothing is pinned out of reach
+      final tab = _awaitingTab
+          ? 'awaiting'
+          : _searchTab
+          ? 'search'
+          : 'list';
+      return ListView(
+        padding: EdgeInsets.all(narrow ? HPSpace.lg : HPSpace.x2),
+        children: [
+          header,
+          const SizedBox(height: HPSpace.lg),
+          ChipTabs<String>(
+            key: const Key('restaurants-tabs'),
+            tabs: const [('list', 'Restaurants', Icons.storefront_outlined), ('awaiting', 'Awaiting', Icons.mark_email_unread_outlined), ('search', 'Search', Icons.search_rounded)],
+            value: tab,
+            onChanged: (v) => setState(() {
+                  _awaitingTab = v == 'awaiting';
+              _searchTab = v == 'search';
+                }),
+          ),
+          const SizedBox(height: HPSpace.lg),
+          if (_awaitingTab)
+            PendingRegistrations(key: ValueKey(_awaitingReload), canAct: canCreate, inScroll: true)
+          else ...[
+            if (_searchTab) ...[_filters(context), const SizedBox(height: HPSpace.lg)],
+            _results(context, compact: true),
+        ],
+        ],
+      );
+    }
+    return Padding(
+      padding: EdgeInsets.all(narrow ? HPSpace.lg : HPSpace.x4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          header,
         const SizedBox(height: HPSpace.lg),
         SegmentedButton<bool>(
           key: const Key('restaurants-tabs'),
@@ -358,15 +447,23 @@ class _RestaurantsScreenState extends ConsumerState<RestaurantsScreen> {
           onSelectionChanged: (v) => setState(() => _awaitingTab = v.first),
         ),
         const SizedBox(height: HPSpace.lg),
-        if (_awaitingTab) Expanded(child: PendingRegistrations(key: ValueKey(_awaitingReload), canAct: canCreate)) else ..._list(context),
-      ]),
+        if (_awaitingTab) Expanded(child: PendingRegistrations(key: ValueKey(_awaitingReload), canAct: canCreate)) else ...[
+            _filters(context),
+            const SizedBox(height: HPSpace.lg),
+            Expanded(child: _results(context, compact: false)),
+          ],
+        ],
+      ),
     );
   }
 
-  List<Widget> _list(BuildContext context) => [
-        Wrap(spacing: HPSpace.md, runSpacing: HPSpace.md, crossAxisAlignment: WrapCrossAlignment.center, children: [
-          SizedBox(width: isNarrowWeb(context) ? double.infinity : 260, child: TextField(key: const Key('search'), controller: _q, decoration: const InputDecoration(labelText: 'Search name or code', prefixIcon: Icon(Icons.search)), onSubmitted: (_) => _apply())),
-          SizedBox(width: isNarrowWeb(context) ? double.infinity : 220, child: TextField(controller: _owner, decoration: const InputDecoration(labelText: 'Owner email'), onSubmitted: (_) => _apply())),
+  Widget _filters(BuildContext context) {
+    final full = isNarrowWeb(context);
+    return Wrap(spacing: HPSpace.md, runSpacing: HPSpace.md, crossAxisAlignment: WrapCrossAlignment.center, children: [
+          SizedBox(width: full ? double.infinity : 260, child: TextField(key: const Key('search'), controller: _q,
+            textInputAction: TextInputAction.search, decoration: const InputDecoration(labelText: 'Search name or code', prefixIcon: Icon(Icons.search)), onSubmitted: (_) => _apply())),
+          SizedBox(width: full ? double.infinity : 220, child: TextField(controller: _owner,
+            keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Owner email'), onSubmitted: (_) => _apply())),
           _Drop(label: 'Status', value: _status == 'pending' ? null : _status, items: const ['active', 'suspended', 'blocked', 'archived'], onChanged: (v) {
             _status = v;
             _apply();
@@ -376,19 +473,33 @@ class _RestaurantsScreenState extends ConsumerState<RestaurantsScreen> {
             _apply();
           }),
           SecondaryButton(label: 'Apply', icon: Icons.filter_alt_outlined, height: 48, onPressed: _apply),
-        ]),
-        const SizedBox(height: HPSpace.lg),
-        Expanded(
-          child: AsyncView<Map<String, dynamic>>(
+        ],
+    );
+  }
+
+  Widget _pager(int total, {bool short = false}) => Wrap(
+    alignment: short ? WrapAlignment.center : WrapAlignment.end,
+    crossAxisAlignment: WrapCrossAlignment.center,
+    children: [
+      if (!short) Text('$total restaurants · page $_page'),
+      IconButton(tooltip: 'Previous page', onPressed: _page > 1 ? () => setState(() => (_page--, _load = _makeLoad())) : null, icon: const Icon(Icons.chevron_left)),
+      if (short) Text('$total · page $_page'),
+      IconButton(tooltip: 'Next page', onPressed: _page * 25 < total ? () => setState(() => (_page++, _load = _makeLoad())) : null, icon: const Icon(Icons.chevron_right)),
+    ],
+  );
+
+  Widget _results(BuildContext context, {required bool compact}) => AsyncView<Map<String, dynamic>>(
             load: _load,
             isEmpty: (d) => (d['items'] as List).isEmpty,
             emptyTitle: 'No restaurants match these filters',
             builder: (c, d, reload) {
               final items = (d['items'] as List).cast<Map<String, dynamic>>();
               final total = d['total'] as int;
-              if (isNarrowWeb(context)) {
-                // phones: one card per restaurant instead of a sideways-scrolling table
-                return ListView(children: [
+              if (compact) {
+        // phones: one card per restaurant instead of a sideways-scrolling table; the page itself scrolls
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
                   for (final r in items)
                     Padding(
                       padding: const EdgeInsets.only(bottom: HPSpace.sm),
@@ -402,31 +513,56 @@ class _RestaurantsScreenState extends ConsumerState<RestaurantsScreen> {
                         onTap: () => c.go('/restaurants/${r['id']}'),
                       ),
                     ),
-                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    IconButton(tooltip: 'Previous page', onPressed: _page > 1 ? () => setState(() => (_page--, _load = _makeLoad())) : null, icon: const Icon(Icons.chevron_left)),
-                    Text('$total · page $_page'),
-                    IconButton(tooltip: 'Next page', onPressed: _page * 25 < total ? () => setState(() => (_page++, _load = _makeLoad())) : null, icon: const Icon(Icons.chevron_right)),
-                  ]),
-                ]);
+            _pager(total, short: true),
+                  ],
+        );
               }
               return Card(
                 child: Column(children: [
                   Expanded(
-                    child: SingleChildScrollView(
+                    child: LayoutBuilder(
+                builder: (c2, box) {
+                  // tablets: the owner email moves under the name, so every column fits without sideways scrolling
+                  final wide = box.maxWidth >= 1100;
+                  return SingleChildScrollView(
                       child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
+                        child: ConstrainedBox(
+                        constraints: BoxConstraints(minWidth: box.maxWidth),
                         child: DataTable(
                           showCheckboxColumn: false,
-                          columns: const [
-                            DataColumn(label: Text('Name')), DataColumn(label: Text('Code')), DataColumn(label: Text('Owner')),
-                            DataColumn(label: Text('Plan')), DataColumn(label: Text('Status')), DataColumn(label: Text('License ends')), DataColumn(label: Text('Branches'), numeric: true),
+                          columnSpacing: wide ? 56 : 24,
+                          dataRowMinHeight: wide ? 48 : 56,
+                          dataRowMaxHeight: wide ? 48 : 64,
+                          columns: [
+                            const DataColumn(label: Text('Name')),
+                            const DataColumn(label: Text('Code')),
+                            if (wide) const DataColumn(label: Text('Owner')),
+                            const DataColumn(label: Text('Plan')),
+                            const DataColumn(label: Text('Status')),
+                            const DataColumn(label: Text('License ends')),
+                            const DataColumn(label: Text('Branches'), numeric: true),
                           ],
                           rows: [
                             for (final r in items)
                               DataRow(onSelectChanged: (_) => c.go('/restaurants/${r['id']}'), cells: [
-                                DataCell(Text('${r['name']}', style: HPType.label(context.hp.text))),
+                                DataCell(
+                                    wide
+                                        ? Text('${r['name']}', style: HPType.label(context.hp.text))
+                                        : ConstrainedBox(
+                                            constraints: BoxConstraints(maxWidth: box.maxWidth * .4),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Text('${r['name']}', style: HPType.label(context.hp.text), overflow: TextOverflow.ellipsis),
+                                                Text('${r['ownerEmail']}', style: HPType.body(context.hp.muted).copyWith(fontSize: 12), overflow: TextOverflow.ellipsis),
+                                              ],
+                                            ),
+                                          ),
+                                  ),
                                 DataCell(Text('${r['code']}', style: HPType.mono(context.hp.muted))),
-                                DataCell(Text('${r['ownerEmail']}')),
+                                  if (wide) DataCell(Text('${r['ownerEmail']}')),
                                 DataCell(Text(titleCase('${r['plan'] ?? '—'}'))),
                                 DataCell(StatusChip(label: restaurantStatusLabel(r['status'], hasPlan: r['plan'] != null), tone: restaurantStatusTone(r['status'], hasPlan: r['plan'] != null))),
                                 DataCell(Text(shortDate(r['licenseEndsAt']))),
@@ -436,22 +572,19 @@ class _RestaurantsScreenState extends ConsumerState<RestaurantsScreen> {
                         ),
                       ),
                     ),
+                  );
+                },
+                    ),
                   ),
                   const Divider(),
                   Padding(
                     padding: const EdgeInsets.all(HPSpace.sm),
-                    child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                      Text('$total restaurants · page $_page'),
-                      IconButton(tooltip: 'Previous page', onPressed: _page > 1 ? () => setState(() => (_page--, _load = _makeLoad())) : null, icon: const Icon(Icons.chevron_left)),
-                      IconButton(tooltip: 'Next page', onPressed: _page * 25 < total ? () => setState(() => (_page++, _load = _makeLoad())) : null, icon: const Icon(Icons.chevron_right)),
-                    ]),
-                  ),
-                ]),
+                    child: _pager(total)),
+                    ],
+        ),
               );
             },
-          ),
-        ),
-      ];
+          );
 }
 
 class _Drop extends StatelessWidget {
@@ -621,7 +754,95 @@ class RestaurantDetailScreen extends ConsumerStatefulWidget {
 
 class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen> {
   late Future<Map<String, dynamic>> Function() _load = () => ref.read(apiProvider).restaurant(widget.id);
-  void _reload() => setState(() => _load = () => ref.read(apiProvider).restaurant(widget.id));
+  Future<Json>? _owner; // fetched the first time the owner card is on screen
+  Future<Json> get _ownerFuture => _owner ??= ref.read(apiProvider).restaurantOwner(widget.id);
+  String _tab = 'overview'; // phone / short screens show one section at a time
+  void _reload() => setState(() {
+    _load = () => ref.read(apiProvider).restaurant(widget.id);
+    _owner = null;
+  });
+
+  /// Support: email the owner a one-time link to choose a new password (step-up + reason, audited).
+  Future<void> _ownerPasswordReset(String email) async {
+    final reason = await ReasonDialog.show(
+      context,
+      title: 'Send a password reset link?',
+      confirmLabel: 'Continue',
+      destructive: false,
+      message:
+          '$email gets a one-time link (valid 24 hours) to choose a new password. Their current password keeps working until then; '
+          'when they set a new one, every signed-in device is signed out. Only do this after verifying who you are talking to.',
+    );
+    if (reason == null || !mounted) return;
+    final me = ref.read(authProvider) as SignedIn;
+    final step = await askStepUp(context, mfaRequired: me.me['mfaEnabled'] != false);
+    if (step == null || !mounted) return;
+    try {
+      final api = ref.read(apiProvider);
+      final r = await api.ownerPasswordReset(widget.id, reason, await api.stepUp(step.$1, step.$2));
+      _reload();
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (c) => HPDialog(
+          title: r['emailed'] == true ? 'Reset link sent' : 'Email not delivered',
+          actions: [
+            SecondaryButton(
+              key: const Key('copy-reset-link'),
+              label: 'Copy link',
+              icon: Icons.copy_rounded,
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: '${r['link']}'));
+                if (c.mounted) Navigator.pop(c);
+              },
+            ),
+            PrimaryButton(label: 'Done', height: 48, onPressed: () => Navigator.pop(c)),
+          ],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                r['emailed'] == true
+                    ? 'We emailed ${r['ownerEmail']} a link to choose a new password. If it does not arrive, give them this one-time link yourself:'
+                    : 'The email to ${r['ownerEmail']} could not be sent. Give them this one-time link yourself:',
+              ),
+              const SizedBox(height: HPSpace.md),
+              SelectableText('${r['link']}', key: const Key('reset-link'), style: HPType.mono(context.hp.text).copyWith(fontSize: 12)),
+              const SizedBox(height: HPSpace.sm),
+              Text('Works once, for 24 hours. Treat it like a password.', style: HPType.body(context.hp.muted).copyWith(fontSize: 12)),
+            ],
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
+  /// Support: clear the owner's authenticator so they sign in with their password and set MFA up again.
+  Future<void> _ownerMfaReset(String email) async {
+    final reason = await ReasonDialog.show(
+      context,
+      title: 'Reset MFA for the owner?',
+      confirmLabel: 'Continue',
+      message:
+          '$email will be signed out everywhere and sign in with their password only, then can set up a new authenticator. '
+          'They are notified by email. Only do this after verifying their identity.',
+    );
+    if (reason == null || !mounted) return;
+    final me = ref.read(authProvider) as SignedIn;
+    final step = await askStepUp(context, mfaRequired: me.me['mfaEnabled'] != false);
+    if (step == null || !mounted) return;
+    try {
+      final api = ref.read(apiProvider);
+      final r = await api.ownerMfaReset(widget.id, reason, await api.stepUp(step.$1, step.$2));
+      if (mounted) showDone(context, 'MFA reset — ${r['notified']} was notified');
+      _reload();
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
 
   Future<void> _status(String action) async {
     final reason = await ReasonDialog.show(
@@ -800,54 +1021,106 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
         final features = (ent['features'] as List? ?? const []).cast<String>();
         final archivesList = (r['archives'] as List? ?? const []).cast<Map<String, dynamic>>();
 
+        final compact = compactLayout(context);
         Widget btn(Widget b) => SizedBox(height: 44, child: b);
-        final profile = SectionCard(title: 'Profile', child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _kv('Code', r['code']), _kv('Owner', r['ownerEmail']), _kv('GSTIN', r['gstin']), _kv('Address', r['address']),
-          if (r['statusReason'] != null) _kv('Status reason', r['statusReason']),
-          _kv('Created', shortDate(r['createdAt'])),
-          if (can('platform.restaurant.status')) ...[
-            const SizedBox(height: HPSpace.lg),
-            Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, children: [
+        // phones: short labels so two buttons fit side by side
+        String l(String full, String short) => compact ? short : full;
+        final statusActions = <Widget>[
               if (status == 'pending') btn(SecondaryButton(label: 'Activate', icon: Icons.check_circle_outline, height: 44, onPressed: () => _status('activate'))),
               if (status == 'active') btn(SecondaryButton(label: 'Suspend', icon: Icons.pause_circle_outline, height: 44, onPressed: () => _status('suspend'))),
               if (status == 'suspended' || status == 'blocked') btn(SecondaryButton(label: 'Reactivate', icon: Icons.play_circle_outline, height: 44, onPressed: () => _status('reactivate'))),
-              if (status == 'suspended') btn(SecondaryButton(label: 'Archive to cold storage', icon: Icons.archive_outlined, height: 44, onPressed: _archive)),
-              if (status == 'archived') btn(SecondaryButton(label: 'Download cold storage (.json.gz)', icon: Icons.download_rounded, height: 44, onPressed: () => _downloadArchive('${r['code']}'))),
-              if (status == 'archived') btn(SecondaryButton(label: 'Restore to Suspended', icon: Icons.restore_page_outlined, height: 44, onPressed: _restore)),
-              if (status == 'archived') btn(DangerButton(label: 'Delete (Housekeeping)', icon: Icons.delete_forever_outlined, height: 44, onPressed: _deleteRestaurant)),
+              if (status == 'suspended') btn(SecondaryButton(label: l('Archive to cold storage', 'Archive'), icon: Icons.archive_outlined, height: 44, onPressed: _archive)),
+              if (status == 'archived') btn(SecondaryButton(label: l('Download cold storage (.json.gz)', 'Download archive'), icon: Icons.download_rounded, height: 44, onPressed: () => _downloadArchive('${r['code']}'))),
+              if (status == 'archived') btn(SecondaryButton(label: l('Restore to Suspended', 'Restore'), icon: Icons.restore_page_outlined, height: 44, onPressed: _restore)),
+              if (status == 'archived') btn(DangerButton(label: l('Delete (Housekeeping)', 'Delete'), icon: Icons.delete_forever_outlined, height: 44, onPressed: _deleteRestaurant)),
               if (status == 'active' || status == 'suspended') btn(DangerButton(label: 'Block', icon: Icons.block, height: 44, onPressed: () => _status('block'))),
-            ]),
-          ],
-        ]));
-        final license = SectionCard(title: 'License', child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          if (lic == null)
-            Text('No active license — the restaurant is read-only until one is issued.', style: HPType.body(p.muted))
-          else ...[
-            _kv('Plan', '$planName${priceText == null ? '' : ' · $priceText'}'),
-            _kv('Started', shortDate(lic['startsAt'])),
-            _kv('Ends', '${shortDate(lic['endsAt'])}${daysLeft == null ? '' : daysLeft >= 0 ? ' · $daysLeft days left' : ' · ended ${-daysLeft} days ago'}'),
-            _kv('Grace period', '${lic['graceDays']} days after the end date'),
-            const SizedBox(height: HPSpace.md),
-            Text('INCLUDES', style: HPType.overline(p.muted)),
-            const SizedBox(height: HPSpace.sm),
-            Wrap(spacing: 6, runSpacing: 6, children: [
-              for (final f in features)
-                Chip(
-                  avatar: Icon(Icons.check_rounded, size: 16, color: p.success),
-                  label: Text(featureLabel(f)),
-                  visualDensity: VisualDensity.compact,
-                ),
-            ]),
-          ],
-          if (can('platform.license.manage')) ...[
-            const SizedBox(height: HPSpace.lg),
-            Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, children: [
+            ];
+        final licenseActions = <Widget>[
               for (final (a, icon) in lic == null ? const [('issue', Icons.add_card_outlined)] : const [('renew', Icons.autorenew), ('upgrade', Icons.trending_up), ('downgrade', Icons.trending_down)])
                 btn(SecondaryButton(label: a[0].toUpperCase() + a.substring(1), icon: icon, height: 44, onPressed: () => _license(a, lic?['planCode'] as String?))),
               if (lic != null) btn(DangerButton(label: 'Revoke', icon: Icons.cancel_outlined, height: 44, onPressed: () => _license('revoke', null))),
-            ]),
+            ];
+        final ownerEmail = '${r['ownerEmail'] ?? 'the owner'}';
+        final ownerActions = <Widget>[
+          btn(SecondaryButton(key: const Key('owner-password-reset'), label: l('Send password reset link', 'Reset password'), icon: Icons.lock_reset_rounded, height: 44, onPressed: () => _ownerPasswordReset(ownerEmail))),
+          btn(SecondaryButton(key: const Key('owner-mfa-reset'), label: l('Reset owner MFA', 'Reset MFA'), icon: Icons.phonelink_lock_outlined, height: 44, onPressed: () => _ownerMfaReset(ownerEmail))),
+        ];
+        Widget actionRow(List<Widget> a) => Padding(
+          padding: const EdgeInsets.only(top: HPSpace.lg),
+          child: Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, children: a),
+        );
+        final profile = SectionCard(
+          title: 'Profile',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _kv('Code', r['code']),
+              _kv('Owner', r['ownerEmail']),
+              _kv('GSTIN', r['gstin']),
+              _kv('Address', r['address']),
+              if (r['statusReason'] != null) _kv('Status reason', r['statusReason']),
+              _kv('Created', shortDate(r['createdAt'])),
+              if (!compact && can('platform.restaurant.status') && statusActions.isNotEmpty) actionRow(statusActions),
           ],
-        ]));
+          ),
+        );
+        final license = SectionCard(
+          title: 'License',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (lic == null)
+                Text('No active license — the restaurant is read-only until one is issued.', style: HPType.body(p.muted))
+              else ...[
+                _kv('Plan', '$planName${priceText == null ? '' : ' · $priceText'}'),
+                _kv('Started', shortDate(lic['startsAt'])),
+                _kv(
+                  'Ends',
+                  '${shortDate(lic['endsAt'])}${daysLeft == null
+                      ? ''
+                      : daysLeft >= 0
+                      ? ' · $daysLeft days left'
+                      : ' · ended ${-daysLeft} days ago'}',
+                ),
+                _kv('Grace period', '${lic['graceDays']} days after the end date'),
+                const SizedBox(height: HPSpace.md),
+                Text('INCLUDES', style: HPType.overline(p.muted)),
+                const SizedBox(height: HPSpace.sm),
+                InlineChecks([for (final f in features) featureLabel(f)], key: const Key('license-features')),
+              ],
+              if (!compact && can('platform.license.manage')) actionRow(licenseActions),
+            ],
+          ),
+        );
+        final ownerCard = SectionCard(
+          key: const Key('owner-account'),
+          title: 'Owner account',
+          child: Builder(
+            builder: (_) => FutureBuilder<Json>(
+              future: _ownerFuture,
+              builder: (c, snap) {
+                if (snap.connectionState != ConnectionState.done) return const LinearProgressIndicator();
+                final o = snap.data;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (o == null)
+                      Text(snap.error is ApiException ? (snap.error as ApiException).message : 'Owner details are not available.', style: HPType.body(p.muted))
+                    else ...[
+                      _kv('Name', o['name']),
+                      _kv('Email', o['email']),
+                      _kv('Sign-in', o['status'] == 'active' ? 'Allowed' : titleCase('${o['status']}')),
+                      _kv('Two-factor (MFA)', o['mfaEnrolled'] == true ? 'Set up' : 'Not set up'),
+                      if (o['lockedUntil'] != null) _kv('Locked', 'Too many wrong passwords · until ${shortDate(o['lockedUntil'])}'),
+                      if (o['passwordResetPendingUntil'] != null) _kv('Reset link', 'Sent · works until ${shortDate(o['passwordResetPendingUntil'])}'),
+                    ],
+                    if (!compact && can('platform.mfa.reset')) actionRow(ownerActions),
+                  ],
+                );
+              },
+            ),
+          ),
+        );
         final payments = SectionCard(
           title: 'Subscription payments',
           actions: [if (can('platform.payment.record')) TextButton.icon(onPressed: _payment, icon: const Icon(Icons.add), label: const Text('Record'))],
@@ -909,8 +1182,7 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
         // a revoked / never-issued license leaves the account open but everything inside it locked
         final hasPlan = ent['state'] != 'none';
         final showCold = archivesList.isNotEmpty || status == 'suspended' || status == 'archived';
-        return ListView(padding: EdgeInsets.all(narrow ? HPSpace.lg : HPSpace.x4), children: [
-          Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: HPSpace.md, runSpacing: HPSpace.sm, children: [
+        final header = Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: HPSpace.md, runSpacing: HPSpace.sm, children: [
             IconButton(tooltip: 'Back to restaurants', onPressed: () => c.go('/restaurants'), icon: const Icon(Icons.arrow_back)),
             Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
               Text('${r['name']}', style: HPType.titleScreen(p.text).copyWith(fontSize: narrow ? 28 : 34)),
@@ -918,36 +1190,154 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
             ]),
             StatusChip(key: const Key('restaurant-status'), label: restaurantStatusLabel(status, hasPlan: hasPlan), tone: restaurantStatusTone(status, hasPlan: hasPlan)),
             StatusChip(label: hasPlan ? 'License: ${statusLabel(ent['state'])}' : 'License: none · console locked', tone: hasPlan ? toneForStatus('${ent['state']}') : HPTone.danger),
-          ]),
-          const SizedBox(height: HPSpace.md),
-          _LifecyclePipeline(status: status, hasPlan: hasPlan),
-          const SizedBox(height: HPSpace.lg),
-          LayoutBuilder(builder: (c2, box) {
-            final cols = narrow ? 2 : 4;
-            final w = (box.maxWidth - HPSpace.lg * (cols - 1)) / cols;
-            return Wrap(spacing: HPSpace.lg, runSpacing: HPSpace.lg, children: [
-              SizedBox(width: w, child: KpiCard(label: 'Plan', value: planName, caption: priceText, icon: Icons.workspace_premium_outlined, tone: HPTone.saffron)),
-              SizedBox(width: w, child: KpiCard(label: 'License ends', value: ends == null ? '—' : shortDate(lic?['endsAt']), caption: daysLeft == null ? null : (daysLeft >= 0 ? '$daysLeft days left' : 'ended'), icon: Icons.event_outlined, tone: daysLeft != null && daysLeft < 7 ? HPTone.danger : HPTone.success)),
-              SizedBox(width: w, child: KpiCard(label: 'Branches', value: '${(r['branches'] as List).length}', icon: Icons.storefront_outlined)),
-              SizedBox(width: w, child: KpiCard(label: 'Devices', value: '${devices.where((d) => d['revokedAt'] == null).length}', caption: hub == null ? 'No hub yet' : 'Hub: ${hub['name']}', icon: Icons.router_outlined, tone: hub == null ? HPTone.neutral : HPTone.success)),
+          ]);
+            final kpis = KpiGrid(spacing: HPSpace.lg, children: [
+            KpiCard(label: 'Plan', value: planName, caption: priceText, icon: Icons.workspace_premium_outlined, tone: HPTone.saffron),
+            KpiCard(label: 'License ends', value: ends == null ? '—' : shortDate(lic?['endsAt']), caption: daysLeft == null ? null : (daysLeft >= 0 ? '$daysLeft days left' : 'ended'), icon: Icons.event_outlined, tone: daysLeft != null && daysLeft < 7 ? HPTone.danger : HPTone.success,
+            ),
+            KpiCard(label: 'Branches', value: '${(r['branches'] as List).length}', icon: Icons.storefront_outlined),
+            KpiCard(label: 'Devices', value: '${devices.where((d) => d['revokedAt'] == null).length}', caption: hub == null ? 'No hub yet' : 'Hub: ${hub['name']}', icon: Icons.router_outlined, tone: hub == null ? HPTone.neutral : HPTone.success,
+            ),
             ]);
-          }),
-          const SizedBox(height: HPSpace.lg),
-          if (narrow) ...[profile, gap, license, gap, payments, gap, branches, if (showCold) ...[gap, coldStorageCard]]
-          else ...[
-            // paired cards share a row and a height, so a new restaurant's short cards leave no ragged gaps
-            IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [Expanded(child: profile), gap, Expanded(child: license)])),
-            gap,
-            IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [Expanded(child: payments), gap, Expanded(child: branches)])),
-            if (showCold) ...[gap, coldStorageCard],
-          ],
-          const SizedBox(height: HPSpace.lg),
-          SectionCard(
+        final history = SectionCard(
             title: 'History',
             actions: [TextButton(onPressed: () => c.go('/audit'), child: const Text('Open audit log'))],
             child: AuditList(tenantId: widget.id, embedded: true),
-          ),
-        ]);
+          );
+
+        if (compact) {
+          // phones and short (landscape) screens: every action at the top, then one section at a time as tabs
+          // grouped by what they change, two equal buttons per row
+          final actionGroups = <(String, List<Widget>)>[
+            if (can('platform.restaurant.status') && statusActions.isNotEmpty) ('Status', statusActions),
+            if (can('platform.license.manage') || can('platform.payment.record'))
+              ('License & payment', [
+                if (can('platform.license.manage')) ...licenseActions,
+                if (can('platform.payment.record')) btn(SecondaryButton(label: 'Record payment', icon: Icons.add_card_rounded, height: 44, onPressed: _payment)),
+              ]),
+            if (can('platform.mfa.reset')) ('Owner account', ownerActions),
+          ];
+          final allActions = [for (final g in actionGroups) ...g.$2];
+          Widget pairs(List<Widget> a) => Column(children: [
+                for (var i = 0; i < a.length; i += 2) ...[
+                  if (i > 0) const SizedBox(height: HPSpace.sm),
+                  Row(children: [
+                    Expanded(child: a[i]),
+                    const SizedBox(width: HPSpace.sm),
+                    Expanded(child: i + 1 < a.length ? a[i + 1] : const SizedBox.shrink()),
+                  ]),
+                ],
+              ]);
+          final tabs = <(String, String, IconData)>[
+            ('overview', 'Overview', Icons.dashboard_outlined),
+            ('profile', 'Profile', Icons.badge_outlined),
+            ('license', 'Plan & license', Icons.workspace_premium_outlined),
+            ('owner', 'Owner account', Icons.manage_accounts_outlined),
+            ('payments', 'Payments', Icons.payments_outlined),
+            ('branches', 'Branches & devices', Icons.storefront_outlined),
+            if (showCold) ('cold', 'Cold storage', Icons.archive_outlined),
+            ('history', 'History', Icons.history_rounded),
+          ];
+          final tab = tabs.any((t) => t.$1 == _tab) ? _tab : 'overview';
+          return ListView(
+            key: const Key('restaurant-detail'),
+            padding: EdgeInsets.all(narrow ? HPSpace.lg : HPSpace.x2),
+            children: [
+              header,
+              if (allActions.isNotEmpty) ...[
+                const SizedBox(height: HPSpace.md),
+                Card(
+                  key: const Key('restaurant-actions'),
+                  child: Padding(
+                    padding: const EdgeInsets.all(HPSpace.lg),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final (gi, g) in actionGroups.indexed) ...[
+                          if (gi > 0) ...[const SizedBox(height: HPSpace.md), Divider(height: 1, color: p.line), const SizedBox(height: HPSpace.md)],
+                          Text(g.$1.toUpperCase(), style: HPType.overline(p.muted)),
+                          const SizedBox(height: HPSpace.sm),
+                          pairs(g.$2),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: HPSpace.md),
+              ChipTabs<String>(key: const Key('restaurant-tabs'), tabs: tabs, value: tab, onChanged: (v) => setState(() => _tab = v)),
+              const SizedBox(height: HPSpace.md),
+              switch (tab) {
+                'profile' => profile,
+                'license' => license,
+                'owner' => ownerCard,
+                'payments' => payments,
+                'branches' => branches,
+                'cold' => coldStorageCard,
+                'history' => history,
+                _ => Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    kpis,
+                    const SizedBox(height: HPSpace.lg),
+                    _LifecyclePipeline(status: status, hasPlan: hasPlan),
+                  ],
+                ),
+              },
+            ],
+          );
+        }
+
+        return ListView(
+          key: const Key('restaurant-detail'),
+          padding: EdgeInsets.all(narrow ? HPSpace.lg : HPSpace.x4),
+          children: [
+            header,
+            const SizedBox(height: HPSpace.md),
+            _LifecyclePipeline(status: status, hasPlan: hasPlan),
+            const SizedBox(height: HPSpace.lg),
+            kpis,
+            const SizedBox(height: HPSpace.lg),
+            // paired cards share a row and a height, so a new restaurant's short cards leave no ragged gaps
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: profile),
+                  gap,
+                  Expanded(child: license),
+                ],
+              ),
+            ),
+            gap,
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: payments),
+                  gap,
+                  Expanded(child: branches),
+                ],
+              ),
+            ),
+            gap,
+            if (showCold)
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: ownerCard),
+                    gap,
+                    Expanded(child: coldStorageCard),
+                  ],
+                ),
+              )
+            else
+              ownerCard,
+            const SizedBox(height: HPSpace.lg),
+            history,
+          ],
+        );
       },
     );
   }
@@ -986,10 +1376,10 @@ class _LifecyclePipeline extends StatelessWidget {
             Row(mainAxisSize: MainAxisSize.min, children: [
               Icon(Icons.timeline_rounded, size: 16, color: p.muted),
               const SizedBox(width: 6),
-              Text('RESTAURANT LIFECYCLE', style: HPType.overline(p.muted)),
+                    Flexible(child: Text('RESTAURANT LIFECYCLE', style: HPType.overline(p.muted))),
             ]),
             Text(
-              isBlocked ? 'Status: Blocked' : 'Order: Create ➔ Active ⇆ Suspend ⇆ Archived ➔ Delete',
+              isBlocked ? 'Status: Blocked' : 'Order: Create ➔ Active ⇆ Suspend ⇆ Archived ➔ Delete', softWrap: true,
               style: HPType.mono(p.muted).copyWith(fontSize: 10.5),
             ),
           ]),
@@ -1264,10 +1654,12 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
         const SizedBox(height: HPSpace.lg),
     ];
     // phones: filters and events scroll together, so the filters never squeeze the list off screen
-    final list = Card(child: Padding(padding: const EdgeInsets.all(HPSpace.lg), child: AuditList(category: _category, action: _a, tenantId: _selectedRestaurantId, q: _q, embedded: narrow, limit: narrow ? 200 : null)));
+    // short screens too (a phone in landscape): one scroll for filters and events
+    final oneScroll = compactLayout(context);
+    final list = Card(child: Padding(padding: const EdgeInsets.all(HPSpace.lg), child: AuditList(category: _category, action: _a, tenantId: _selectedRestaurantId, q: _q, embedded: oneScroll, limit: oneScroll ? 200 : null)));
     return Padding(
       padding: EdgeInsets.all(narrow ? HPSpace.lg : HPSpace.x4),
-      child: narrow
+      child: oneScroll
           ? ListView(children: [...filters, list])
           : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [...filters, Expanded(child: list)]),
     );
@@ -1326,8 +1718,11 @@ String _expiresIn(Object? iso) {
 
 /// Registrations waiting for the owner to confirm their email: resend a fresh link or cancel.
 class PendingRegistrations extends ConsumerStatefulWidget {
-  const PendingRegistrations({super.key, required this.canAct});
+  const PendingRegistrations({super.key, required this.canAct, this.inScroll = false});
   final bool canAct;
+
+  /// Inside a page that already scrolls (phone layouts): no Expanded, no inner list scrolling.
+  final bool inScroll;
   @override
   ConsumerState<PendingRegistrations> createState() => _PendingRegistrationsState();
 }
@@ -1386,13 +1781,13 @@ class _PendingRegistrationsState extends ConsumerState<PendingRegistrations> {
         SizedBox(width: 260, child: HPSearchField(hint: 'Restaurant or owner email', onChanged: (v) => setState(() => _q = v.trim()))),
       ]),
       const SizedBox(height: HPSpace.lg),
-      Expanded(
-        child: AsyncView<Map<String, dynamic>>(
+        _fill(
+          AsyncView<Map<String, dynamic>>(
           key: ValueKey('$_state|$_q|$_reload'),
           load: () => ref.read(apiProvider).registrations(state: _state, q: _q),
           isEmpty: (d) => (d['items'] as List).isEmpty,
           emptyTitle: _state == 'awaiting' ? 'Nobody is waiting to verify' : 'Nothing here',
-          builder: (c, d, reload) => ListView(children: [
+          builder: (c, d, reload) => _list([
             for (final r in (d['items'] as List).cast<Map<String, dynamic>>())
               Padding(
                 padding: const EdgeInsets.only(bottom: HPSpace.md),
@@ -1465,6 +1860,9 @@ class _PendingRegistrationsState extends ConsumerState<PendingRegistrations> {
       ),
     ]);
   }
+
+  Widget _fill(Widget w) => widget.inScroll ? w : Expanded(child: w);
+  Widget _list(List<Widget> children) => widget.inScroll ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children) : ListView(children: children);
 }
 
 class _Fact extends StatelessWidget {

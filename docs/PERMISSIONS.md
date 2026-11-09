@@ -19,7 +19,7 @@ Enforcement: every API route declares `@RequirePermissions(...)` (or is explicit
 | `platform.admin.invite` | Create or invite platform admins; activate pending invitations | Y | — | — |
 | `platform.admin.roles` | Assign roles to platform admins / create roles | Y | — | — |
 | `platform.admin.deactivate` | Deactivate a platform admin | Y | — | — |
-| `platform.mfa.reset` | Reset another admin's MFA (requires step-up) | Y | — | — |
+| `platform.mfa.reset` | Reset another admin's or a restaurant owner's MFA, or send an owner a password reset link (requires step-up) | Y | — | — |
 | `platform.audit.read` | Read the platform audit log | Y | — | R |
 
 Platform roles are data (`platform_roles`); Super Admins can create more. Guards: an admin can only grant permissions they hold, cannot change their own roles, and cannot edit an admin who holds more authority. MFA reset additionally needs a 5-minute step-up token (password + TOTP).

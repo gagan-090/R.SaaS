@@ -178,6 +178,15 @@ class ApiClient {
   Future<Uint8List> downloadArchive(String id) => getBytes('/restaurants/$id/archive/download');
   Future<Json> restoreRestaurant(String id, String reason) async => await _send('POST', '/restaurants/$id/restore', body: {'reason': reason}) as Json;
   Future<Json> deleteRestaurant(String id, String reason) async => await _send('POST', '/restaurants/$id/delete', body: {'reason': reason}) as Json;
+  // support tools for the restaurant's owner (first admin): one-time password reset link, MFA reset (both need step-up)
+  Future<Json> restaurantOwner(String id) async => await _send('GET', '/restaurants/$id/owner') as Json;
+  Future<Json> ownerPasswordReset(String id, String reason, String stepUpToken) async =>
+      await _send('POST', '/restaurants/$id/owner/password-reset', body: {'reason': reason}, headers: {'x-step-up-token': stepUpToken}) as Json;
+  Future<Json> ownerMfaReset(String id, String reason, String stepUpToken) async =>
+      await _send('POST', '/restaurants/$id/owner/mfa/reset', body: {'reason': reason}, headers: {'x-step-up-token': stepUpToken}) as Json;
+  Future<Json> passwordLinkCheck(String token) async => await _send('POST', '/auth/password-link/check', body: {'token': token}) as Json;
+  Future<Json> passwordLinkComplete(String token, String password) async =>
+      await _send('POST', '/auth/password-link/complete', body: {'token': token, 'password': password}) as Json;
   Future<Json> recordPayment(String id, Json body) async => await _send('POST', '/restaurants/$id/payments', body: body) as Json;
 
   Future<List<dynamic>> plans({bool includeArchived = false}) async =>

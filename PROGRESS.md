@@ -322,3 +322,50 @@ Owner asked for Android, iOS, Windows and web. All builds use `--dart-define=API
   uploads the Release folder) and `build-pos-web` to `flutter.yml`; it runs on push but has not run yet.
 - Outputs in `release/2026-11-04/` (gitignored). Fix: pnpm now installs arm64 + x64 native binaries (`supportedArchitectures`),
   because Node runs arm64 here and the existing install only had x64 rollup/esbuild, which broke vitest/vite.
+
+### Admin console (`apps/admin_web`) on Android, iOS, Windows — 2026-11-04
+- `flutter create --platforms=android,ios,windows` (bundle `com.rsaas.rsaas_admin_web`, name "House Plating Console", iOS 15).
+- Native implementations of the web-only helpers: `download_io.dart` (Save dialog via file_picker), `open_link_io.dart`
+  (url_launcher, new dependency). Android: INTERNET permission, https `<queries>`, release signing from `key.properties`.
+  Gradle fix: file_picker 11 skips the Kotlin plugin on AGP 9 while `android.builtInKotlin=false`, so its plugin class was
+  missing (`cannot find symbol FilePickerPlugin`); `android/build.gradle.kts` now applies Kotlin to that subproject.
+- `flutter test` **103 passed**; `flutter analyze`: 5 info-level lints, all already in `menu_screen.dart` (not touched).
+- Builds: `apk --release` ✓ 64.6 MB (upload key), `ios --release --no-codesign` ✓ 25.7 MB, `web --release` ✓.
+  Windows not built (macOS host); CI matrix job `build-admin-native` builds Android/iOS/Windows, not run yet.
+- Not verified: running on a real phone, iPhone or Windows PC (download / link opening are untested on device).
+
+### POS responsive pass — DONE (2026-11-04)
+Built: `apps/pos_app/lib/ui/responsive.dart` (size classes, breakpoints, ResponsiveGrid, CenteredContent, hinge-aware TwoPane);
+adaptive nav (bottom bar / rail / labelled sidebar, scrolling rail in landscape); order + bill screens split at a foldable hinge and size
+the side panel to the window; overflow fixes in order lines, totals, reports, staff, floors, restaurant & license, device setup;
+scrollable bottom sheets for short windows; readable max widths on desktop / ultrawide; brand text size multiplies the system text size;
+HPDialog margins shrink on small / short windows (ui_kit).
+Test: `flutter test` in apps/pos_app → **62 passed** (25 existing + 37 in `test/responsive_test.dart`: every screen at 15 viewports from
+320×568 to 2560×1080 incl. phone landscape, text ×1.3 at three sizes, nav adaptation, hinge split); `packages/ui_kit` → **12 passed**;
+`flutter analyze` → no issues. The sweep found 16 distinct overflows before the fixes; 0 after.
+- Rename (2026-11-04): both apps now show "BhojMitra". Tests: pos_app **62 passed**, admin_web **103 passed**. Release APKs rebuilt
+  (`aapt2` label `BhojMitra`, upload-key signed): `release/2026-11-04/BhojMitra-POS-android.apk`, `BhojMitra-Console-android.apk`.
+
+### Client review 2026-11-06 (names, plans, owner support, archive fix, every screen size)
+- **Names**: admin app "BhojMitra Admin" (Android label, iOS, Windows, web, title), POS "BhojMitra".
+- **Archive to cold storage → 500 fixed**: `JSON.stringify` threw on BigInt `seq` (every branch has one). Replacer added;
+  archive also omits password / PIN / device-token hashes. Test proves it: without the fix the new spec gets the same 500.
+- **Owner support**: `GET /restaurants/:id/owner`, `POST …/owner/password-reset` (emailed one-time link + shown once),
+  `POST …/owner/mfa/reset`, public `POST /auth/password-link/check|complete`; step-up + reason + audit; sessions revoked.
+  Console: "Owner account" card + `#/reset-password` page. PIN-link routes refuse password-reset tokens.
+- **Plans**: KPI tiles (plans on sale, restaurants, monthly revenue, most popular), toggles after the KPIs, features as
+  "✓ name, ✓ name", carousel (swipe / arrows, wraps, opens on Professional) when cards do not fit side by side.
+- **Restaurant detail (phone / short screens)**: actions on top, sections as tabs (Overview, Profile, Plan & license, Owner
+  account, Payments, Branches & devices, Cold storage, History); features inline. Restaurants list: one scroll, tabs
+  Restaurants / Awaiting / Search. Dashboard: accordion (Overview KPIs open first, one panel open at a time).
+- **Every size / orientation**: sidebar scrolls on short screens (menu was squeezed to nothing in landscape); tap outside
+  closes the keyboard (both apps); overflow fixes in console dashboard, inventory, settings, audit, auth card; POS: rail +
+  side-by-side order on landscape phones, dish tiles never shorter than their content, toasts clear of the order panel.
+- Tests (this session): API `pnpm test` **159 passed** (20 suites, incl. new `owner-support.spec.ts` 3); admin_web
+  `flutter test` **143 passed** (new: responsive matrix 32 = 16 sizes × 2 consoles, owner support 3, keyboard 1, plans 4);
+  pos_app `flutter test` **80 passed** (responsive sweep now 24 sizes). Analyze: pos_app clean; admin_web 5 pre-existing infos
+  in `menu_screen.dart`. `tsc --noEmit` + eslint clean.
+- Builds: `release/2026-11-06/BhojMitra-Admin-android.apk` (label "BhojMitra Admin"), `BhojMitra-POS-android.apk`
+  (label "BhojMitra"); both upload-key signed (apksigner). Not run on a real phone in this session.
+- Machine fixes: Postgres 18 installed via Homebrew to run the API tests on `.localdb/pg` (:5433); argon2's x64
+  `build/` moved to `build-x64-backup` so the arm64 prebuild loads.

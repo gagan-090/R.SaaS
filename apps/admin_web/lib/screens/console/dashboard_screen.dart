@@ -107,7 +107,7 @@ class _RestaurantDashboardScreenState extends ConsumerState<RestaurantDashboardS
       const SizedBox(height: HPSpace.lg),
       _LiveStrip(live: live),
       const SizedBox(height: HPSpace.lg),
-      _grid(narrow ? 2 : 4, [
+      KpiGrid(spacing: HPSpace.lg, children: [
         KpiCard(key: const Key('kpi-sales'), label: 'Sales · $_rangeWord', value: rupees(k['salesPaise'] as int), caption: _delta(change['salesPct'], _prevWord, (d['previous'] as Json)['salesPaise'] as int), icon: Icons.currency_rupee_rounded, tone: HPTone.saffron),
         KpiCard(label: 'Bills', value: '${k['bills']}', caption: _deltaCount(change['billsPct'], _prevWord), icon: Icons.receipt_long_rounded),
         KpiCard(label: 'Average bill', value: rupees(k['avgBillPaise'] as int), caption: '${k['orders']} orders opened', icon: Icons.analytics_outlined, tone: HPTone.success),
@@ -149,12 +149,6 @@ class _RestaurantDashboardScreenState extends ConsumerState<RestaurantDashboardS
     final v = pct as num;
     return '${v >= 0 ? '▲' : '▼'} ${v.abs()}% vs $prevWord';
   }
-
-  static Widget _grid(int cols, List<Widget> children) => LayoutBuilder(builder: (c, box) {
-        const gap = HPSpace.lg;
-        final w = (box.maxWidth - gap * (cols - 1)) / cols;
-        return Wrap(spacing: gap, runSpacing: gap, children: [for (final ch in children) SizedBox(width: w, child: ch)]);
-      });
 
   static String _partOfDay() {
     final h = DateTime.now().hour;
@@ -297,14 +291,19 @@ class _Modes extends StatelessWidget {
           child: Row(children: [
             Icon(icons[e.key] ?? Icons.payments_outlined, size: 18, color: colors[e.key] ?? p.muted),
             const SizedBox(width: HPSpace.sm),
-            Expanded(child: Text(e.key.toUpperCase(), style: HPType.label(p.text))),
-            Text('${((e.value as int) * 100 / total).round()}%', style: HPType.body(p.muted)),
-            const SizedBox(width: HPSpace.md),
-            SizedBox(width: 84, child: Text(rupees(e.value as int), textAlign: TextAlign.right, style: HPType.label(p.text))),
+            // the share sits under the mode, so narrow cards keep room for the amount
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(e.key.toUpperCase(), style: HPType.label(p.text), overflow: TextOverflow.ellipsis),
+                Text('${((e.value as int) * 100 / total).round()}%', style: HPType.body(p.muted).copyWith(fontSize: 12)),
+              ]),
+            ),
+            const SizedBox(width: HPSpace.sm),
+            Text(rupees(e.value as int), textAlign: TextAlign.right, style: HPType.label(p.text)),
           ]),
         ),
       const Divider(),
-      Row(children: [Text('Total collected', style: HPType.body(p.muted)), const Spacer(), Text(rupees(total), style: HPType.label(p.text))]),
+      Row(children: [Expanded(child: Text('Total collected', style: HPType.body(p.muted))), Text(rupees(total), style: HPType.label(p.text))]),
     ]);
   }
 }
@@ -322,9 +321,13 @@ class _Split extends StatelessWidget {
           child: Row(children: [
             Icon(icon, color: c, size: 20),
             const SizedBox(width: HPSpace.sm),
-            Expanded(child: Text(label, style: HPType.label(p.text))),
-            Text('$bills bills', style: HPType.body(p.muted)),
-            const SizedBox(width: HPSpace.md),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(label, style: HPType.label(p.text), overflow: TextOverflow.ellipsis),
+                Text('$bills bills', style: HPType.body(p.muted).copyWith(fontSize: 12)),
+              ]),
+            ),
+            const SizedBox(width: HPSpace.sm),
             Text(rupees(paise), style: HPType.label(p.text)),
           ]),
         );
@@ -362,7 +365,8 @@ class _Categories extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Row(children: [
               Expanded(child: Text('${c['name']}', style: HPType.label(p.text), overflow: TextOverflow.ellipsis)),
-              Text('${c['qty']} · ${rupees(c['amountPaise'] as int)}', style: HPType.body(p.muted)),
+              const SizedBox(width: HPSpace.sm),
+              Flexible(child: Text('${c['qty']} · ${rupees(c['amountPaise'] as int)}', textAlign: TextAlign.right, style: HPType.body(p.muted))),
             ]),
             const SizedBox(height: 4),
             ClipRRect(
@@ -389,7 +393,8 @@ class _Leakage extends StatelessWidget {
             Container(width: 8, height: 8, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
             const SizedBox(width: HPSpace.sm),
             Expanded(child: Text(label, style: HPType.label(p.text))),
-            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [Text(value, style: HPType.label(p.text)), Text(sub, style: HPType.body(p.muted).copyWith(fontSize: 12))]),
+            const SizedBox(width: HPSpace.sm),
+            Flexible(child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [Text(value, textAlign: TextAlign.right, style: HPType.label(p.text)), Text(sub, textAlign: TextAlign.right, style: HPType.body(p.muted).copyWith(fontSize: 12))])),
           ]),
         );
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -423,13 +428,15 @@ class _TopDishes extends StatelessWidget {
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text('${it['name']}', style: HPType.label(p.text), overflow: TextOverflow.ellipsis),
-                Text('${it['category'] ?? ''}', style: HPType.body(p.muted).copyWith(fontSize: 12)),
+                // quantity and share under the name: the row fits a phone without dropping either
+                Text(
+                  [if ('${it['category'] ?? ''}'.isNotEmpty) '${it['category']}', '${it['qty']} sold', if (total > 0) '${((it['amountPaise'] as int) * 100 / total).round()}%'].join(' · '),
+                  style: HPType.body(p.muted).copyWith(fontSize: 12),
+                ),
               ]),
             ),
-            Text('${it['qty']} sold', style: HPType.body(p.muted)),
-            const SizedBox(width: HPSpace.md),
-            SizedBox(width: 48, child: Text(total == 0 ? '' : '${((it['amountPaise'] as int) * 100 / total).round()}%', textAlign: TextAlign.right, style: HPType.body(p.faint))),
-            SizedBox(width: 90, child: Text(rupees(it['amountPaise'] as int), textAlign: TextAlign.right, style: HPType.label(p.text))),
+            const SizedBox(width: HPSpace.sm),
+            Text(rupees(it['amountPaise'] as int), textAlign: TextAlign.right, style: HPType.label(p.text)),
           ]),
         ),
     ]);
@@ -445,10 +452,8 @@ class _Staff extends StatelessWidget {
     if (rows.isEmpty) return Text('Sales per waiter show here once bills are paid.', style: HPType.body(p.muted));
     return Column(children: [
       Row(children: [
-        Expanded(child: Text('WAITER', style: HPType.overline(p.muted).copyWith(fontSize: 10))),
-        SizedBox(width: 48, child: Text('BILLS', textAlign: TextAlign.right, style: HPType.overline(p.muted).copyWith(fontSize: 10))),
-        SizedBox(width: 84, child: Text('SALES', textAlign: TextAlign.right, style: HPType.overline(p.muted).copyWith(fontSize: 10))),
-        SizedBox(width: 64, child: Text('TIPS', textAlign: TextAlign.right, style: HPType.overline(p.muted).copyWith(fontSize: 10))),
+        Expanded(child: Text('WAITER · BILLS', style: HPType.overline(p.muted).copyWith(fontSize: 10))),
+        Text('SALES · TIPS', textAlign: TextAlign.right, style: HPType.overline(p.muted).copyWith(fontSize: 10)),
       ]),
       const Divider(),
       for (final r in rows)
@@ -457,10 +462,17 @@ class _Staff extends StatelessWidget {
           child: Row(children: [
             CircleAvatar(radius: 14, backgroundColor: p.success.withValues(alpha: .18), child: Text('${r['name']}'.characters.first, style: HPType.label(p.text).copyWith(fontSize: 12))),
             const SizedBox(width: HPSpace.sm),
-            Expanded(child: Text('${r['name']}', style: HPType.label(p.text), overflow: TextOverflow.ellipsis)),
-            SizedBox(width: 48, child: Text('${r['bills']}', textAlign: TextAlign.right, style: HPType.body(p.text))),
-            SizedBox(width: 84, child: Text(rupees(r['salesPaise'] as int), textAlign: TextAlign.right, style: HPType.label(p.text))),
-            SizedBox(width: 64, child: Text(rupees(r['tipsPaise'] as int), textAlign: TextAlign.right, style: HPType.body(p.accentInk))),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('${r['name']}', style: HPType.label(p.text), overflow: TextOverflow.ellipsis),
+                Text('${r['bills']} bills', style: HPType.body(p.muted).copyWith(fontSize: 12)),
+              ]),
+            ),
+            const SizedBox(width: HPSpace.sm),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text(rupees(r['salesPaise'] as int), textAlign: TextAlign.right, style: HPType.label(p.text)),
+              Text('tips ${rupees(r['tipsPaise'] as int)}', textAlign: TextAlign.right, style: HPType.body(p.accentInk).copyWith(fontSize: 12)),
+            ]),
           ]),
         ),
     ]);
@@ -490,9 +502,13 @@ class _RecentBills extends ConsumerWidget {
                   Text([b['where'], if (b['waiter'] != null) b['waiter'], _clock(b['closedAt'] ?? b['createdAt'])].join(' · '), style: HPType.body(p.muted).copyWith(fontSize: 12), overflow: TextOverflow.ellipsis),
                 ]),
               ),
-              StatusChip(label: b['status'] == 'paid' ? 'Paid' : 'Open', tone: b['status'] == 'paid' ? HPTone.success : HPTone.saffron),
-              const SizedBox(width: HPSpace.md),
-              SizedBox(width: 90, child: Text(rupees(b['totalPaise'] as int), textAlign: TextAlign.right, style: HPType.label(p.text))),
+              const SizedBox(width: HPSpace.sm),
+              // amount over its status: fits a phone without squeezing the invoice number
+              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Text(rupees(b['totalPaise'] as int), textAlign: TextAlign.right, style: HPType.label(p.text)),
+                const SizedBox(height: 2),
+                StatusChip(label: b['status'] == 'paid' ? 'Paid' : 'Open', tone: b['status'] == 'paid' ? HPTone.success : HPTone.saffron),
+              ]),
               Icon(Icons.chevron_right_rounded, color: p.faint),
             ]),
           ),

@@ -143,7 +143,8 @@ class _BillScreenState extends ConsumerState<BillScreen> {
     ref.listen(refreshTickProvider, (_, _) => _reload()); // pull-down-to-refresh; payments typed so far stay
     if (_order == null) return const Scaffold(body: LoadingState());
     final p = context.hp;
-    final wide = MediaQuery.sizeOf(context).width >= 900;
+    final wide = MediaQuery.sizeOf(context).width >= Breakpoints.threePane;
+    final gutter = context.gutter;
     final title = _bill == null ? 'Bill preview' : 'Bill ${_bill!['invoice_no']}';
     final where = _order!['table_id'] == null ? 'Takeaway' : 'Table ${_order!['table_name'] ?? ''}';
 
@@ -163,14 +164,19 @@ class _BillScreenState extends ConsumerState<BillScreen> {
         PosTopBar(title: where, subtitle: title),
         Expanded(
           child: wide
-              ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Expanded(child: SingleChildScrollView(padding: const EdgeInsets.all(HPSpace.x2), child: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 480), child: receipt)))),
-                  VerticalDivider(width: 1, color: p.line),
-                  Expanded(child: SingleChildScrollView(padding: const EdgeInsets.all(HPSpace.x2), child: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 460), child: right)))),
-                ])
+              ? TwoPane(
+                  start: SingleChildScrollView(padding: const EdgeInsets.all(HPSpace.x2), child: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 480), child: receipt))),
+                  divider: VerticalDivider(width: 1, color: p.line),
+                  endWidth: MediaQuery.sizeOf(context).width / 2,
+                  end: SingleChildScrollView(padding: const EdgeInsets.all(HPSpace.x2), child: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 460), child: right))),
+                )
               : SingleChildScrollView(
-                  padding: const EdgeInsets.all(HPSpace.lg),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [receipt, const SizedBox(height: HPSpace.lg), right]),
+                  padding: EdgeInsets.all(gutter),
+                  // foldables / large phones: one readable column, not a stretched receipt
+                  child: CenteredContent(
+                    maxWidth: ContentWidth.form,
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [receipt, const SizedBox(height: HPSpace.lg), right]),
+                  ),
                 ),
         ),
       ]),
@@ -247,8 +253,7 @@ class _BillScreenState extends ConsumerState<BillScreen> {
             child: Row(children: [
               Icon(Icons.check_circle_rounded, size: 16, color: p.success),
               const SizedBox(width: HPSpace.sm),
-              Text('${pay['mode']}'.toUpperCase(), style: HPType.label(p.text)),
-              const Spacer(),
+              Expanded(child: Text('${pay['mode']}'.toUpperCase(), style: HPType.label(p.text), overflow: TextOverflow.ellipsis)),
               Text(formatPaise(pay['amountPaise'] as int), style: HPType.label(p.text)),
             ]),
           ),
@@ -262,6 +267,7 @@ class _BillScreenState extends ConsumerState<BillScreen> {
                 ButtonSegment(value: 'upi', label: Text('UPI'), icon: Icon(Icons.qr_code_2_rounded)),
                 ButtonSegment(value: 'card', label: Text('Card'), icon: Icon(Icons.credit_card_rounded)),
               ],
+              style: MediaQuery.sizeOf(context).width < 360 ? const ButtonStyle(visualDensity: VisualDensity.compact, padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 4))) : null,
               selected: {_mode},
               onSelectionChanged: (s) => setState(() {
                 _mode = s.first;
@@ -304,8 +310,7 @@ class _Receipt extends StatelessWidget {
     Widget row(String l, int paise, {bool strong = false}) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 2),
           child: Row(children: [
-            Text(l, style: (strong ? HPType.label(p.text) : HPType.body(p.muted))),
-            const Spacer(),
+            Expanded(child: Text(l, style: (strong ? HPType.label(p.text) : HPType.body(p.muted)))),
             Text(formatPaise(paise), style: strong ? HPType.label(p.text) : HPType.mono(p.muted)),
           ]),
         );
@@ -384,32 +389,39 @@ class _BillHistoryScreenState extends ConsumerState<BillHistoryScreen> {
               final all = s.data!.reversed.toList();
               final paid = all.where((b) => b['status'] == 'paid').toList();
               final bills = all.where((b) => _q.isEmpty || '${b['invoice_no']}'.toLowerCase().contains(_q.toLowerCase())).toList();
-              return ListView(padding: EdgeInsets.all(narrow ? HPSpace.lg : HPSpace.x2), children: [
-                  Wrap(spacing: HPSpace.md, runSpacing: HPSpace.md, children: [
-                    SizedBox(width: narrow ? double.infinity : 260, child: KpiCard(label: 'Collected today', value: rupees(paid.fold(0, (n, b) => n + (b['total_paise'] as int))), caption: '${paid.length} paid bills', icon: Icons.payments_outlined, tone: HPTone.success)),
-                    if (all.length > paid.length)
-                      SizedBox(width: narrow ? double.infinity : 260, child: KpiCard(label: 'Open bills', value: '${all.length - paid.length}', caption: 'waiting for payment', icon: Icons.hourglass_bottom_rounded, tone: HPTone.saffron)),
-                  ]),
-                  const SizedBox(height: HPSpace.lg),
-                  HPSearchField(hint: 'Search invoice number', onChanged: (v) => setState(() => _q = v.trim())),
-                  const SizedBox(height: HPSpace.lg),
-                  if (bills.isEmpty)
-                    const Padding(padding: EdgeInsets.only(top: HPSpace.x4), child: EmptyState(title: 'No bills yet today', icon: Icons.receipt_long_rounded))
-                  else
-                    for (final b in bills)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: HPSpace.sm),
-                        child: OrderCard(
-                          key: Key('bill-${b['invoice_no']}'),
-                          title: '${b['invoice_no']}',
-                          subtitle: clock12(b['created_at']),
-                          total: formatPaise(b['total_paise'] as int),
-                          status: b['status'] == 'paid' ? 'Paid' : 'Open',
-                          tone: b['status'] == 'paid' ? HPTone.success : HPTone.saffron,
-                          onTap: () => showBillActions(context, ref, b),
-                        ),
+              return ListView(padding: EdgeInsets.all(narrow ? context.gutter : HPSpace.x2), children: [
+                  CenteredContent(
+                    maxWidth: ContentWidth.dashboard,
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                      KpiGrid(minTileWidth: 240, children: [
+                        KpiCard(label: 'Collected today', value: rupees(paid.fold(0, (n, b) => n + (b['total_paise'] as int))), caption: '${paid.length} paid bills', icon: Icons.payments_outlined, tone: HPTone.success),
+                        if (all.length > paid.length)
+                          KpiCard(label: 'Open bills', value: '${all.length - paid.length}', caption: 'waiting for payment', icon: Icons.hourglass_bottom_rounded, tone: HPTone.saffron),
+                      ]),
+                      const SizedBox(height: HPSpace.lg),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: ContentWidth.form),
+                        child: HPSearchField(hint: 'Search invoice number', onChanged: (v) => setState(() => _q = v.trim())),
                       ),
-                  Text(' ', style: HPType.body(p.muted)),
+                      const SizedBox(height: HPSpace.lg),
+                      if (bills.isEmpty)
+                        const Padding(padding: EdgeInsets.only(top: HPSpace.x4), child: EmptyState(title: 'No bills yet today', icon: Icons.receipt_long_rounded))
+                      else
+                        ResponsiveGrid(minTileWidth: 340, maxColumns: 3, spacing: HPSpace.sm, children: [
+                          for (final b in bills)
+                            OrderCard(
+                              key: Key('bill-${b['invoice_no']}'),
+                              title: '${b['invoice_no']}',
+                              subtitle: clock12(b['created_at']),
+                              total: formatPaise(b['total_paise'] as int),
+                              status: b['status'] == 'paid' ? 'Paid' : 'Open',
+                              tone: b['status'] == 'paid' ? HPTone.success : HPTone.saffron,
+                              onTap: () => showBillActions(context, ref, b),
+                            ),
+                        ]),
+                      Text(' ', style: HPType.body(p.muted)),
+                    ]),
+                  ),
                 ]);
             },
           ),
@@ -427,13 +439,13 @@ Future<void> showBillActions(BuildContext context, WidgetRef ref, Json bill) asy
   final choice = await showModalBottomSheet<String>(
     context: context,
     builder: (c) => SafeArea(
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
+      child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
         ListTile(title: Text('${bill['invoice_no']}', style: HPType.titleCard(c.hp.text)), subtitle: Text('${formatPaise(bill['total_paise'] as int)} · ${clock12(bill['created_at'])}')),
         if (s.can('payment.take')) ListTile(key: const Key('bill-reprint'), leading: const Icon(Icons.print_rounded), title: const Text('Reprint bill (DUPLICATE)'), onTap: () => Navigator.pop(c, 'print')),
         if (paid && s.can('payment.take')) ListTile(key: const Key('bill-adjust'), leading: const Icon(Icons.edit_note_rounded), title: const Text('Adjust paid bill'), subtitle: const Text('Refund or extra charge with a reason'), onTap: () => Navigator.pop(c, 'adjust')),
         if (!s.can('payment.take')) const ListTile(leading: Icon(Icons.visibility_outlined), title: Text('Read-only: bills are reprinted and adjusted by the cashier or owner.')),
         const SizedBox(height: HPSpace.sm),
-      ]),
+      ])),
     ),
   );
   if (!context.mounted || choice == null) return;
