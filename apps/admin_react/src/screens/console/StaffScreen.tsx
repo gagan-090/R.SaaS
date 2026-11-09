@@ -197,7 +197,10 @@ function StaffEditor({ user, roles, customRoles, limits, close }: { user?: Json;
   const [canDiscount, setCanDiscount] = useState<boolean>(user?.canDiscount ?? false);
   const [webAccess, setWebAccess] = useState<boolean>(user?.webAccess ?? false);
   const [active, setActive] = useState<boolean>(user == null || user.status === 'active');
-  const [invite, setInvite] = useState(true);
+  // for now the owner / admin sets the PIN and the person is active at once — no invite email to wait for
+  // (the server still supports sendInvite; set OFFER_INVITE to bring the email option back)
+  const OFFER_INVITE = false;
+  const [invite, setInvite] = useState(false);
   const [consoleLogin, setConsoleLogin] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -296,7 +299,7 @@ function StaffEditor({ user, roles, customRoles, limits, close }: { user?: Json;
         {role === 'custom' && <Select<string | null> label="Which custom role" testId="custom-role" value={customRoleId} options={customRoles.map((r) => [r.id as string, `${r.name}`])} onChange={setCustomRoleId} />}
         {role === 'cashier' && <SwitchRow title="Can give discounts" checked={canDiscount} onChange={setCanDiscount} />}
         <div className="t-overline mt-8">PIN</div>
-        {isNew && (
+        {isNew && OFFER_INVITE && (
           <div>
             <Radio name="pin-mode" testId="pin-invite" value={true} current={invite} onChange={setInvite} label="Email an invite — they choose their own PIN (recommended)" />
             <Radio name="pin-mode" testId="pin-now" value={false} current={invite} onChange={setInvite} label="Set a PIN now and tell them in person" />

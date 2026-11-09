@@ -268,7 +268,10 @@ class _StaffEditorState extends State<_StaffEditor> {
   late bool _canDiscount = widget.user?['canDiscount'] as bool? ?? false;
   late bool _webAccess = widget.user?['webAccess'] as bool? ?? false;
   late bool _active = widget.user == null || widget.user!['status'] == 'active';
-  bool _invite = true, _consoleLogin = false, _busy = false;
+  // for now the owner / admin sets the PIN and the person is active at once — no invite email to wait for.
+  // (The server still supports sendInvite; flip this to bring the email option back.)
+  static const _offerInvite = false;
+  bool _invite = false, _consoleLogin = false, _busy = false;
   String? _error;
 
   bool get _isNew => widget.user == null;
@@ -393,7 +396,7 @@ class _StaffEditorState extends State<_StaffEditor> {
           SwitchListTile(contentPadding: EdgeInsets.zero, value: _canDiscount, onChanged: (v) => setState(() => _canDiscount = v), title: const Text('Can give discounts')),
         const SizedBox(height: HPSpace.md),
         Text('PIN', style: HPType.overline(p.muted)),
-        if (_isNew)
+        if (_isNew && _offerInvite)
           RadioGroup<bool>(
             groupValue: _invite,
             onChanged: (v) => setState(() => _invite = v!),
@@ -410,7 +413,7 @@ class _StaffEditorState extends State<_StaffEditor> {
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             obscureText: true,
             maxLength: 8,
-            decoration: InputDecoration(labelText: _isNew ? 'PIN (6 to 8 digits, e.g. 246813)' : 'New PIN (leave empty to keep)', counterText: '', prefixIcon: const Icon(Icons.pin_outlined)),
+            decoration: InputDecoration(labelText: _isNew ? 'PIN (6 to 8 digits, e.g. 246813)' : 'New PIN (leave empty to keep)', helperText: _isNew ? 'Tell them this PIN. They sign in with their email + PIN straight away, no email needed.' : null, helperMaxLines: 2, counterText: '', prefixIcon: const Icon(Icons.pin_outlined)),
           ),
         if (!_isNew && widget.user!['email'] != null)
           Wrap(spacing: HPSpace.sm, children: [

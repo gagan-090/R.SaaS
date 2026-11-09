@@ -420,9 +420,8 @@ void main() {
       await t.pumpAndSettle();
       expect(find.text('Enter their work email'), findsOneWidget);
       await t.enterText(find.byKey(const Key('staff-email')), 'anita@demo.com');
-      await t.ensureVisible(find.byKey(const Key('pin-now')));
-      await t.tap(find.byKey(const Key('pin-now')));
-      await t.pumpAndSettle();
+      // no invite-by-email choice for now: the PIN box is there straight away
+      expect(find.byKey(const Key('pin-invite')), findsNothing);
       for (final (bad, msg) in [('12', 'PIN must be 6 to 8 digits'), ('111111', 'PIN cannot be the same digit repeated'), ('123456', 'PIN cannot be a run of digits like 123456')]) {
         await t.enterText(find.byKey(const Key('staff-pin')), bad);
         await t.tap(find.byKey(const Key('save-staff')));
@@ -445,20 +444,25 @@ void main() {
       expect(api.staff.firstWhere((u) => u['name'] == 'Anita')['status'], 'disabled');
     });
 
-    testWidgets('[$tag] staff: invite by email is the default; web access depends on the plan', (t) async {
+    testWidgets('[$tag] staff: added with a PIN, active at once, no invite email; web access depends on the plan', (t) async {
       final api = await start(t, size: size, brightness: brightness);
       await go(t, 'Staff', size: size);
       await t.tap(find.byKey(const Key('add-staff')));
       await t.pumpAndSettle();
       await t.enterText(find.byKey(const Key('staff-name')), 'Kunal');
       await t.enterText(find.byKey(const Key('staff-email')), 'kunal@demo.com');
+      await t.ensureVisible(find.byKey(const Key('staff-pin')));
+      await t.enterText(find.byKey(const Key('staff-pin')), '582914');
+      await t.pumpAndSettle();
       await t.ensureVisible(find.byKey(const Key('web-access')));
+      await t.pumpAndSettle();
       await t.tap(find.byKey(const Key('web-access')));
+      await t.pumpAndSettle();
       await t.tap(find.byKey(const Key('save-staff')));
       await t.pumpAndSettle();
-      expect(api.last('POST', '/staff'), allOf(containsPair('sendInvite', true), containsPair('webAccess', true)));
-      expect(api.last('POST', '/staff').containsKey('pin'), isFalse);
-      expect(find.textContaining('Invite sent to kunal@demo.com'), findsOneWidget);
+      expect(api.last('POST', '/staff'), allOf(containsPair('pin', '582914'), containsPair('webAccess', true), containsPair('status', 'active')));
+      expect(api.last('POST', '/staff').containsKey('sendInvite'), isFalse);
+      expect(find.textContaining('Kunal added'), findsOneWidget);
     });
 
     testWidgets('[$tag] staff: an owner with no PIN is told so and sets their own', (t) async {
