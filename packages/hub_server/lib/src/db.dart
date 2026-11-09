@@ -113,6 +113,14 @@ const _schemaV5 = <String>[
   'ALTER TABLE floors ADD COLUMN height INTEGER NOT NULL DEFAULT 800',
 ];
 
+/// v6: staff email, so a new device can join the main device with the employee's email + PIN (no pairing code).
+/// The config cursor is cleared so the next cloud pull sends every user again, now with their email.
+const _schemaV6 = <String>[
+  'ALTER TABLE users ADD COLUMN email TEXT',
+  'CREATE INDEX users_email ON users(email)',
+  "DELETE FROM meta WHERE key = 'config_cursor'",
+];
+
 /// drift database without code generation: the schema is plain SQL above and queries go through
 /// [query]/[execute]. drift provides the executor, transactions (nested = savepoints) and migrations.
 class HubDatabase extends GeneratedDatabase {
@@ -128,12 +136,12 @@ class HubDatabase extends GeneratedDatabase {
   Iterable<DatabaseSchemaEntity> get allSchemaEntities => const [];
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) async {
-          for (final s in [..._schemaV1, ..._schemaV2, ..._schemaV3, ..._schemaV4, ..._schemaV5]) {
+          for (final s in [..._schemaV1, ..._schemaV2, ..._schemaV3, ..._schemaV4, ..._schemaV5, ..._schemaV6]) {
             await customStatement(s);
           }
         },
@@ -155,6 +163,11 @@ class HubDatabase extends GeneratedDatabase {
           }
           if (from < 5) {
             for (final s in _schemaV5) {
+              await customStatement(s);
+            }
+          }
+          if (from < 6) {
+            for (final s in _schemaV6) {
               await customStatement(s);
             }
           }

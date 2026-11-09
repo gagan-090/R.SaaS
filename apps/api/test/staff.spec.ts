@@ -130,7 +130,7 @@ describe('staff & staff web portal', () => {
       await t.http().get(api('/floors')).set(bearer(tok)).expect(200);
       await t.http().get(api('/staff')).set(bearer(tok)).expect(403);
       // the hub pulls the role's permissions
-      const reg = (await t.http().post(api('/devices/register-hub')).set(auth).send({ name: 'Hub 2', platform: 'android' }).expect(201)).body;
+      const reg = (await t.http().post(api('/devices/register-hub')).set(auth).send({ name: 'Hub 2', platform: 'android', replace: true }).expect(201)).body;
       const pull = (await t.http().get(api('/sync/pull?since=0')).set('X-Device-Token', reg.deviceToken).expect(200)).body;
       expect(pull.users.find((x: { id: string }) => x.id === u.id).roles[0]).toMatchObject({ role: 'custom', permissions: expect.arrayContaining(['order.write']) });
       // changing the role changes access on the next request; a role in use cannot be deleted

@@ -369,3 +369,17 @@ Test: `flutter test` in apps/pos_app → **62 passed** (25 existing + 37 in `tes
   (label "BhojMitra"); both upload-key signed (apksigner). Not run on a real phone in this session.
 - Machine fixes: Postgres 18 installed via Homebrew to run the API tests on `.localdb/pg` (:5433); argon2's x64
   `build/` moved to `build-x64-backup` so the arm64 prebuild loads.
+
+### POS: first owner device = main device; staff devices join with email + PIN — 2026-11-09
+- Setup screen: one form (email, "PIN or password", device name); no "Main device / Join a hub" choice. Password → owner's
+  first device signs in to the cloud and becomes the main device (MFA / choose-PIN steps kept). PIN → finds the main device
+  on the Wi-Fi (scan of the local /24, port 8443) and joins it; works without internet. Not found → message + address box.
+  Second owner device: server answers `hub_exists`, app asks for the PIN instead (owner chose "join as a terminal").
+- Hub (`packages/hub_server`): `POST /pairing/staff-claim` (email + PIN, lockout after 5 wrong PINs, plan rules), DB v6
+  `users.email`, `/pairing/info` returns `app` + restaurant name. Pairing codes kept for support/older hubs.
+- API: `register-hub` refuses a second main device unless `replace: true` (revoking the old one in the console frees it);
+  sync pull sends staff `email`.
+- Main device "Hub & devices": pairing code/QR replaced by "Add a device" steps + its address. Console Devices pages updated.
+- Tests (this session): API **162 passed** (new hub_exists + staff email test); hub_server `dart test` **49 passed** (new
+  staff-claim + lockout + Standard-plan tests); pos_app **81 passed** (new setup tests: join with PIN, not-found + typed
+  address); admin_web **143 passed**; admin_react **50 passed**. Not tested on real devices on a real Wi-Fi.

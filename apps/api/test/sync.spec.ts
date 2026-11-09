@@ -22,6 +22,17 @@ describe('sync', () => {
 
   const ev = (entity = 'order') => ({ eventId: uuidv7(), entity, entityId: uuidv7(), op: 'create', payload: { branchId: R.branchId }, createdAt: new Date().toISOString() });
 
+  it('a branch keeps its first main device: a second registration gets hub_exists unless it deliberately replaces it', async () => {
+    const again = await t.http().post(api('/devices/register-hub')).set(bearer(R.ownerToken)).send({ name: 'Owner phone', platform: 'android' }).expect(409);
+    expect(again.body).toMatchObject({ code: 'hub_exists', hubName: 'Cashier PC' });
+    // the first main device keeps working
+    await t.http().get(api('/sync/pull')).set('X-Device-Token', device).expect(200);
+    // staff emails go to the hub so new devices can join it with email + PIN
+    const pull = (await t.http().get(api('/sync/pull')).set('X-Device-Token', device).expect(200)).body;
+    expect(pull.users.length).toBeGreaterThan(0);
+    for (const u of pull.users) expect(u.email).toEqual(expect.stringContaining('@'));
+  });
+
   it('the same outbox batch pushed twice is stored once', async () => {
     const batch = [ev(), ev('order_line'), ev('payment')];
     const r1 = await t.http().post(api('/sync/push')).set('X-Device-Token', device).send({ events: batch }).expect(200);

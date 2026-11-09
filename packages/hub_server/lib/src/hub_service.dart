@@ -171,19 +171,53 @@ class HubService {
         if (row == null || row['used_at'] != null || DateTime.parse(row['expires_at']! as String).isBefore(clock())) {
           throw unauthorized('invalid_pairing_code', 'Pairing code is invalid, used or expired');
         }
-        if (!['windows', 'android', 'ios'].contains(platform)) throw badRequest('bad_platform', 'platform must be windows, android or ios');
-        final l = await license();
-        final paired = (await db.selectOne('SELECT count(*) AS n FROM devices WHERE revoked_at IS NULL'))!['n']! as int;
-        final limit = (l.payload?['limits'] as Map?)?['devicesPerBranch'];
-        // the hub itself counts as the first device; lan_hub (Professional+) is needed for any other device
-        if (!l.features.contains('lan_hub')) throw forbidden('feature_not_in_plan', 'Pairing other devices needs the lan_hub feature (Professional)');
-        if (limit is int && paired + 1 >= limit) throw forbidden('plan_limit', 'Device limit reached for this plan');
+        await _checkNewDevice(platform);
         await db.execute('UPDATE pairing_codes SET used_at = ? WHERE code_hash = ?', [nowIso(clock()), sha256Hex(code)]);
-        final id = uuidv7();
-        final token = randomToken();
-        await db.execute('INSERT INTO devices(id, name, platform, token_hash, paired_at) VALUES (?,?,?,?,?)', [id, name, platform, sha256Hex(token), nowIso(clock())]);
-        await _audit(Actor(deviceId: id), 'device.paired', objectType: 'device', objectId: id, after: {'name': name, 'platform': platform});
-        return {'deviceId': id, 'deviceToken': token, 'branchId': config.branchId};
+        return _addDevice(name, platform);
+      });
+
+  /// Plan rules for one more device: lan_hub (Professional+) and the devices-per-branch limit (the hub counts as one).
+  Future<void> _checkNewDevice(String platform) async {
+    if (!['windows', 'android', 'ios'].contains(platform)) throw badRequest('bad_platform', 'platform must be windows, android or ios');
+    final l = await license();
+    final paired = (await db.selectOne('SELECT count(*) AS n FROM devices WHERE revoked_at IS NULL'))!['n']! as int;
+    final limit = (l.payload?['limits'] as Map?)?['devicesPerBranch'];
+    if (!l.features.contains('lan_hub')) {
+      throw forbidden('feature_not_in_plan', 'Your plan allows only the main device. Ask BhojMitra to upgrade to Professional to add more devices.');
+    }
+    if (limit is int && paired + 1 >= limit) throw forbidden('plan_limit', 'Device limit reached for this plan. Remove an old device in Hub & devices, or upgrade the plan.');
+  }
+
+  Future<Map<String, Object?>> _addDevice(String name, String platform, {String? userId}) async {
+    final id = uuidv7();
+    final token = randomToken();
+    await db.execute('INSERT INTO devices(id, name, platform, token_hash, paired_at) VALUES (?,?,?,?,?)', [id, name, platform, sha256Hex(token), nowIso(clock())]);
+    await _audit(Actor(deviceId: id, userId: userId), 'device.paired', objectType: 'device', objectId: id, after: {'name': name, 'platform': platform, if (userId != null) 'by': userId});
+    return {'deviceId': id, 'deviceToken': token, 'branchId': config.branchId};
+  }
+
+  /// Wrong PINs per email: 5 in a row lock that email out of device joining for 5 minutes (a 4-digit PIN must not
+  /// be guessable from the Wi-Fi). In memory: a hub restart clears it, which is acceptable for a LAN-only door.
+  final Map<String, (int, DateTime)> _joinFailures = {};
+
+  /// A new device joins the main device with an employee's (or the owner's) email + POS PIN — no pairing code, works
+  /// offline. The PIN is checked against the staff list last synced from the cloud.
+  Future<Map<String, Object?>> claimWithStaff(String email, String pin, String name, String platform) => _tx(() async {
+        final key = email.trim().toLowerCase();
+        final f = _joinFailures[key];
+        if (f != null && f.$1 >= 5 && clock().isBefore(f.$2)) {
+          throw HubError(429, 'too_many_attempts', 'Too many wrong PINs. Wait 5 minutes and try again.');
+        }
+        final u = key.isEmpty ? null : await db.selectOne('SELECT * FROM users WHERE email = ?', [key]);
+        if (u == null || u['status'] != 'active' || u['pin_hash'] == null || !verifyArgon2(u['pin_hash']! as String, pin)) {
+          final n = (f == null || clock().isAfter(f.$2) ? 0 : f.$1) + 1;
+          _joinFailures[key] = (n, clock().add(const Duration(minutes: 5)));
+          throw unauthorized('invalid_credentials', 'Wrong email or PIN, or this person is not on this restaurant\'s staff list.');
+        }
+        _joinFailures.remove(key);
+        await _checkNewDevice(platform);
+        final d = await _addDevice(name, platform, userId: u['id']! as String);
+        return {...d, 'user': {'id': u['id'], 'name': u['name']}};
       });
 
   /// Registers the hub's own device (no code needed — it is the hub). Returns its device token.
@@ -284,8 +318,8 @@ class HubService {
         );
       }
       for (final r in rows('users')) {
-        await db.execute('INSERT OR REPLACE INTO users(id, name, status, pin_hash, roles_json) VALUES (?,?,?,?,?)',
-            [r['id'], r['name'], r['status'], r['pinHash'], jsonEncode(r['roles'] ?? const [])]);
+        await db.execute('INSERT OR REPLACE INTO users(id, name, email, status, pin_hash, roles_json) VALUES (?,?,?,?,?,?)',
+            [r['id'], r['name'], (r['email'] as String?)?.trim().toLowerCase(), r['status'], r['pinHash'], jsonEncode(r['roles'] ?? const [])]);
       }
       final tenant = pull['tenant'] as Map<String, Object?>?;
       if (tenant != null) await db.setMeta('tenant', jsonEncode(tenant));

@@ -106,8 +106,8 @@ void main() {
     expect(PairingPayload.tryParse('https://evil.example'), isNull);
   });
 
-  testWidgets('S1: joining a hub with the pairing text stores the device token', (t) async {
-    PairingPayload? claimed;
+  testWidgets('S1: one sign-in, no "Join a hub" choice; email + PIN finds the main device on the Wi-Fi and joins it', (t) async {
+    final calls = <String>[];
     final store = MemoryDeviceStore();
     t.view.physicalSize = tablet;
     t.view.devicePixelRatio = 1;
@@ -115,21 +115,55 @@ void main() {
     await t.pumpWidget(ProviderScope(overrides: [
       deviceStoreProvider.overrideWithValue(store),
       hubApiFactoryProvider.overrideWithValue((_) => FakeHubApi()),
-      pairFnProvider.overrideWithValue((p, name, platform) async {
-        claimed = p;
-        return 'issued-device-token';
+      joinHubFnProvider.overrideWithValue(({required email, required pin, required deviceName, required platform, host}) async {
+        calls.add('$email|$pin|$deviceName|${host ?? '-'}');
+        return const JoinedHub(baseUrl: 'https://10.0.0.5:8443/hub/v1', deviceToken: 'issued-device-token', fingerprint: 'AA:BB', restaurant: 'Demo Dhaba', userName: 'Ravi');
       }),
     ], child: const PosApp()));
     await t.pumpAndSettle();
-    expect(find.text('Set up this device'), findsOneWidget);
-    await t.tap(find.text('Join a hub'));
+    expect(find.text('Sign in to set up this device'), findsOneWidget);
+    expect(find.text('Join a hub'), findsNothing);
+    expect(find.text('Main device'), findsNothing);
+    await t.enterText(find.byKey(const Key('setup-email')), 'ravi@demo.test');
+    await t.enterText(find.byKey(const Key('setup-secret')), '1234');
+    await t.tap(find.byKey(const Key('setup-sign-in')));
     await t.pumpAndSettle();
-    await t.enterText(find.byKey(const Key('pair-payload')), const PairingPayload(host: '10.0.0.5', port: 8443, code: '654321', fingerprint: 'AA:BB').encode());
-    await t.tap(find.widgetWithText(PrimaryButton, 'Pair'));
-    await t.pumpAndSettle();
-    expect(claimed?.code, '654321');
+    expect(calls, ['ravi@demo.test|1234|Cashier terminal|-']);
     expect(store.value?.deviceToken, 'issued-device-token');
+    expect(store.value?.hubBaseUrl, 'https://10.0.0.5:8443/hub/v1');
+    expect(store.value?.fingerprint, 'AA:BB');
     expect(find.text('Who is working?'), findsOneWidget); // S3 next
+  });
+
+  testWidgets('S1: no main device on the Wi-Fi: a clear message and an address box; a wrong PIN shows the hub\'s refusal', (t) async {
+    var answer = 0;
+    final store = MemoryDeviceStore();
+    t.view.physicalSize = tablet;
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    String? typedHost;
+    await t.pumpWidget(ProviderScope(overrides: [
+      deviceStoreProvider.overrideWithValue(store),
+      hubApiFactoryProvider.overrideWithValue((_) => FakeHubApi()),
+      joinHubFnProvider.overrideWithValue(({required email, required pin, required deviceName, required platform, host}) async {
+        typedHost = host;
+        if (answer++ == 0) return null;
+        throw HubApiException(401, 'invalid_credentials', 'Wrong email or PIN');
+      }),
+    ], child: const PosApp()));
+    await t.pumpAndSettle();
+    await t.enterText(find.byKey(const Key('setup-email')), 'anita@demo.test');
+    await t.enterText(find.byKey(const Key('setup-secret')), '5555');
+    await t.tap(find.byKey(const Key('setup-sign-in')));
+    await t.pumpAndSettle();
+    expect(find.textContaining('No main device found on this Wi-Fi'), findsOneWidget);
+    expect(find.byKey(const Key('setup-hub-address')), findsOneWidget);
+    await t.enterText(find.byKey(const Key('setup-hub-address')), '192.168.1.20');
+    await t.tap(find.byKey(const Key('setup-sign-in')));
+    await t.pumpAndSettle();
+    expect(typedHost, '192.168.1.20');
+    expect(find.text('Wrong email or PIN'), findsOneWidget);
+    expect(store.value, isNull);
   });
 
   testWidgets('S3: wrong PIN shakes and clears; right PIN opens the shell with hub status', (t) async {

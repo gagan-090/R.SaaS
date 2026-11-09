@@ -11,7 +11,7 @@ import { askReason, showDone, showError } from '../../ui/overlay';
 
 /**
  * T1 Hubs & devices: the branch hub (the cashier device that keeps working offline) and every paired terminal.
- * A hub is added from the POS app itself ("This device is the hub"); this page shows how, and lets you revoke.
+ * A hub is added from the POS app itself (the owner's first sign-in); this page shows how, and lets you revoke.
  */
 export function DevicesScreen() {
   const me = useSession();
@@ -113,15 +113,15 @@ function HowTo({ apiUrl, email, hasHub }: { apiUrl: string; email: string; hasHu
   return (
     <SectionCard title={hasHub ? 'Add another terminal or replace the hub' : 'Set up your hub'}>
       <p className="muted" style={{ marginTop: 0 }}>
-        The hub is the main cashier device (Windows PC or Android). It keeps billing running when the internet drops and syncs to the cloud when it is back. Other phones and tablets pair with it over Wi-Fi.
+        The hub is the main cashier device (Windows PC or Android). It keeps billing running when the internet drops and syncs to the cloud when it is back. Staff phones and tablets join it over Wi-Fi with their email and PIN.
       </p>
       <div className="mt-16">
         {step(1, 'Install BhojMitra POS on the cashier device', <span className="muted">Android: install the APK. Windows: run the installer.</span>)}
         {step(
           2,
-          'Open it and choose "This device is the hub"',
+          'Open it on the first device (needs internet once)',
           <>
-            <span className="muted">Enter this server address:</span>
+            <span className="muted">If it asks for a server (Server settings), use this address:</span>
             <div className="copy-box mt-8">
               <span className="t-mono grow" data-testid="hub-api-url" style={{ userSelect: 'all', overflowWrap: 'anywhere' }}>
                 {apiUrl}
@@ -130,8 +130,8 @@ function HowTo({ apiUrl, email, hasHub }: { apiUrl: string; email: string; hasHu
             </div>
           </>,
         )}
-        {step(3, 'Sign in as the owner or IT admin', <span className="muted">{email ? `For example ${email} and your console password.` : 'Use your console email and password.'}</span>)}
-        {step(4, 'Staff sign in with their PIN', <span className="muted">Menu, tables and staff arrive automatically. Pair more devices from the hub: Menu → Hub & devices → scan the code.</span>)}
+        {step(3, 'Sign in as the owner with your password', <span className="muted">{email ? `For example ${email} and your console password. This device becomes the main device.` : 'Use your console email and password. This device becomes the main device.'}</span>)}
+        {step(4, 'More devices: email + PIN on the same Wi-Fi', <span className="muted">Add staff (email + PIN). On each new device, open BhojMitra POS on the restaurant Wi-Fi and sign in with that email and PIN — it connects to the main device by itself, also without internet.</span>)}
       </div>
     </SectionCard>
   );

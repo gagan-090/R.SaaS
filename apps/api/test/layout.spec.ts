@@ -62,7 +62,7 @@ describe('floor layout editor', () => {
   it('a table with an open order cannot be removed; past orders keep their table; the live view shows occupied', async () => {
     const cur = (await t.http().get(api(`/floors/${floor.id}/layout`)).set(auth()).expect(200)).body;
     const target = cur.tables.find((x: { name: string }) => x.name === 'Patio-A');
-    const reg = (await t.http().post(api('/devices/register-hub')).set(auth()).send({ name: 'Hub 2', platform: 'android' }).expect(201)).body;
+    const reg = (await t.http().post(api('/devices/register-hub')).set(auth()).send({ name: 'Hub 2', platform: 'android', replace: true }).expect(201)).body;
     const orderId = uuidv7();
     const ev = (status: string) => ({ eventId: uuidv7(), entity: 'order', entityId: orderId, op: 'update', payload: { id: orderId, type: 'dine_in', table_id: target.id, status, branchId: r.branchId }, createdAt: new Date().toISOString() });
     await t.http().post(api('/sync/push')).set('X-Device-Token', reg.deviceToken).send({ events: [ev('open')] }).expect(200);

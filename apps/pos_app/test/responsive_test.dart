@@ -239,9 +239,9 @@ void main() {
       try {
         e.screen = 'device setup';
         await _start(t, size, setup: null);
-        e.screen = 'join a hub';
-        if (find.text('Join a hub').evaluate().isNotEmpty) await _tap(t, find.text('Join a hub'));
-        await _tap(t, find.text('Enter the address by hand'));
+        e.screen = 'device setup: server settings';
+        expect(find.text('Join a hub'), findsNothing);
+        if (find.text('Server settings').evaluate().isNotEmpty) await _tap(t, find.text('Server settings'));
       } finally {
         e.restore();
       }

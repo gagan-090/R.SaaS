@@ -139,16 +139,16 @@ class _HowTo extends StatelessWidget {
       title: hasHub ? 'Add another terminal or replace the hub' : 'Set up your hub',
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text(
-          'The hub is the main cashier device (Windows PC or Android). It keeps billing running when the internet drops and syncs to the cloud when it is back. Other phones and tablets pair with it over Wi-Fi.',
+          'The hub is the main cashier device (Windows PC or Android). It keeps billing running when the internet drops and syncs to the cloud when it is back. Staff phones and tablets join it over Wi-Fi with their email and PIN.',
           style: HPType.body(p.muted),
         ),
         const SizedBox(height: HPSpace.lg),
         step(1, 'Install BhojMitra POS on the cashier device', Text('Android: install the APK. Windows: run the installer.', style: HPType.body(p.muted))),
         step(
           2,
-          'Open it and choose "This device is the hub"',
+          'Open it on the first device (needs internet once)',
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Enter this server address:', style: HPType.body(p.muted)),
+            Text('If it asks for a server (Server settings), use this address:', style: HPType.body(p.muted)),
             const SizedBox(height: 6),
             Container(
               padding: const EdgeInsets.fromLTRB(HPSpace.md, 4, 4, 4),
@@ -167,8 +167,8 @@ class _HowTo extends StatelessWidget {
             ),
           ]),
         ),
-        step(3, 'Sign in as the owner or IT admin', Text(email.isEmpty ? 'Use your console email and password.' : 'For example $email and your console password.', style: HPType.body(p.muted))),
-        step(4, 'Staff sign in with their PIN', Text('Menu, tables and staff arrive automatically. Pair more devices from the hub: Menu → Hub & devices → scan the code.', style: HPType.body(p.muted))),
+        step(3, 'Sign in as the owner with your password', Text(email.isEmpty ? 'Use your console email and password. This device becomes the main device.' : 'For example $email and your console password. This device becomes the main device.', style: HPType.body(p.muted))),
+        step(4, 'More devices: email + PIN on the same Wi-Fi', Text('Add staff (email + PIN). On each new device, open BhojMitra POS on the restaurant Wi-Fi and sign in with that email and PIN — it connects to the main device by itself, also without internet.', style: HPType.body(p.muted))),
       ]),
     );
   }

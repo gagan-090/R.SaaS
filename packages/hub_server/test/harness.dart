@@ -104,7 +104,7 @@ class Harness {
       };
 
   static Map<String, Object?> _user(String id, String name, String role, {List<String> extra = const []}) => {
-        'id': id, 'name': name, 'status': 'active', 'pinHash': fastArgon2(pins[id]!),
+        'id': id, 'name': name, 'email': '${name.toLowerCase()}@demo.test', 'status': 'active', 'pinHash': fastArgon2(pins[id]!),
         'roles': [{'role': role, 'extraPermissions': extra}],
       };
 

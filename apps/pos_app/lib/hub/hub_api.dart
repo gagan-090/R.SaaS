@@ -249,5 +249,42 @@ Future<String> claimPairing(PairingPayload p, {required String deviceName, requi
   return body['deviceToken'] as String;
 }
 
+/// A device that joined the main device: where the hub is, the pinned certificate and this device's token.
+class JoinedHub {
+  const JoinedHub({required this.baseUrl, required this.deviceToken, required this.fingerprint, this.restaurant, this.userName});
+  final String baseUrl, deviceToken, fingerprint;
+  final String? restaurant, userName;
+}
+
+/// Finds the restaurant's main device on this Wi-Fi and joins it with the person's email + POS PIN (no pairing code,
+/// no internet needed). Returns null when no main device answered; throws [HubApiException] when one refused.
+/// [host] = an address typed in by hand ("192.168.1.20" or "192.168.1.20:8443") instead of scanning.
+Future<JoinedHub?> findAndJoinHub({required String email, required String pin, required String deviceName, required String platform, String? host}) async {
+  String? only;
+  var port = 8443;
+  if (host != null && host.trim().isNotEmpty) {
+    final parts = host.trim().split(':');
+    only = parts.first;
+    if (parts.length > 1) port = int.tryParse(parts[1]) ?? 8443;
+  }
+  final hubs = await probeHubs(onlyHost: only, port: port);
+  if (hubs.isEmpty) return null;
+  HubApiException? last;
+  for (final h in hubs) {
+    final base = 'https://${h.host}:${h.port}/hub/v1';
+    final res = await pinnedHttpClient(h.fingerprint).post(Uri.parse('$base/pairing/staff-claim'),
+        headers: {'content-type': 'application/json'}, body: jsonEncode({'email': email.trim(), 'pin': pin, 'deviceName': deviceName, 'platform': platform}));
+    final body = res.body.isEmpty ? const {} : jsonDecode(res.body) as Map;
+    if (res.statusCode == 201) {
+      return JoinedHub(baseUrl: base, deviceToken: body['deviceToken'] as String, fingerprint: h.fingerprint,
+          restaurant: h.info['restaurant'] as String?, userName: (body['user'] as Map?)?['name'] as String?);
+    }
+    last = HubApiException(res.statusCode, '${body['code']}', '${body['message'] ?? 'Could not join the main device'}');
+    // another restaurant's main device on a shared Wi-Fi does not know this person: try the next one
+    if (last.code != 'invalid_credentials') throw last;
+  }
+  throw last!;
+}
+
 /// Opaque helper so the app can show WebSocket channel errors uniformly.
 typedef ChannelFactory = WebSocketChannel Function(Uri);

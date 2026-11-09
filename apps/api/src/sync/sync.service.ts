@@ -114,7 +114,7 @@ export class SyncService {
         users: users
           .filter((u) => u.roles.some((r) => r.branchIds.length === 0 || r.branchIds.includes(dev.branchId)))
           .map((u) => ({
-            id: u.id, name: u.name, status: u.status, pinHash: u.pinHash, seq: u.seq.toString(),
+            id: u.id, name: u.name, email: u.email, status: u.status, pinHash: u.pinHash, seq: u.seq.toString(),
             roles: u.roles.map((r) => ({
               role: r.role, extraPermissions: r.extraPermissions,
               ...(r.role === 'custom' ? { permissions: r.customRole && !r.customRole.deleted && ent.features.includes('roles.custom') ? r.customRole.permissions : [] } : {}),

@@ -73,6 +73,33 @@ void main() {
       expect((await h.post('/pairing/claim', body: {'code': old, 'deviceName': 'x', 'platform': 'android'})).status, 401);
     });
 
+    test('a new device joins with a staff email + PIN (no pairing code); wrong PINs lock the email for 5 minutes', () async {
+      final ok = await h.post('/pairing/staff-claim', body: {'email': ' Ravi@Demo.test ', 'pin': Harness.pins[Harness.cashier], 'deviceName': "Ravi's phone", 'platform': 'android'});
+      expect(ok.status, 201, reason: '$ok');
+      expect(ok.json['branchId'], Harness.branchId);
+      expect((ok.json['user']! as Map)['name'], 'Ravi');
+      expect(await h.hub.authenticateDevice(ok.json['deviceToken']! as String), ok.json['deviceId']);
+      // the paired device then signs staff in with their PIN as usual
+      final dev = await h.hub.db.selectOne("SELECT id FROM devices WHERE id = ?", [ok.json['deviceId']]);
+      expect(dev, isNotNull);
+      // unknown email and wrong PIN look the same
+      expect((await h.post('/pairing/staff-claim', body: {'email': 'nobody@demo.test', 'pin': '1234', 'deviceName': 'x', 'platform': 'android'})).code, 'invalid_credentials');
+      for (var i = 0; i < 5; i++) {
+        expect((await h.post('/pairing/staff-claim', body: {'email': 'anita@demo.test', 'pin': '0000', 'deviceName': 'x', 'platform': 'android'})).status, 401);
+      }
+      // locked, even with the right PIN, until 5 minutes pass
+      final locked = await h.post('/pairing/staff-claim', body: {'email': 'anita@demo.test', 'pin': Harness.pins[Harness.waiter], 'deviceName': 'x', 'platform': 'android'});
+      expect(locked.status, 429);
+      h.now = h.now.add(const Duration(minutes: 6));
+      expect((await h.post('/pairing/staff-claim', body: {'email': 'anita@demo.test', 'pin': Harness.pins[Harness.waiter], 'deviceName': 'x', 'platform': 'android'})).status, 201);
+    });
+
+    test('Standard plan: email + PIN join is refused too (only the main device)', () async {
+      await h.hub.applyConfig(await h.configPull(plan: 'standard'));
+      final r = await h.post('/pairing/staff-claim', body: {'email': 'ravi@demo.test', 'pin': Harness.pins[Harness.cashier], 'deviceName': 'x', 'platform': 'android'});
+      expect(r.code, 'feature_not_in_plan');
+    });
+
     test('Standard plan cannot pair extra devices (lan_hub is Professional)', () async {
       await h.hub.applyConfig(await h.configPull(plan: 'standard'));
       final code = await h.hub.createPairingCode();

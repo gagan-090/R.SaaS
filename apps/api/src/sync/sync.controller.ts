@@ -1,11 +1,11 @@
-import { Body, Controller, Get, Headers, HttpCode, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Post, Query } from '@nestjs/common';
 import { ApiBody, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import type { Actor, AuditDetails } from '../common/actor';
 import { AuditCtx, CurrentActor } from '../common/actor';
 import { randomToken, sha256 } from '../common/crypto';
 import { Audited, Public, RequirePermissions, RequiresFeature } from '../common/decorators';
-import { badRequest, forbidden, notFound } from '../common/errors';
+import { AppError, badRequest, forbidden, notFound } from '../common/errors';
 import { loadEnv } from '../config/env';
 import { apiBody, zbody, ZodPipe } from '../common/validation';
 import { DbService } from '../db/db.service';
@@ -15,6 +15,8 @@ const RegisterHubBody = z.object({
   branchId: z.string().uuid().optional(), // optional when the restaurant has exactly one branch (Standard / Professional)
   name: z.string().min(1).max(60),
   platform: z.enum(['windows', 'android', 'ios']),
+  // a branch has one main device; to move it, revoke the old one in the console (Devices) or send replace: true
+  replace: z.boolean().optional(),
 });
 const PushBody = z.object({
   events: z
@@ -51,6 +53,11 @@ export class SyncController {
       const branch = branches[0];
       if (!branch) throw notFound('Branch');
       if (a.branchIds.length && !a.branchIds.includes(branch.id)) throw forbidden('branch_scope', 'Not your branch');
+      const current = await tx.device.findFirst({ where: { branchId: branch.id, isHub: true, revokedAt: null } });
+      if (current && !b.replace) {
+        // the first owner device is the main device; later devices join it over the restaurant Wi-Fi with email + PIN
+        throw new AppError(HttpStatus.CONFLICT, 'hub_exists', `This restaurant already has a main device ("${current.name}"). Connect this device to the same Wi-Fi as the main device and sign in with your email and PIN. Main device lost or replaced? Remove it in the web console under Devices, then sign in here again with your password.`, { hubName: current.name });
+      }
       await tx.device.updateMany({ where: { branchId: branch.id, isHub: true, revokedAt: null }, data: { isHub: false } });
       const dev = await tx.device.create({
         data: { name: b.name, platform: b.platform, branchId: branch.id, tenantId: a.tenantId!, isHub: true, deviceTokenHash: sha256(token) },

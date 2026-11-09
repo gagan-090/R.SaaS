@@ -68,10 +68,20 @@ class HubServer {
     r.get('/health', (Request q) => _json({'status': 'ok', 'hub': hubName, 'time': nowIso()}));
 
     // ---- pairing
-    r.get('/pairing/info', (Request q) => _json({'hubName': hubName, 'branchId': hub.config.branchId, 'branchCode': hub.config.branchCode, 'certFingerprint': certFingerprint}));
+    // also the discovery probe: a new device on the Wi-Fi scans for this and shows which restaurant it found
+    r.get('/pairing/info', (Request q) async {
+      final tenant = jsonDecode(await hub.db.getMeta('tenant') ?? '{}') as Map;
+      return _json({'app': 'bhojmitra-hub', 'hubName': hubName, 'restaurant': tenant['name'], 'branchId': hub.config.branchId, 'branchCode': hub.config.branchCode, 'certFingerprint': certFingerprint});
+    });
     r.post('/pairing/claim', (Request q) async {
       final b = await _body(q);
       return _json(await hub.claimPairing('${b['code'] ?? ''}', '${b['deviceName'] ?? 'Device'}', '${b['platform'] ?? ''}'), 201);
+    });
+
+    // a new device joins with a staff member's email + PIN (the main device checks it against its synced staff list)
+    r.post('/pairing/staff-claim', (Request q) async {
+      final b = await _body(q);
+      return _json(await hub.claimWithStaff('${b['email'] ?? ''}', '${b['pin'] ?? ''}', '${b['deviceName'] ?? 'Device'}', '${b['platform'] ?? ''}'), 201);
     });
 
     // ---- session

@@ -311,7 +311,7 @@ class AdminHomeScreen extends ConsumerWidget {
             child: ListView(padding: const EdgeInsets.all(HPSpace.lg), children: [
               tile('Printers', 'Bill and kitchen printers, test print', Icons.print_rounded, () => const PrintersScreen()),
               const SizedBox(height: HPSpace.md),
-              tile('Hub & devices', 'Pairing code for new terminals, sync health', Icons.router_rounded, () => const HubStatusScreen()),
+              tile('Hub & devices', 'Add devices for staff, sync health', Icons.router_rounded, () => const HubStatusScreen()),
               if (s != null && (s.can('reports.read') || s.roles.contains('owner'))) ...[
                 const SizedBox(height: HPSpace.md),
                 tile('Sales & Reports', 'Daily sales, bills, payments & KPIs', Icons.bar_chart_rounded, () => const ReportsDashboardScreen()),

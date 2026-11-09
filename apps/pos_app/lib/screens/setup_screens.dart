@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
-import 'package:qr_flutter/qr_flutter.dart';
 import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 
 import '../hub/hub_api.dart';
@@ -15,7 +14,11 @@ import '../ui/common.dart';
 import '../ui/media.dart';
 import '../ui/shell.dart';
 
-/// Pairs with a hub: overridable so tests do not open sockets.
+/// Finds the main device on this Wi-Fi and joins it with email + PIN: overridable so tests do not open sockets.
+typedef JoinHubFn = Future<JoinedHub?> Function({required String email, required String pin, required String deviceName, required String platform, String? host});
+final joinHubFnProvider = Provider<JoinHubFn>((ref) => findAndJoinHub);
+
+/// Pairs with a hub using a one-time code (kept for older hubs and support; the setup screen uses email + PIN).
 final pairFnProvider = Provider<Future<String> Function(PairingPayload, String name, String platform)>(
   (ref) => (p, name, platform) => claimPairing(p, deviceName: name, platform: platform),
 );
@@ -35,7 +38,11 @@ class _Brand extends StatelessWidget {
       ]);
 }
 
-/// S1 Device setup: make this device the branch hub (signs in to the cloud once) or join an existing hub.
+/// S1 Device setup — one sign-in, no "join a hub" choice:
+/// - email + 4–8 digit PIN: this device finds the restaurant's main device on the Wi-Fi and joins it (employees, or the
+///   owner on a second device). Works without internet.
+/// - email + password: the owner's (or IT admin's) first device signs in to the cloud and becomes the main device. If
+///   the restaurant already has one, the server says so and the person is asked to use their PIN on that Wi-Fi.
 class DeviceSetupScreen extends ConsumerStatefulWidget {
   const DeviceSetupScreen({super.key});
   @override
@@ -43,15 +50,13 @@ class DeviceSetupScreen extends ConsumerStatefulWidget {
 }
 
 class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
-  final _payload = TextEditingController(), _ip = TextEditingController(), _port = TextEditingController(text: '8443'),
-      _code = TextEditingController(), _fp = TextEditingController(), _name = TextEditingController(text: 'Cashier terminal');
+  final _name = TextEditingController(text: 'Cashier terminal'), _hubAddress = TextEditingController();
   final _cloud = TextEditingController(text: const String.fromEnvironment('API_BASE_URL', defaultValue: 'http://localhost:3000/api/v1')),
       _email = TextEditingController(), _password = TextEditingController(), _mfa = TextEditingController(),
       _newPin = TextEditingController(), _newPinAgain = TextEditingController();
-  bool _busy = false, _needMfa = false, _needPin = false, _manual = false, _showPassword = false;
+  bool _busy = false, _needMfa = false, _needPin = false, _showPassword = false, _showAddress = false, _showServer = false;
   String? _access; // kept while the owner chooses a PIN, so they do not sign in twice
-  late bool _asHub = HubHost.supported;
-  String? _challenge, _error;
+  String? _challenge, _error, _status;
 
   String get _platform => switch (Theme.of(context).platform) {
         TargetPlatform.windows => 'windows',
@@ -59,31 +64,52 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
         _ => 'android',
       };
 
-  Future<void> _pair() async {
-    final p = PairingPayload.tryParse(_payload.text) ??
-        (int.tryParse(_port.text) == null || _ip.text.trim().isEmpty || _code.text.trim().isEmpty
-            ? null
-            : PairingPayload(host: _ip.text.trim(), port: int.parse(_port.text), code: _code.text.trim(), fingerprint: _fp.text.trim().isEmpty ? null : _fp.text.trim().toUpperCase()));
-    if (p == null) return setState(() => _error = 'Paste the pairing text shown on the hub, or enter its IP address and 6-digit code');
+  static final _pinShape = RegExp(r'^\d{4,8}$');
+
+  /// The one button: PIN → join the main device on the Wi-Fi; password → the owner's first device becomes the main one.
+  Future<void> _signIn() async {
+    final email = _email.text.trim(), secret = _password.text;
+    if (_access != null || _needMfa) return _becomeHub(); // owner half-way through MFA / choosing a PIN
+    if (email.isEmpty || secret.isEmpty) return setState(() => _error = 'Enter your email and your PIN (or password)');
+    if (!_pinShape.hasMatch(secret)) return _becomeHub();
     setState(() {
       _busy = true;
       _error = null;
+      _status = 'Looking for your restaurant\'s main device on this Wi-Fi…';
     });
     try {
-      final token = await ref.read(pairFnProvider)(p, _name.text.trim(), _platform);
-      await ref.read(setupProvider.notifier).save(DeviceSetup(hubBaseUrl: p.baseUrl, deviceToken: token, fingerprint: p.fingerprint));
+      final joined = await ref.read(joinHubFnProvider)(email: email, pin: secret, deviceName: _name.text.trim(), platform: _platform, host: _showAddress ? _hubAddress.text : null);
+      if (joined == null) {
+        setState(() {
+          _showAddress = true;
+          _error = 'No main device found on this Wi-Fi. Connect this device to the restaurant Wi-Fi, keep the main device open, '
+              'and try again — or type the address shown on the main device under More → Hub & devices.\n'
+              'Owner setting up the very first device? Sign in with your password instead of your PIN.';
+        });
+        return;
+      }
+      await ref.read(setupProvider.notifier).save(DeviceSetup(hubBaseUrl: joined.baseUrl, deviceToken: joined.deviceToken, fingerprint: joined.fingerprint));
     } catch (e) {
       if (mounted) setState(() => _error = errText(e));
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _status = null;
+        });
+      }
     }
   }
 
-  /// Hub mode: owner signs in to the cloud once; the cloud registers this device as the branch hub.
+  /// The owner's first device: signs in to the cloud once; the cloud registers this device as the branch's main device.
   Future<void> _becomeHub() async {
+    if (!HubHost.supported) {
+      return setState(() => _error = 'This device cannot be the main device. Sign in with your email and PIN while on the restaurant Wi-Fi to join the main device.');
+    }
     setState(() {
       _busy = true;
       _error = null;
+      _status = null;
     });
     final base = _cloud.text.trim().replaceAll(RegExp(r'/$'), '');
     Future<Map<String, dynamic>> call(String method, String path, {Object? body, String? bearer}) async {
@@ -98,7 +124,8 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
         })
             .timeout(const Duration(seconds: 15));
       } catch (_) {
-        throw HubApiException(0, 'unreachable', 'Cannot reach $base — check the address and that this device is on the same Wi-Fi');
+        throw HubApiException(0, 'unreachable', 'No internet. The first (main) device needs internet once to sign in. '
+            'Other devices join the main device with email + PIN over Wi-Fi, without internet.');
       }
       final j = r.body.isEmpty ? <String, dynamic>{} : jsonDecode(r.body) as Map<String, dynamic>;
       if (r.statusCode >= 400) throw HubApiException(r.statusCode, '${j['code']}', '${j['message']}');
@@ -125,7 +152,7 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
         }
       }
       if (!_needPin) {
-        // The POS signs everyone in with a PIN. An owner who signed up on the web has none yet: choose it now.
+        // Everyone signs in on the POS with a PIN. An owner who signed up on the web has none yet: choose it now.
         final me = await call('GET', '/me', bearer: access);
         if (me['hasPin'] == false) {
           setState(() {
@@ -136,11 +163,25 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
         }
       } else {
         final pin = _newPin.text.trim();
-        if (!RegExp(r'^\d{4,8}$').hasMatch(pin)) throw HubApiException(400, 'pin', 'PIN must be 4–8 digits');
+        if (!_pinShape.hasMatch(pin)) throw HubApiException(400, 'pin', 'PIN must be 4–8 digits');
         if (pin != _newPinAgain.text.trim()) throw HubApiException(400, 'pin', 'The two PINs do not match');
         await call('PUT', '/me/pin', body: {'pin': pin}, bearer: access);
       }
-      final reg = await post('/devices/register-hub', {'name': _name.text.trim(), 'platform': _platform}, bearer: access);
+      final Map<String, dynamic> reg;
+      try {
+        reg = await post('/devices/register-hub', {'name': _name.text.trim(), 'platform': _platform}, bearer: access);
+      } on HubApiException catch (e) {
+        if (e.code != 'hub_exists') rethrow;
+        // the restaurant already runs on another device: this one joins it like any other terminal
+        setState(() {
+          _access = null;
+          _needMfa = false;
+          _needPin = false;
+          _password.clear();
+          _showAddress = true;
+        });
+        throw HubApiException(409, e.code, '${e.message}\nType your PIN in the password box and tap Sign in.');
+      }
       final cfg = HubHostConfig(cloudUrl: base, cloudDeviceToken: reg['deviceToken'] as String, branchId: reg['branchId'] as String,
           branchCode: reg['branchCode'] as String, licensePublicKey: reg['licensePublicKey'] as String);
       final host = ref.read(hubHostProvider);
@@ -157,6 +198,7 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
   @override
   Widget build(BuildContext context) {
     final p = context.hp;
+    final ownerStep = _needMfa || _needPin;
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -171,27 +213,104 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
                     ThemeModeSwitch(compact: true, value: ref.watch(themeModeProvider), onChanged: ref.read(themeModeProvider.notifier).set),
                   ]),
                   const SizedBox(height: HPSpace.x2),
-                  Text('Set up this device', style: HPType.titleScreen(p.text)),
+                  Text('Sign in to set up this device', style: HPType.titleScreen(p.text)),
                   const SizedBox(height: HPSpace.xs),
-                  Text('Do this once. Afterwards staff only need their PIN.', style: HPType.body(p.muted).copyWith(fontSize: 15)),
+                  Text('Owner, first device: use your password — it becomes the main device. Everyone else (and the owner on '
+                      'more devices): use your email and POS PIN while on the restaurant Wi-Fi.', style: HPType.body(p.muted).copyWith(fontSize: 15)),
                   const SizedBox(height: HPSpace.x2),
-                  if (HubHost.supported)
-                    SegmentedButton<bool>(
-                      showSelectedIcon: false,
-                      segments: const [
-                        ButtonSegment(value: true, label: Text('Main device'), icon: Icon(Icons.router_rounded)),
-                        ButtonSegment(value: false, label: Text('Join a hub'), icon: Icon(Icons.link_rounded)),
-                      ],
-                      selected: {_asHub},
-                      onSelectionChanged: (v) => setState(() {
-                        _asHub = v.first;
-                        _error = null;
-                      }),
+                  Card(
+                    child: Padding(
+                      padding: EdgeInsets.all(context.isNarrow ? HPSpace.lg : HPSpace.x2),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                        TextField(
+                          key: const Key('setup-email'),
+                          controller: _email,
+                          enabled: !ownerStep,
+                          keyboardType: TextInputType.emailAddress,
+                          autofillHints: const [AutofillHints.email],
+                          decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.alternate_email_rounded)),
+                        ),
+                        const SizedBox(height: HPSpace.md),
+                        TextField(
+                          key: const Key('setup-secret'),
+                          controller: _password,
+                          enabled: !ownerStep,
+                          obscureText: !_showPassword,
+                          autofillHints: const [AutofillHints.password],
+                          decoration: InputDecoration(
+                            labelText: 'PIN or password',
+                            helperText: 'PIN (4–8 digits) to join the main device · password for the owner\'s first device',
+                            helperMaxLines: 2,
+                            prefixIcon: const Icon(Icons.lock_outline_rounded),
+                            suffixIcon: IconButton(
+                              tooltip: _showPassword ? 'Hide' : 'Show',
+                              icon: Icon(_showPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                              onPressed: () => setState(() => _showPassword = !_showPassword),
+                            ),
+                          ),
+                          onSubmitted: (_) => _signIn(),
+                        ),
+                        if (_needPin) ...[
+                          const SizedBox(height: HPSpace.lg),
+                          Container(
+                            key: const Key('choose-pin'),
+                            padding: const EdgeInsets.all(HPSpace.md),
+                            decoration: BoxDecoration(color: HPColors.saffron.withValues(alpha: .14), borderRadius: BorderRadius.circular(12)),
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                              Text('Choose your POS PIN', style: HPType.titleCard(p.text)),
+                              const SizedBox(height: 2),
+                              Text('You have no PIN yet. Everyone signs in on the POS with a PIN, 4 to 8 digits. You also use it to add more devices.', style: HPType.body(p.muted)),
+                              const SizedBox(height: HPSpace.md),
+                              TextField(key: const Key('new-pin'), controller: _newPin, autofocus: true, obscureText: true, maxLength: 8, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: const InputDecoration(labelText: 'New PIN', counterText: '', prefixIcon: Icon(Icons.pin_outlined))),
+                              const SizedBox(height: HPSpace.sm),
+                              TextField(key: const Key('new-pin-again'), controller: _newPinAgain, obscureText: true, maxLength: 8, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: const InputDecoration(labelText: 'Type it again', counterText: '', prefixIcon: Icon(Icons.pin_outlined)), onSubmitted: (_) => _signIn()),
+                            ]),
+                          ),
+                        ],
+                        if (_needMfa) ...[
+                          const SizedBox(height: HPSpace.md),
+                          TextField(key: const Key('setup-mfa'), controller: _mfa, autofocus: true, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Authenticator code', prefixIcon: Icon(Icons.verified_user_outlined)), onSubmitted: (_) => _signIn()),
+                        ],
+                        const SizedBox(height: HPSpace.md),
+                        TextField(key: const Key('setup-device-name'), controller: _name, decoration: const InputDecoration(labelText: 'Name of this device', prefixIcon: Icon(Icons.devices_rounded))),
+                        if (_showAddress) ...[
+                          const SizedBox(height: HPSpace.md),
+                          TextField(
+                            key: const Key('setup-hub-address'),
+                            controller: _hubAddress,
+                            keyboardType: TextInputType.url,
+                            decoration: const InputDecoration(labelText: 'Main device address (optional)', hintText: 'e.g. 192.168.1.20', prefixIcon: Icon(Icons.router_outlined)),
+                          ),
+                        ],
+                        const SizedBox(height: HPSpace.x2),
+                        PrimaryButton(
+                          key: const Key('setup-sign-in'),
+                          label: _needPin ? 'Save PIN and continue' : (_needMfa ? 'Verify' : 'Sign in'),
+                          icon: Icons.login_rounded,
+                          busy: _busy,
+                          onPressed: _signIn,
+                        ),
+                        if (_status != null) ...[
+                          const SizedBox(height: HPSpace.md),
+                          Row(children: [
+                            const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                            const SizedBox(width: HPSpace.sm),
+                            Expanded(child: Text(_status!, key: const Key('setup-status'), style: HPType.body(p.muted))),
+                          ]),
+                        ],
+                        if (HubHost.supported)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: () => setState(() => _showServer = !_showServer),
+                              icon: Icon(_showServer ? Icons.expand_less_rounded : Icons.expand_more_rounded),
+                              label: const Text('Server settings'),
+                            ),
+                          ),
+                        if (_showServer)
+                          TextField(controller: _cloud, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'Server address', prefixIcon: Icon(Icons.cloud_outlined))),
+                      ]),
                     ),
-                  const SizedBox(height: HPSpace.lg),
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 200),
-                    child: KeyedSubtree(key: ValueKey(_asHub), child: _asHub ? _hubForm(p) : _pairForm(p)),
                   ),
                   if (_error != null)
                     Container(
@@ -212,109 +331,9 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
       ),
     );
   }
-
-  Widget _hubForm(HPPalette p) => Card(
-        child: Padding(
-          padding: EdgeInsets.all(context.isNarrow ? HPSpace.lg : HPSpace.x2),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Text('This device runs the restaurant', style: HPType.titleCard(p.text)),
-            const SizedBox(height: 4),
-            Text('Use the main cashier device. Billing keeps working when the internet is down; keep it charged.', style: HPType.body(p.muted)),
-            const SizedBox(height: HPSpace.lg),
-            TextField(controller: _cloud, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'Server address', prefixIcon: Icon(Icons.cloud_outlined))),
-            const SizedBox(height: HPSpace.md),
-            TextField(
-              key: const Key('hub-email'),
-              controller: _email,
-              keyboardType: TextInputType.emailAddress,
-              autofillHints: const [AutofillHints.email],
-              decoration: const InputDecoration(labelText: 'Owner or IT admin email', prefixIcon: Icon(Icons.alternate_email_rounded)),
-            ),
-            const SizedBox(height: HPSpace.md),
-            TextField(
-              key: const Key('hub-password'),
-              controller: _password,
-              obscureText: !_showPassword,
-              autofillHints: const [AutofillHints.password],
-              decoration: InputDecoration(
-                labelText: 'Password',
-                prefixIcon: const Icon(Icons.lock_outline_rounded),
-                suffixIcon: IconButton(
-                  tooltip: _showPassword ? 'Hide password' : 'Show password',
-                  icon: Icon(_showPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
-                  onPressed: () => setState(() => _showPassword = !_showPassword),
-                ),
-              ),
-              onSubmitted: (_) => _becomeHub(),
-            ),
-            if (_needPin) ...[
-              const SizedBox(height: HPSpace.lg),
-              Container(
-                key: const Key('choose-pin'),
-                padding: const EdgeInsets.all(HPSpace.md),
-                decoration: BoxDecoration(color: HPColors.saffron.withValues(alpha: .14), borderRadius: BorderRadius.circular(12)),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  Text('Choose your POS PIN', style: HPType.titleCard(p.text)),
-                  const SizedBox(height: 2),
-                  Text('You have no PIN yet. Everyone signs in on this device with a PIN, 4 to 8 digits.', style: HPType.body(p.muted)),
-                  const SizedBox(height: HPSpace.md),
-                  TextField(key: const Key('new-pin'), controller: _newPin, autofocus: true, obscureText: true, maxLength: 8, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: const InputDecoration(labelText: 'New PIN', counterText: '', prefixIcon: Icon(Icons.pin_outlined))),
-                  const SizedBox(height: HPSpace.sm),
-                  TextField(key: const Key('new-pin-again'), controller: _newPinAgain, obscureText: true, maxLength: 8, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: const InputDecoration(labelText: 'Type it again', counterText: '', prefixIcon: Icon(Icons.pin_outlined)), onSubmitted: (_) => _becomeHub()),
-                ]),
-              ),
-            ],
-            if (_needMfa) ...[
-              const SizedBox(height: HPSpace.md),
-              TextField(controller: _mfa, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Authenticator code', prefixIcon: Icon(Icons.verified_user_outlined))),
-            ],
-            const SizedBox(height: HPSpace.md),
-            TextField(controller: _name, decoration: const InputDecoration(labelText: 'Name of this device', prefixIcon: Icon(Icons.devices_rounded))),
-            const SizedBox(height: HPSpace.x2),
-            PrimaryButton(key: const Key('make-hub'), label: _needPin ? 'Save PIN and make this the hub' : 'Make this the hub', icon: Icons.power_settings_new_rounded, busy: _busy, onPressed: _becomeHub),
-          ]),
-        ),
-      );
-
-  Widget _pairForm(HPPalette p) => Card(
-        child: Padding(
-          padding: EdgeInsets.all(context.isNarrow ? HPSpace.lg : HPSpace.x2),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Text('Join the restaurant\'s hub', style: HPType.titleCard(p.text)),
-            const SizedBox(height: 4),
-            Text('On the hub open More → Hub & devices. Copy the pairing text here, or type its address and code.', style: HPType.body(p.muted)),
-            const SizedBox(height: HPSpace.lg),
-            TextField(key: const Key('pair-payload'), controller: _payload, decoration: const InputDecoration(labelText: 'Pairing text from the hub', prefixIcon: Icon(Icons.link_rounded))),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(onPressed: () => setState(() => _manual = !_manual), icon: Icon(_manual ? Icons.expand_less_rounded : Icons.expand_more_rounded), label: const Text('Enter the address by hand')),
-            ),
-            AnimatedSize(
-              duration: const Duration(milliseconds: 180),
-              child: !_manual
-                  ? const SizedBox(width: double.infinity)
-                  : Column(children: [
-                      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Expanded(flex: 3, child: TextField(controller: _ip, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'Hub IP'))),
-                        const SizedBox(width: HPSpace.sm),
-                        Expanded(flex: 2, child: TextField(controller: _port, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Port'))),
-                      ]),
-                      const SizedBox(height: HPSpace.sm),
-                      TextField(controller: _code, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '6-digit code')),
-                      const SizedBox(height: HPSpace.sm),
-                      TextField(controller: _fp, decoration: const InputDecoration(labelText: 'Security fingerprint (from the hub screen)')),
-                    ]),
-            ),
-            const SizedBox(height: HPSpace.md),
-            TextField(controller: _name, decoration: const InputDecoration(labelText: 'Name of this device', prefixIcon: Icon(Icons.devices_rounded))),
-            const SizedBox(height: HPSpace.x2),
-            PrimaryButton(label: 'Pair', icon: Icons.link_rounded, busy: _busy, onPressed: _pair),
-          ]),
-        ),
-      );
 }
 
-/// S2 Hub & devices (on the hub): pairing code + QR for new terminals, sync health, reset.
+/// S2 Hub & devices (on the main device): how to add staff devices (email + PIN, no code), sync health, reset.
 class HubStatusScreen extends ConsumerStatefulWidget {
   const HubStatusScreen({super.key});
   @override
@@ -362,45 +381,35 @@ class _HubStatusScreenState extends ConsumerState<HubStatusScreen> {
               child: ListView(padding: const EdgeInsets.all(HPSpace.lg), children: [
                 if (pairing != null)
                   Card(
+                    key: const Key('add-device-help'),
                     child: Padding(
                       padding: const EdgeInsets.all(HPSpace.x2),
-                      child: Column(children: [
-                        Text('Pair another device', style: HPType.titleCard(p.text)),
-                        const SizedBox(height: 4),
-                        Text('On the new device choose "Join a hub" and use this code. It works once, for 10 minutes.', textAlign: TextAlign.center, style: HPType.body(p.muted)),
-                        const SizedBox(height: HPSpace.lg),
-                        Container(
-                          padding: const EdgeInsets.all(HPSpace.md),
-                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(HPRadius.card)),
-                          child: QrImageView(data: pairing.encode(), size: MediaQuery.sizeOf(context).width < 360 ? 160 : 200),
-                        ),
-                        const SizedBox(height: HPSpace.lg),
-                        FittedBox(fit: BoxFit.scaleDown, child: Text(pairing.code.split('').join(' '), style: HPType.displayTotal(p.text).copyWith(fontSize: 36, letterSpacing: 4))),
-                        Text('${pairing.host}:${pairing.port}', style: HPType.mono(p.muted)),
-                        const SizedBox(height: HPSpace.md),
-                        Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, alignment: WrapAlignment.center, children: [
-                          OutlinedButton.icon(
-                            icon: const Icon(Icons.copy_rounded, size: 18),
-                            label: const Text('Copy pairing text'),
-                            onPressed: () async {
-                              await Clipboard.setData(ClipboardData(text: pairing.encode()));
-                              if (context.mounted) toast(context, 'Pairing text copied');
-                            },
-                          ),
-                          OutlinedButton.icon(
-                            icon: const Icon(Icons.refresh_rounded, size: 18),
-                            label: const Text('New code'),
-                            onPressed: () async {
-                              await host.newPairingCode();
-                              setState(() {});
-                            },
-                          ),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Row(children: [
+                          Icon(Icons.add_to_home_screen_rounded, color: p.accentInk),
+                          const SizedBox(width: HPSpace.sm),
+                          Expanded(child: Text('Add a device', style: HPType.titleCard(p.text))),
                         ]),
+                        const SizedBox(height: HPSpace.sm),
+                        Text('This is the main device. To add a phone or PC for an employee:', style: HPType.body(p.muted)),
+                        const SizedBox(height: HPSpace.sm),
+                        for (final (i, step) in const [
+                          'Add the employee under More → Staff (email + PIN), or let them set their PIN from the invite email.',
+                          'Connect the new device to this restaurant Wi-Fi and install BhojMitra POS.',
+                          'Open the app and sign in with the employee\'s email and PIN. It connects here by itself — no code, no internet needed.',
+                        ].indexed)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: HPSpace.xs),
+                            child: Text('${i + 1}. $step', style: HPType.body(p.text)),
+                          ),
+                        const SizedBox(height: HPSpace.sm),
+                        Text('If the new device cannot find this one, type this address on it:', style: HPType.body(p.muted)),
+                        SelectableText(pairing.host, key: const Key('hub-address'), style: HPType.mono(p.text).copyWith(fontSize: 18)),
                       ]),
                     ),
                   )
                 else
-                  const EmptyState(title: 'Paired to a hub', message: 'This device works with the hub on your restaurant Wi-Fi.', icon: Icons.link_rounded),
+                  const EmptyState(title: 'Connected to the main device', message: 'This device works with the main device on your restaurant Wi-Fi, also without internet.', icon: Icons.link_rounded),
                 const SizedBox(height: HPSpace.lg),
                 if (api != null)
                   FutureBuilder<Json>(
