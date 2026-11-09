@@ -590,6 +590,56 @@ void main() {
     expect(now(), Brightness.light);
   });
 
+  testWidgets('owner adds a person from the POS: PIN checks, server refusal shown, then they are in the list and can sign in', (t) async {
+    final hub = await start(t);
+    await signIn(t, 'Owner', '9999');
+    await nav(t, 'More');
+    await t.tap(find.byKey(const Key('more-staff')));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('add-staff')));
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('role-it_admin')), findsOneWidget); // owners can add Restaurant Admins
+    Future<void> save() async {
+      await t.ensureVisible(find.byKey(const Key('save-staff')));
+      await t.tap(find.byKey(const Key('save-staff')));
+      await t.pumpAndSettle();
+    }
+
+    await t.enterText(find.byKey(const Key('staff-name')), 'Kiran');
+    await t.enterText(find.byKey(const Key('staff-email')), 'taken@demo.test');
+    await t.tap(find.byKey(const Key('role-cashier')));
+    await t.pumpAndSettle();
+    await t.enterText(find.byKey(const Key('staff-pin')), '123456');
+    await t.enterText(find.byKey(const Key('staff-pin-again')), '123456');
+    await save();
+    expect(find.text('PIN cannot be a run of digits like 123456'), findsOneWidget);
+    await t.enterText(find.byKey(const Key('staff-pin')), '582914');
+    await t.enterText(find.byKey(const Key('staff-pin-again')), '582915');
+    await save();
+    expect(find.text('The two PINs do not match'), findsOneWidget);
+    await t.enterText(find.byKey(const Key('staff-pin-again')), '582914');
+    await save();
+    expect(find.text('That email is already used by another account'), findsOneWidget); // the server's answer
+    expect(hub.addedStaff, isEmpty);
+    await t.enterText(find.byKey(const Key('staff-email')), 'Kiran@Demo.test');
+    await save();
+    expect(hub.addedStaff.single, {'name': 'Kiran', 'email': 'kiran@demo.test', 'role': 'cashier', 'pin': '582914', 'canDiscount': false});
+    expect(find.text('Kiran'), findsOneWidget); // list reloaded
+    expect(find.textContaining('Kiran added'), findsOneWidget);
+    // the new person is on the main device's staff list and signs in with the PIN the owner set
+    final kiran = (await hub.staff()).firstWhere((u) => u['name'] == 'Kiran');
+    expect(kiran['hasPin'], isTrue);
+    expect((await hub.login(kiran['id'] as String, '582914'))['user'], containsPair('name', 'Kiran'));
+  });
+
+  testWidgets('cashiers cannot add people (no Staff entry, no add button)', (t) async {
+    await start(t);
+    await signIn(t, 'Ravi', '1234');
+    await nav(t, 'More');
+    expect(find.byKey(const Key('more-staff')), findsNothing);
+    expect(find.byKey(const Key('add-staff')), findsNothing);
+  });
+
   testWidgets('admin flow: owner can access reports, toggle 86 item availability, view staff and license', (t) async {
     final hub = await start(t);
     await signIn(t, 'Owner', '9999');

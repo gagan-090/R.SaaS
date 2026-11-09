@@ -383,3 +383,13 @@ Test: `flutter test` in apps/pos_app → **62 passed** (25 existing + 37 in `tes
 - Tests (this session): API **162 passed** (new hub_exists + staff email test); hub_server `dart test` **49 passed** (new
   staff-claim + lockout + Standard-plan tests); pos_app **81 passed** (new setup tests: join with PIN, not-found + typed
   address); admin_web **143 passed**; admin_react **50 passed**. Not tested on real devices on a real Wi-Fi.
+
+### POS: owner adds staff from the app (no invite email) — 2026-11-09
+- POS More → Staff & Team: "Add a person" (owner, Restaurant Admin): name, email, role, PIN twice (same PIN policy as the
+  cloud). Active at once; they can sign in on the POS and join new devices with email + PIN. Console "Add staff" also sets
+  the PIN directly now (invite-by-email hidden, server support kept).
+- Hub `POST /staff` → cloud `POST /sync/staff`; offline → clear "needs internet on the main device" message.
+- Tests (this session): API **163 passed** (new: POS-forwarded staff creation incl. cashier refused, duplicate email,
+  weak PIN, no token, another restaurant's owner id); hub_server **50 passed** (new: forwarded as the signed-in owner,
+  spoofed actor ignored, cashier refused, offline 503); pos_app **83 passed** (new: add person flow, cashier has no entry);
+  admin_web **143**, admin_react **50**. Not tried on real devices.

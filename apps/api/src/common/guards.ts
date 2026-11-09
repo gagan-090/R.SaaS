@@ -54,27 +54,35 @@ export class AuthGuard implements CanActivate {
       return { type: 'admin', id, permissions, roles: admin.roles.map((r) => r.role.name), branchIds: [], sessionId: sid, tokenAudience: aud };
     }
     if (!tid) throw unauthorized('invalid_token');
-    const { user, features, tenantStatus } = await this.db.tenant(tid, async (tx) => ({
-      user: await tx.user.findUnique({ where: { id }, include: { roles: { include: { customRole: true } } } }),
-      features: (await this.licenses.entitlement(tx, tid)).features,
-      tenantStatus: (await tx.restaurantTenant.findUnique({ where: { id: tid }, select: { status: true } }))?.status,
-    }));
-    // Deactivated employees lose access on their very next request (permissions are loaded per request).
-    if (!user || user.status !== 'active') throw unauthorized('inactive_account', 'Account is not active');
-    if (tenantStatus === 'archived' || tenantStatus === 'deleted') throw unauthorized('restaurant_closed', 'This restaurant is closed');
-    const assignments = user.roles.map((r) => ({
-      role: r.role as RestaurantRoleName,
-      extraPermissions: r.extraPermissions,
-      customPermissions: r.customRole && !r.customRole.deleted && features.includes('roles.custom') ? r.customRole.permissions : [],
-    }));
-    const branchIds = user.roles.some((r) => r.branchIds.length === 0) ? [] : [...new Set(user.roles.flatMap((r) => r.branchIds))];
-    const granted = permissionsForRoles(assignments);
-    const permissions = limitToPlan(granted, features);
-    return {
-      type: 'user', id, tenantId: tid, permissions, planBlocked: new Set([...granted].filter((p) => !permissions.has(p))),
-      roles: assignments.map((a) => a.role), branchIds, sessionId: sid, tokenAudience: aud,
-    };
+    return loadUserActor(this.db, this.licenses, id, tid, sid, aud);
   }
+}
+
+/**
+ * A restaurant user's live permissions (roles + custom role, limited to the plan). Shared by the token guard and by
+ * hub-forwarded requests (the main device acts for the owner who signed in on it with their PIN).
+ */
+export async function loadUserActor(db: DbService, licenses: LicenseService, id: string, tid: string, sid?: string, aud: Actor['tokenAudience'] = 'access'): Promise<Actor> {
+  const { user, features, tenantStatus } = await db.tenant(tid, async (tx) => ({
+    user: await tx.user.findUnique({ where: { id }, include: { roles: { include: { customRole: true } } } }),
+    features: (await licenses.entitlement(tx, tid)).features,
+    tenantStatus: (await tx.restaurantTenant.findUnique({ where: { id: tid }, select: { status: true } }))?.status,
+  }));
+  // Deactivated employees lose access on their very next request (permissions are loaded per request).
+  if (!user || user.status !== 'active') throw unauthorized('inactive_account', 'Account is not active');
+  if (tenantStatus === 'archived' || tenantStatus === 'deleted') throw unauthorized('restaurant_closed', 'This restaurant is closed');
+  const assignments = user.roles.map((r) => ({
+    role: r.role as RestaurantRoleName,
+    extraPermissions: r.extraPermissions,
+    customPermissions: r.customRole && !r.customRole.deleted && features.includes('roles.custom') ? r.customRole.permissions : [],
+  }));
+  const branchIds = user.roles.some((r) => r.branchIds.length === 0) ? [] : [...new Set(user.roles.flatMap((r) => r.branchIds))];
+  const granted = permissionsForRoles(assignments);
+  const permissions = limitToPlan(granted, features);
+  return {
+    type: 'user', id, tenantId: tid, permissions, planBlocked: new Set([...granted].filter((p) => !permissions.has(p))),
+    roles: assignments.map((a) => a.role), branchIds, sessionId: sid, tokenAudience: aud,
+  };
 }
 
 /** Every non-public route must declare @RequirePermissions(...) or @AuthenticatedOnly(); otherwise it is refused. */

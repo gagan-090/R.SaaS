@@ -4,8 +4,9 @@ const rolePermissions = <String, Set<String>>{
   'owner': {
     'floor.read', 'menu.read', 'order.read', 'order.write', 'order.transfer', 'order.reverse', 'order.reverse.sent',
     'discount.apply', 'payment.take', 'bill.adjust', 'kds.read', 'device.manage', 'clock', 'reports.read', 'reports.own',
+    'staff.manage', // add people from the POS (forwarded to the cloud, which re-checks it)
   },
-  'it_admin': {'floor.read', 'menu.read', 'device.manage', 'clock', 'reports.read'},
+  'it_admin': {'floor.read', 'menu.read', 'device.manage', 'clock', 'reports.read', 'staff.manage'},
   'cashier': {'floor.read', 'menu.read', 'order.read', 'order.write', 'order.transfer', 'order.reverse', 'payment.take', 'kds.read', 'clock', 'reports.own'},
   'waiter': {'floor.read', 'menu.read', 'order.read', 'order.write', 'order.transfer', 'order.reverse', 'kds.read', 'clock', 'reports.own'},
   'chef': {'menu.read', 'kds.read', 'kds.update', 'clock'},

@@ -26,6 +26,9 @@ abstract class HubApi {
 
   Future<Json> health();
   Future<List<Json>> staff();
+
+  /// Owner / Restaurant Admin adds a person (name, email, role, pin). Needs internet on the main device.
+  Future<Json> addStaff(Json body);
   Future<Json> login(String userId, String pin);
   Future<Json> state();
 
@@ -129,6 +132,9 @@ class HttpHubApi extends HubApi {
   Future<Json> health() async => await _send('GET', '/health') as Json;
   @override
   Future<List<Json>> staff() async => (await _send('GET', '/staff') as List).cast<Json>();
+  @override
+  Future<Json> addStaff(Json body) async => await _send('POST', '/staff', body: body) as Json;
+
   @override
   Future<Json> login(String userId, String pin) async {
     final r = await _send('POST', '/session/login', body: {'userId': userId, 'pin': pin}) as Json;

@@ -94,6 +94,37 @@ void main() {
       expect((await h.post('/pairing/staff-claim', body: {'email': 'anita@demo.test', 'pin': Harness.pins[Harness.waiter], 'deviceName': 'x', 'platform': 'android'})).status, 201);
     });
 
+    test('owner adds a person from the POS: forwarded to the cloud as the owner, staff pulled back; cashiers refused; offline is clear', () async {
+      final sent = <Map<String, Object?>>[];
+      var refreshed = 0;
+      final hubServer = HubServer(h.hub, hubName: 'Add staff', refreshStaff: () async => refreshed++, addStaff: (b) async {
+        sent.add(b);
+        if (b['email'] == 'offline@demo.test') throw HubError(503, 'offline', 'Adding a person needs internet on the main device.');
+        return {'id': 'new-user', 'name': b['name'], 'role': b['role'], 'status': 'active', 'invite': null};
+      });
+      final server = await hubServer.start(address: InternetAddress.loopbackIPv4, port: 0);
+      Future<http.Response> add(String session, Map<String, Object?> body) => http.post(Uri.parse('http://127.0.0.1:${server.port}/hub/v1/staff'),
+          headers: {'x-device-token': h.deviceToken, 'authorization': 'Bearer $session', 'content-type': 'application/json'}, body: jsonEncode(body));
+      try {
+        final ok = await add(owner, {'name': 'Kiran', 'email': 'kiran@demo.test', 'role': 'waiter', 'pin': '582914', 'actorUserId': 'spoofed'});
+        expect(ok.statusCode, 201, reason: ok.body);
+        expect(jsonDecode(ok.body), containsPair('status', 'active'));
+        // the hub says who is acting (the signed-in owner) — a body value cannot change it
+        expect(sent.single, {'actorUserId': Harness.owner, 'name': 'Kiran', 'email': 'kiran@demo.test', 'role': 'waiter', 'pin': '582914'});
+        expect(refreshed, 1);
+        final denied = await add(cashier, {'name': 'X', 'email': 'x@demo.test', 'role': 'waiter', 'pin': '582914'});
+        expect(denied.statusCode, 403);
+        expect(sent, hasLength(1));
+        final off = await add(owner, {'name': 'Y', 'email': 'offline@demo.test', 'role': 'waiter', 'pin': '582914'});
+        expect(off.statusCode, 503);
+        expect(jsonDecode(off.body)['code'], 'offline');
+      } finally {
+        await hubServer.stop();
+      }
+      // a hub without a cloud link cannot add people
+      expect((await h.post('/staff', session: owner, body: {'name': 'Z', 'email': 'z@demo.test', 'role': 'waiter', 'pin': '582914'})).status, 503);
+    });
+
     test('Standard plan: email + PIN join is refused too (only the main device)', () async {
       await h.hub.applyConfig(await h.configPull(plan: 'standard'));
       final r = await h.post('/pairing/staff-claim', body: {'email': 'ravi@demo.test', 'pin': Harness.pins[Harness.cashier], 'deviceName': 'x', 'platform': 'android'});

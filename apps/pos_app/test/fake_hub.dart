@@ -58,6 +58,17 @@ class FakeHubApi extends HubApi {
   Future<Json> health() async => {'status': 'ok'};
   @override
   Future<List<Json>> staff() async => [for (final s in staffList) {'id': s['id'], 'name': s['name'], 'roles': s['roles'], 'hasPin': s['pin'] != null}];
+
+  final addedStaff = <Json>[];
+  @override
+  Future<Json> addStaff(Json body) async {
+    if (staffList.any((s) => s['email'] == body['email']) || body['email'] == 'taken@demo.test') {
+      throw HubApiException(409, 'email_taken', 'That email is already used by another account');
+    }
+    addedStaff.add(body);
+    staffList.add({'id': 'u-${staffList.length}', 'name': body['name'], 'email': body['email'], 'roles': [body['role']], 'pin': body['pin']});
+    return {'id': 'u-${staffList.length}', 'name': body['name'], 'role': body['role'], 'status': 'active'};
+  }
   @override
   Future<Json> login(String userId, String pin) async {
     final u = staffList.firstWhere((s) => s['id'] == userId);
@@ -70,7 +81,7 @@ class FakeHubApi extends HubApi {
       'cashier' => ['floor.read', 'menu.read', 'order.read', 'order.write', 'order.transfer', 'order.reverse', 'payment.take', 'kds.read', 'clock', 'reports.own'],
       'waiter' => ['floor.read', 'menu.read', 'order.read', 'order.write', 'order.transfer', 'order.reverse', 'kds.read', 'clock', 'reports.own'],
       'chef' => ['menu.read', 'kds.read', 'kds.update', 'clock'],
-      'it_admin' => ['floor.read', 'menu.read', 'device.manage', 'clock', 'reports.read', 'staff.read', 'restaurant.profile.read'],
+      'it_admin' => ['floor.read', 'menu.read', 'device.manage', 'clock', 'reports.read', 'staff.read', 'staff.manage', 'restaurant.profile.read'],
       _ => ['floor.read', 'menu.read', 'order.read', 'kds.read', 'reports.read'], // auditor
     };
     _perms = perms.toSet();

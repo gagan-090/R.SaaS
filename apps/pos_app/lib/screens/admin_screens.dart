@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 
@@ -544,25 +545,70 @@ class _MenuManagementScreenState extends ConsumerState<MenuManagementScreen> {
 // 3. STAFF & TEAM SCREEN
 // ============================================================================
 
-class StaffManagementScreen extends ConsumerWidget {
+/// Same rule as the cloud (apps/api/src/staff/pin-policy.ts): checked here first so mistakes show at once.
+String? pinProblem(String pin) {
+  if (!RegExp(r'^\d{6,8}$').hasMatch(pin)) return 'PIN must be 6 to 8 digits';
+  if (RegExp(r'^(\d)\1+$').hasMatch(pin)) return 'PIN cannot be the same digit repeated';
+  final d = pin.split('').map(int.parse).toList();
+  bool run(int step) => [for (var i = 1; i < d.length; i++) d[i] == (d[i - 1] + step + 10) % 10].every((x) => x);
+  if (run(1) || run(-1)) return 'PIN cannot be a run of digits like 123456';
+  if (const {'123123', '112233', '121212', '000000', '111111', '123321', '159753', '147258', '102030', '696969', '520520', '12341234'}.contains(pin)) {
+    return 'That PIN is too common; choose another';
+  }
+  return null;
+}
+
+/// Staff list; the owner and Restaurant Admins can add a person here (no invite email: they set the PIN and tell them).
+class StaffManagementScreen extends ConsumerStatefulWidget {
   const StaffManagementScreen({super.key});
+  @override
+  ConsumerState<StaffManagementScreen> createState() => _StaffManagementScreenState();
+}
+
+class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
+  int _reload = 0;
 
   static Widget _pinChip(Json u) => u['hasPin'] == true
       ? const StatusChip(label: 'PIN active', tone: HPTone.success, icon: Icons.lock_outline_rounded)
       : const StatusChip(label: 'No PIN set', tone: HPTone.danger, icon: Icons.lock_open_rounded);
 
+  Future<void> _add(HubApi api, StaffSession s) async {
+    final done = await showDialog<String>(barrierDismissible: false, context: context, builder: (_) => AddStaffDialog(api: api, isOwner: s.roles.contains('owner')));
+    if (done == null || !mounted) return;
+    setState(() => _reload++);
+    toast(context, done);
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final api = ref.watch(hubApiProvider);
+    final s = ref.watch(sessionProvider);
     if (api == null) return const Scaffold(body: LoadingState());
     final p = context.hp;
+    final canAdd = s?.can('staff.manage') ?? false;
 
     return Scaffold(
       body: Column(
         children: [
-          const PosTopBar(title: 'Staff & Team', subtitle: 'Roles and terminal PIN status'),
+          PosTopBar(
+            title: 'Staff & Team',
+            subtitle: canAdd ? 'Add people, roles and PIN status' : 'Roles and terminal PIN status',
+            actions: [
+              if (canAdd)
+                MediaQuery.sizeOf(context).width < 360
+                    // tiny screens (flip-phone cover): icon only, so the title keeps its room
+                    ? IconButton.filled(key: const Key('add-staff'), tooltip: 'Add a person', onPressed: () => _add(api, s!), icon: const Icon(Icons.person_add_alt_1_rounded))
+                    : FilledButton.icon(
+                        key: const Key('add-staff'),
+                        onPressed: () => _add(api, s!),
+                        icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                        label: Text(context.isNarrow ? 'Add' : 'Add a person'),
+                      ),
+            ],
+          ),
           Expanded(
             child: FutureBuilder<List<Json>>(
+              key: ValueKey(_reload),
               future: api.staff(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
@@ -636,6 +682,95 @@ class StaffManagementScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Add a person from the POS: name, email, role and the PIN the owner tells them. They are active at once and can
+/// sign in on any device of this restaurant (and join a new device with email + PIN). Needs internet on the main device.
+class AddStaffDialog extends StatefulWidget {
+  const AddStaffDialog({super.key, required this.api, required this.isOwner});
+  final HubApi api;
+  final bool isOwner;
+  @override
+  State<AddStaffDialog> createState() => _AddStaffDialogState();
+}
+
+class _AddStaffDialogState extends State<AddStaffDialog> {
+  final _name = TextEditingController(), _email = TextEditingController(), _pin = TextEditingController(), _pin2 = TextEditingController();
+  String _role = 'waiter';
+  bool _canDiscount = false, _busy = false;
+  String? _error;
+
+  List<String> get _roles => ['cashier', 'waiter', 'chef', 'auditor', if (widget.isOwner) 'it_admin'];
+
+  Future<void> _save() async {
+    final name = _name.text.trim(), email = _email.text.trim().toLowerCase(), pin = _pin.text.trim();
+    String? problem;
+    if (name.isEmpty) {
+      problem = 'Enter their name';
+    } else if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+      problem = 'Enter their email — they use it with the PIN to set up a new device';
+    } else {
+      problem = pinProblem(pin) ?? (pin != _pin2.text.trim() ? 'The two PINs do not match' : null);
+    }
+    if (problem != null) return setState(() => _error = problem);
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await widget.api.addStaff({'name': name, 'email': email, 'role': _role, 'pin': pin, if (_role == 'cashier') 'canDiscount': _canDiscount});
+      if (mounted) Navigator.pop(context, '$name added — they can sign in with their PIN now');
+    } catch (e) {
+      if (mounted) setState(() => _error = errText(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.hp;
+    Widget pinField(Key key, TextEditingController c, String label) => TextField(
+          key: key,
+          controller: c,
+          obscureText: true,
+          maxLength: 8,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: InputDecoration(labelText: label, counterText: '', prefixIcon: const Icon(Icons.pin_outlined)),
+        );
+    return HPDialog(
+      title: 'Add a person',
+      actions: [
+        SecondaryButton(label: 'Cancel', onPressed: _busy ? null : () => Navigator.pop(context)),
+        PrimaryButton(key: const Key('save-staff'), label: 'Add', icon: Icons.person_add_alt_1_rounded, busy: _busy, onPressed: _save),
+      ],
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        TextField(key: const Key('staff-name'), controller: _name, autofocus: true, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Full name', prefixIcon: Icon(Icons.person_outline_rounded))),
+        const SizedBox(height: HPSpace.md),
+        TextField(key: const Key('staff-email'), controller: _email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.alternate_email_rounded))),
+        const SizedBox(height: HPSpace.md),
+        Text('ROLE', style: HPType.overline(p.muted)),
+        const SizedBox(height: HPSpace.xs),
+        Wrap(spacing: HPSpace.xs, runSpacing: HPSpace.xs, children: [
+          for (final r in _roles)
+            ChoiceChip(key: Key('role-$r'), label: Text(roleNames[r] ?? r), selected: _role == r, showCheckmark: false, onSelected: (_) => setState(() => _role = r)),
+        ]),
+        if (_role == 'cashier')
+          SwitchListTile(key: const Key('staff-discount'), contentPadding: EdgeInsets.zero, value: _canDiscount, onChanged: (v) => setState(() => _canDiscount = v), title: const Text('Can give discounts')),
+        const SizedBox(height: HPSpace.md),
+        pinField(const Key('staff-pin'), _pin, 'PIN (6 to 8 digits)'),
+        const SizedBox(height: HPSpace.sm),
+        pinField(const Key('staff-pin-again'), _pin2, 'Type the PIN again'),
+        const SizedBox(height: HPSpace.xs),
+        Text('Tell them this PIN. No email is sent; they can sign in straight away.', style: HPType.body(p.muted).copyWith(fontSize: 13)),
+        if (_error != null) ...[
+          const SizedBox(height: HPSpace.md),
+          Text(_error!, key: const Key('staff-error'), style: HPType.body(p.danger)),
+        ],
+      ]),
     );
   }
 }

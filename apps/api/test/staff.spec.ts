@@ -88,6 +88,37 @@ describe('staff & staff web portal', () => {
     });
   });
 
+  describe('adding people from the POS (main device acts for the owner)', () => {
+    it('the main device adds a person for the owner: active at once, no invite, audited as the owner; cashiers and bad tokens are refused', async () => {
+      const r = await onboardRestaurant(t, saToken, 'premium');
+      const hub = (await t.http().post(api('/devices/register-hub')).set(bearer(r.ownerToken)).send({ name: 'Main', platform: 'android' }).expect(201)).body;
+      const pin = goodPin();
+      const email = mail();
+      const added = (await t.http().post(api('/sync/staff')).set('X-Device-Token', hub.deviceToken)
+        .send({ actorUserId: r.ownerUserId, name: 'Ravi', email, role: 'cashier', pin }).expect(201)).body;
+      expect(added).toMatchObject({ name: 'Ravi', role: 'cashier', status: 'active', invite: null });
+      // the main device gets them (with email, for joining new devices) on its next pull
+      const pull = (await t.http().get(api('/sync/pull?since=0')).set('X-Device-Token', hub.deviceToken).expect(200)).body;
+      expect(pull.users.find((u: { id: string }) => u.id === added.id)).toMatchObject({ email, status: 'active' });
+      const audit = await t.owner.auditEvent.findFirstOrThrow({ where: { action: 'staff.created', objectId: added.id } });
+      expect(audit).toMatchObject({ actorId: r.ownerUserId, tenantId: r.tenantId, deviceId: hub.deviceId });
+      expect(JSON.stringify(audit)).not.toContain(pin);
+      // a cashier signed in on the POS cannot add people
+      await t.http().post(api('/sync/staff')).set('X-Device-Token', hub.deviceToken)
+        .send({ actorUserId: added.id, name: 'X', email: mail(), role: 'waiter', pin: goodPin() }).expect(403);
+      // same rules as the console: the email must be unused, the PIN must pass the policy
+      await t.http().post(api('/sync/staff')).set('X-Device-Token', hub.deviceToken)
+        .send({ actorUserId: r.ownerUserId, name: 'Dup', email, role: 'waiter', pin: goodPin() }).expect(409);
+      await t.http().post(api('/sync/staff')).set('X-Device-Token', hub.deviceToken)
+        .send({ actorUserId: r.ownerUserId, name: 'Weak', email: mail(), role: 'waiter', pin: '123456' }).expect(400);
+      // no or a wrong device token: nothing
+      await t.http().post(api('/sync/staff')).send({ actorUserId: r.ownerUserId, name: 'X', email: mail(), role: 'waiter', pin: goodPin() }).expect(401);
+      // another restaurant's owner id through this device: not found as an active user of this restaurant
+      await t.http().post(api('/sync/staff')).set('X-Device-Token', hub.deviceToken)
+        .send({ actorUserId: prem.ownerUserId, name: 'X', email: mail(), role: 'waiter', pin: goodPin() }).expect(401);
+    });
+  });
+
   describe('Restaurant Admin authority', () => {
     let admin: string;
     beforeAll(async () => {

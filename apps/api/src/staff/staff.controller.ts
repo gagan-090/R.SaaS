@@ -1,11 +1,13 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, HttpCode, Param, ParseUUIDPipe, Patch, Post, Req } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
-import type { Actor, AuditDetails } from '../common/actor';
+import type { Actor, AppRequest, AuditDetails } from '../common/actor';
 import { AuditCtx, CurrentActor } from '../common/actor';
 import { hashPassword } from '../auth/auth.service';
 import { randomToken, sha256 } from '../common/crypto';
-import { Audited, RequirePermissions, RequiresFeature } from '../common/decorators';
+import { Audited, Public, RequirePermissions, RequiresFeature } from '../common/decorators';
+import { loadUserActor } from '../common/guards';
+import { SyncService } from '../sync/sync.service';
 import { badRequest, conflict, forbidden, notFound } from '../common/errors';
 import {
   EXTENDED_ROLES, RESTAURANT_PERMISSIONS, ROLE_PERMISSIONS, limitToPlan, type RestaurantRoleName,
@@ -44,6 +46,22 @@ export const StaffBody = z
   .refine((b) => !!b.pin || b.sendInvite, { message: 'Set a PIN now or send an invite so they choose one', path: ['pin'] })
   .refine((b) => b.role !== 'custom' || !!b.customRoleId, { message: 'Choose the custom role', path: ['customRoleId'] });
 
+/**
+ * The main device (hub) adds a person for the owner / Restaurant Admin who signed in on it with their PIN. The hub
+ * sets the PIN, so the person is active at once (no invite email). The device token proves the branch; the acting
+ * user's permissions are re-checked here exactly as for the console.
+ */
+const HubStaffBody = z.object({
+  actorUserId: z.string().uuid(),
+  name: z.string().trim().min(1).max(80),
+  email: z.string().trim().toLowerCase().email(),
+  phone: z.string().trim().max(20).optional(),
+  role: z.enum(STAFF_ROLES),
+  customRoleId: z.string().uuid().optional(),
+  pin: Pin,
+  canDiscount: z.boolean().default(false),
+});
+
 const StaffPatch = z.object({
   name: z.string().trim().min(1).max(80).optional(),
   email: z.string().trim().toLowerCase().email().optional(),
@@ -72,7 +90,7 @@ type Ent = Awaited<ReturnType<LicenseService['entitlement']>>;
 @ApiBearerAuth()
 @Controller()
 export class StaffController {
-  constructor(private db: DbService, private licenses: LicenseService, private mailer: Mailer) {}
+  constructor(private db: DbService, private licenses: LicenseService, private mailer: Mailer, private sync: SyncService) {}
 
   private t<T>(a: Actor, fn: (tx: Tx) => Promise<T>) {
     if (!a.tenantId) throw forbidden('tenant_only', 'Restaurant account required');
@@ -208,6 +226,25 @@ export class StaffController {
       after: { name: r.u.name, email: r.u.email, role: b.role, customRole: r.roleName, status: b.status, webAccess: b.webAccess, canDiscount: b.canDiscount, pinSet: !!b.pin, invited: b.sendInvite },
     });
     return { id: r.u.id, name: r.u.name, role: b.role, status: r.u.status, webAccess: r.u.webAccess, invite: r.invite };
+  }
+
+  /**
+   * Adding a person from the POS: the main device forwards it for the owner / Restaurant Admin signed in on it.
+   * Needs internet at that moment (email must be unique across BhojMitra, plan limits are checked here).
+   */
+  @Public()
+  @Audited('staff.created')
+  @Post('sync/staff')
+  @ApiBody(apiBody(HubStaffBody))
+  async createFromHub(@Headers('x-device-token') token: string | undefined, @Body(zbody(HubStaffBody)) b: z.infer<typeof HubStaffBody>, @Req() req: AppRequest, @AuditCtx() audit: AuditDetails) {
+    const dev = await this.sync.authenticateDevice(token);
+    const actor = await loadUserActor(this.db, this.licenses, b.actorUserId, dev.tenantId);
+    if (!actor.permissions.has('staff.manage')) throw forbidden('missing_permission', 'Only the owner or a Restaurant Admin can add people');
+    if (actor.branchIds.length && !actor.branchIds.includes(dev.branchId)) throw forbidden('branch_scope', 'Not your branch');
+    req.actor = actor; // the audit records who added them (and through which device)
+    req.deviceId = dev.deviceId;
+    const { actorUserId: _actor, ...p } = b;
+    return this.create(actor, { ...p, sendInvite: false, status: 'active', webAccess: false }, audit);
   }
 
   @RequirePermissions('staff.manage')

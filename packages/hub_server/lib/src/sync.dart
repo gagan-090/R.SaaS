@@ -32,6 +32,23 @@ class CloudClient {
     return (contentType: r.headers['content-type'] ?? 'image/jpeg', bytes: r.bodyBytes);
   }
 
+  /// Adds a person for the owner / admin signed in on the hub (POST /sync/staff). Needs internet: the cloud checks
+  /// the email is unused and the plan's staff limit. Cloud refusals come back as [HubError] with the cloud's message.
+  Future<Map<String, Object?>> addStaff(Map<String, Object?> body) async {
+    final http.Response r;
+    try {
+      r = await _http.post(Uri.parse('$baseUrl/sync/staff'), headers: _h, body: jsonEncode(body)).timeout(const Duration(seconds: 20));
+    } catch (_) {
+      throw HubError(503, 'offline', 'Adding a person needs internet on the main device. Billing keeps working offline; try again when it is back online.');
+    }
+    final j = r.body.isEmpty ? const <String, Object?>{} : jsonDecode(r.body) as Map<String, Object?>;
+    if (r.statusCode != 201) {
+      final m = j['message'];
+      throw HubError(r.statusCode >= 500 ? 502 : r.statusCode, '${j['code'] ?? 'cloud_error'}', m is List ? m.join(', ') : '${m ?? 'The server refused it'}');
+    }
+    return j;
+  }
+
   Future<List<Map<String, Object?>>> push(List<Map<String, Object?>> events) async {
     final r = await _http
         .post(Uri.parse('$baseUrl/sync/push'), headers: _h, body: jsonEncode({'events': events}))

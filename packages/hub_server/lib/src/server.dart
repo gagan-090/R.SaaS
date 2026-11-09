@@ -14,10 +14,13 @@ import 'util.dart';
 /// HTTP + WebSocket API of the branch hub (Build Spec §09), served at /hub/v1.
 /// Devices send `X-Device-Token`; staff actions also send `Authorization: Bearer <session token>`.
 class HubServer {
-  HubServer(this.hub, {required this.hubName, this.certFingerprint, this.refreshStaff});
+  HubServer(this.hub, {required this.hubName, this.certFingerprint, this.refreshStaff, this.addStaff});
 
   final HubService hub;
   final Future<void> Function()? refreshStaff;
+
+  /// Forwards "add a person" to the cloud (null when the hub runs without a cloud link, e.g. in tests).
+  final Future<Map<String, Object?>> Function(Map<String, Object?> body)? addStaff;
   final String hubName;
 
   /// SHA-256 fingerprint of the hub's TLS certificate; clients pin it at pairing.
@@ -97,6 +100,26 @@ class HubServer {
       await _actor(q);
       return _json(await hub.staff());
     });
+    // owner / Restaurant Admin adds a person from the POS: checked here, forwarded to the cloud (which re-checks and
+    // enforces email + plan rules), then pulled straight back so the new person can sign in on any device at once
+    r.post('/staff', (Request q) async {
+      final a = await _staff(q);
+      a.require('staff.manage');
+      final add = addStaff;
+      if (add == null) throw HubError(503, 'offline', 'This main device has no cloud link');
+      final b = await _body(q);
+      final created = await add({
+        'actorUserId': a.userId,
+        for (final k in ['name', 'email', 'phone', 'role', 'customRoleId', 'pin', 'canDiscount']) if (b[k] != null) k: b[k],
+      });
+      try {
+        await refreshStaff?.call().timeout(const Duration(seconds: 10));
+      } catch (_) {
+        // the regular sync brings them within a minute
+      }
+      return _json(created, 201);
+    });
+
     r.get('/menu', (Request q) async {
       await _actor(q);
       return _json(await hub.menu());

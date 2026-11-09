@@ -39,13 +39,14 @@ class HubHost {
       keyF.writeAsStringSync(tls.keyPem);
     }
     fingerprint = tls.fingerprint;
-    _worker = SyncWorker(_db!, _hub!, CloudClient(c.cloudUrl, c.cloudDeviceToken));
+    final cloud = CloudClient(c.cloudUrl, c.cloudDeviceToken);
+    _worker = SyncWorker(_db!, _hub!, cloud);
     try {
       await _worker!.pullOnce();
     } catch (_) {
       // offline start: keep serving the LAN with the last pulled config
     }
-    _server = HubServer(_hub!, hubName: Platform.localHostname, refreshStaff: _worker!.pullOnce, certFingerprint: fingerprint);
+    _server = HubServer(_hub!, hubName: Platform.localHostname, refreshStaff: _worker!.pullOnce, addStaff: cloud.addStaff, certFingerprint: fingerprint);
     await _server!.start(port: port, tls: tls.context());
     _worker!.start();
     localDeviceToken ??= await _hub!.registerSelf('This hub (${Platform.localHostname})', Platform.isWindows ? 'windows' : 'android');
