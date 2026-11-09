@@ -1,9 +1,9 @@
-import { Injectable, NotImplementedException } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger, NotImplementedException } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { gunzipSync, gzipSync } from 'zlib';
-import { badRequest } from '../common/errors';
+import { AppError, badRequest } from '../common/errors';
 
 /**
  * JSON.stringify replacer for database rows: Prisma returns BigInt for `seq` cursors (every branch has one), which
@@ -42,8 +42,14 @@ export class ColdStorage {
     if (this.driver !== 'file') throw new NotImplementedException('S3 cold storage is not implemented yet; use COLD_STORAGE=file');
     const bytes = gzipSync(Buffer.from(JSON.stringify(doc, jsonSafe)));
     const file = this.safe(key);
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(file, bytes, { flag: 'wx' }); // never overwrite an existing archive
+    try {
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      await fs.writeFile(file, bytes, { flag: 'wx' }); // never overwrite an existing archive
+    } catch (e) {
+      // e.g. EACCES when the folder is not writable by the API user: a clear 503 instead of a bare 500
+      new Logger(ColdStorage.name).error(`cold storage write failed at ${path.dirname(file)}: ${(e as Error).message}`);
+      throw new AppError(HttpStatus.SERVICE_UNAVAILABLE, 'cold_storage_unavailable', 'Cold storage is not writable on the server, so the archive was not created. The restaurant was not changed.');
+    }
     return { storage: 'file', key, sha256: createHash('sha256').update(bytes).digest('hex'), sizeBytes: bytes.length };
   }
 

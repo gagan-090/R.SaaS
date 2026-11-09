@@ -14,6 +14,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -
 COPY --from=build /repo /repo
 WORKDIR /repo/apps/api
 ENV NODE_ENV=production
+# cold storage (restaurant archives) is written under /repo/.localdb by the non-root API user
+ENV COLD_STORAGE_DIR=/repo/.localdb/cold-storage
+RUN mkdir -p /repo/.localdb/cold-storage && chown -R node:node /repo/.localdb
 USER node
 EXPOSE 3000
 # Applies pending migrations with the owner URL, then starts as the least-privilege app role.

@@ -12,6 +12,7 @@ export class HealthController {
   @Get()
   async health() {
     await this.db.$queryRaw`SELECT 1`;
-    return { status: 'ok', time: new Date().toISOString() };
+    // commit: which build is live (Render sets RENDER_GIT_COMMIT), so a fix can be checked from outside
+    return { status: 'ok', time: new Date().toISOString(), commit: process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? null };
   }
 }
