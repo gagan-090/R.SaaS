@@ -36,7 +36,7 @@ export function ImportDialog({ kind, close }: { kind: 'menu' | 'inventory'; clos
     }
   };
 
-  const template = () => run(async () => saveFile(`house-plating-${kind}-import-template.xlsx`, await api.importTemplate(kind), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'));
+  const template = () => run(async () => saveFile(`bhojmitra-${kind}-import-template.xlsx`, await api.importTemplate(kind), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'));
   const upload = async () => {
     const f = await xlsxPicker.pick();
     if (!f) return;

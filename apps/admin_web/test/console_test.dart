@@ -659,7 +659,7 @@ void main() {
       await t.tap(find.byKey(const Key('save-branding')));
       await t.pumpAndSettle();
       expect(api.last('PUT', '/tenant/branding'), {'color': '#1A73E8', 'textSize': 'large', 'headingWeight': 'bold', 'headingCase': 'upper'});
-      expect(find.byKey(const Key('brand-name')), findsOneWidget); // sidebar shows the restaurant, not House Plating
+      expect(find.byKey(const Key('brand-name')), findsOneWidget); // sidebar shows the restaurant, not BhojMitra
       expect(find.text('DEMO DHABA'), findsWidgets);
       expect(HPColors.saffron, const Color(0xFF1A73E8));
       expect(Theme.of(t.element(find.byType(Scaffold).first)).colorScheme.primary, const Color(0xFF1A73E8));
@@ -843,7 +843,7 @@ void main() {
     await t.pumpAndSettle();
     await t.tap(find.byKey(const Key('download-template')));
     await t.pumpAndSettle();
-    expect(lastSavedFile?.name, 'house-plating-inventory-import-template.xlsx');
+    expect(lastSavedFile?.name, 'bhojmitra-inventory-import-template.xlsx');
     await t.tap(find.byKey(const Key('upload-xlsx')));
     await t.pumpAndSettle();
     expect(api.last('POST', '/imports/inventory/validate')['fileName'], 'inventory.xlsx');
@@ -863,7 +863,7 @@ void main() {
     await t.pumpAndSettle();
     await t.tap(find.byKey(const Key('download-template')));
     await t.pumpAndSettle();
-    expect(lastSavedFile?.name, 'house-plating-menu-import-template.xlsx');
+    expect(lastSavedFile?.name, 'bhojmitra-menu-import-template.xlsx');
     await t.tap(find.byKey(const Key('mode-create')));
     await t.tap(find.byKey(const Key('upload-xlsx')));
     await t.pumpAndSettle();

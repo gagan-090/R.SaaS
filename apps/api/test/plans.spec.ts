@@ -114,7 +114,7 @@ describe('verification email', () => {
     expect(r.verifyUrl).toBeUndefined(); // the token only travels by email when the email works
     const m = t.mailer.sent.at(-1)!;
     expect(m.to).toBe(ownerEmail);
-    expect(m.subject).toBe('Activate Spice Route on House Plating');
+    expect(m.subject).toBe('Activate Spice Route on BhojMitra');
     expect(m.text).toMatch(/\/#\/verify-email\?token=[A-Za-z0-9_-]+/);
     expect(m.html).toContain('Confirm email &amp; set password');
     expect(m.html).toContain('Meera');

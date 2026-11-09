@@ -88,10 +88,10 @@ export function StaffScreen() {
         ))}
       </div>
       {noPlan && canEdit && (
-        <Notice testId="staff-no-plan" icon={Lock} title="No active plan" text={`People cannot be added or changed until your restaurant has an active plan. ${isOwner ? 'Ask House Plating to issue or renew your plan' : 'Ask the owner to renew the plan'}.`} />
+        <Notice testId="staff-no-plan" icon={Lock} title="No active plan" text={`People cannot be added or changed until your restaurant has an active plan. ${isOwner ? 'Ask BhojMitra to issue or renew your plan' : 'Ask the owner to renew the plan'}.`} />
       )}
       {full && !noPlan && canEdit && (
-        <Notice testId="limit-reached" icon={UsersRound} title="Employee limit reached" text={`Your plan allows ${limit} active employees. Turn someone off, or ${isOwner ? 'ask House Plating for a bigger plan' : 'ask the owner about a bigger plan'}.`} />
+        <Notice testId="limit-reached" icon={UsersRound} title="Employee limit reached" text={`Your plan allows ${limit} active employees. Turn someone off, or ${isOwner ? 'ask BhojMitra for a bigger plan' : 'ask the owner about a bigger plan'}.`} />
       )}
       {limits.staffPortal !== true && (
         <Notice

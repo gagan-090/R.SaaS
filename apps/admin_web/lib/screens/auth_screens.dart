@@ -42,7 +42,7 @@ class _AuthFrame extends ConsumerWidget {
                         child: Icon(Icons.restaurant_rounded, size: 20, color: HPColors.onSaffron),
                       ),
                       const SizedBox(width: HPSpace.sm),
-                      Flexible(child: Text('HOUSE PLATING', style: HPType.overline(context.hp.accentInk), overflow: TextOverflow.ellipsis)),
+                      Flexible(child: Text('BHOJMITRA', style: HPType.overline(context.hp.accentInk), overflow: TextOverflow.ellipsis)),
                     ]),
                     const SizedBox(height: HPSpace.lg),
                     Text(title, style: HPType.titleScreen(context.hp.text)),

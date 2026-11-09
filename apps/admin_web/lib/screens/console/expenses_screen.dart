@@ -82,7 +82,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
   @override
   Widget build(BuildContext context) {
     if (_error is ApiException && (_error as ApiException).code == 'feature_not_in_plan') {
-      return const PageFrame(title: 'Expenses', child: EmptyState(key: Key('expenses-locked'), icon: Icons.lock_outline_rounded, title: 'Expenses are not in your plan', message: 'Ask House Plating to add expense tracking to your plan.'));
+      return const PageFrame(title: 'Expenses', child: EmptyState(key: Key('expenses-locked'), icon: Icons.lock_outline_rounded, title: 'Expenses are not in your plan', message: 'Ask BhojMitra to add expense tracking to your plan.'));
     }
     if (_error != null) return ErrorState(message: '$_error', onRetry: _load);
     if (_data == null) return const LoadingState();

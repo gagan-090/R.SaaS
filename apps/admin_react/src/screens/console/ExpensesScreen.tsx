@@ -50,7 +50,7 @@ export function ExpensesScreen() {
   if (error instanceof ApiException && error.code === 'feature_not_in_plan')
     return (
       <PageFrame title="Expenses">
-        <EmptyState testId="expenses-locked" icon={Lock} title="Expenses are not in your plan" message="Ask House Plating to add expense tracking to your plan." />
+        <EmptyState testId="expenses-locked" icon={Lock} title="Expenses are not in your plan" message="Ask BhojMitra to add expense tracking to your plan." />
       </PageFrame>
     );
   if (error != null) return <ErrorState message={errorText(error)} onRetry={load} />;

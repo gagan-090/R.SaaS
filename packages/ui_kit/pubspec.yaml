@@ -1,5 +1,5 @@
 name: rsaas_ui_kit
-description: '"House Plating" design system (STYLE.md): tokens, themes and components shared by pos_app and admin_web.'
+description: '"BhojMitra" design system (STYLE.md): tokens, themes and components shared by pos_app and admin_web.'
 version: 0.1.0
 publish_to: none
 resolution: workspace

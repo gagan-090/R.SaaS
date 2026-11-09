@@ -122,10 +122,10 @@ class _StaffScreenState extends ConsumerState<StaffScreen> {
         ]),
         if (noPlan && _canEdit)
           _Notice(key: const Key('staff-no-plan'), icon: Icons.lock_outline_rounded, title: 'No active plan',
-              text: 'People cannot be added or changed until your restaurant has an active plan. ${_isOwner ? 'Ask House Plating to issue or renew your plan' : 'Ask the owner to renew the plan'}.'),
+              text: 'People cannot be added or changed until your restaurant has an active plan. ${_isOwner ? 'Ask BhojMitra to issue or renew your plan' : 'Ask the owner to renew the plan'}.'),
         if (full && !noPlan && _canEdit)
           _Notice(key: const Key('limit-reached'), icon: Icons.group_off_outlined, title: 'Employee limit reached',
-              text: 'Your plan allows $limit active employees. Turn someone off, or ${_isOwner ? 'ask House Plating for a bigger plan' : 'ask the owner about a bigger plan'}.'),
+              text: 'Your plan allows $limit active employees. Turn someone off, or ${_isOwner ? 'ask BhojMitra for a bigger plan' : 'ask the owner about a bigger plan'}.'),
         if (_limits?['staffPortal'] != true)
           _Notice(icon: Icons.lock_outline_rounded, title: 'Employee web portal is not in your plan',
               text: 'Employees can use the POS with their PIN. For email + PIN web sign-in, ${_isOwner ? 'ask the Super Admin to enable "Staff web portal (email + PIN)" in Plans, then sign in again' : 'ask the owner to enable a plan with the staff web portal'}.'),

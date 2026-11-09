@@ -14,7 +14,7 @@ abstract final class HPType {
   static const fallback = ['packages/rsaas_ui_kit/LiberationSans', 'Helvetica Neue', 'Helvetica', 'Roboto', 'Segoe UI', 'sans-serif'];
   static const tabular = [FontFeature.tabularFigures()];
 
-  /// Heading weight and case — House Plating bold, or the restaurant's choice ([HPBrand.activate]).
+  /// Heading weight and case — BhojMitra bold, or the restaurant's choice ([HPBrand.activate]).
   static FontWeight headingWeight = FontWeight.w700;
   static bool headingUpper = false;
 
@@ -34,7 +34,7 @@ abstract final class HPType {
 }
 
 /// A restaurant's own look (plan feature "branding", set in the restaurant console): highlight colour, text size,
-/// heading weight and case, and a logo (media id). `null` everywhere means the House Plating look.
+/// heading weight and case, and a logo (media id). `null` everywhere means the BhojMitra look.
 @immutable
 class HPBrand {
   const HPBrand({required this.color, this.textSize = 'standard', this.headingWeight = 'bold', this.headingCase = 'normal', this.logoImageId});
@@ -80,13 +80,13 @@ class HPBrand {
     return h.toColor();
   }
 
-  /// This brand's colours on top of a House Plating palette.
+  /// This brand's colours on top of a BhojMitra palette.
   HPPalette apply(HPPalette p) {
     final fill = p.isDark ? inkOn(dark: true) : color;
     return p.copyWith(accent: fill, onAccent: onColor(fill), accentInk: inkOn(dark: p.isDark), brand: fill, onBrand: onColor(fill));
   }
 
-  /// Makes this brand (or the House Plating look when null) current for [HPColors.saffron] and heading styles.
+  /// Makes this brand (or the BhojMitra look when null) current for [HPColors.saffron] and heading styles.
   /// Call before building the theme; widgets pick it up on their next build.
   static void activate(HPBrand? b) {
     HPColors.saffron = b?.color ?? HPColors.amber;

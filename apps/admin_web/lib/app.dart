@@ -91,7 +91,7 @@ class AdminApp extends ConsumerWidget {
   const AdminApp({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // a restaurant with the "branding" plan feature sees its own colour and text style; everyone else House Plating
+    // a restaurant with the "branding" plan feature sees its own colour and text style; everyone else BhojMitra
     final brand = ref.watch(restaurantLookProvider).valueOrNull?.brand;
     HPBrand.activate(brand);
     final authState = ref.watch(authProvider);
@@ -196,7 +196,7 @@ class ConsoleShell extends ConsumerWidget {
                   if (look?.brand != null && look!.name.isNotEmpty)
                     Text(HPType.heading(look.name), key: const Key('brand-name'), style: HPType.titleScreen(_onSidebar(p)).copyWith(fontSize: 22, height: 1.1))
                   else
-                    Text('House\nPlating', style: HPType.titleScreen(_onSidebar(p)).copyWith(fontSize: 26, height: 1.05)),
+                    Text('BhojMitra', style: HPType.titleScreen(_onSidebar(p)).copyWith(fontSize: 26, height: 1.05)),
                   const SizedBox(height: HPSpace.sm),
                   Text('$brand console'.toUpperCase(), style: HPType.overline(_onSidebar(p).withValues(alpha: .65)).copyWith(fontSize: 10)),
                 ]),

@@ -12,7 +12,7 @@ abstract final class HPColors {
   static const ghee = Color(0xFFF6EBDD);
   static const husk = Color(0xFFB8A595);
   static const smoke = Color(0xFF8F7D6E);
-  /// Highlight colour (selected navigation, avatars, main buttons on the POS). House Plating saffron by default;
+  /// Highlight colour (selected navigation, avatars, main buttons on the POS). BhojMitra saffron by default;
   /// a restaurant with the "branding" plan feature replaces it with its own colour ([HPBrand.activate]).
   static Color saffron = amber;
   static Color onSaffron = onAmber;
@@ -203,6 +203,6 @@ class HPPalette extends ThemeExtension<HPPalette> {
 }
 
 extension HPContext on BuildContext {
-  /// The House Plating palette of the current theme (dark service palette if a screen is built without HPTheme).
+  /// The BhojMitra palette of the current theme (dark service palette if a screen is built without HPTheme).
   HPPalette get hp => Theme.of(this).extension<HPPalette>() ?? HPPalette.serviceDark;
 }

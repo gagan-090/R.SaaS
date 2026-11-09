@@ -116,7 +116,7 @@ function HowTo({ apiUrl, email, hasHub }: { apiUrl: string; email: string; hasHu
         The hub is the main cashier device (Windows PC or Android). It keeps billing running when the internet drops and syncs to the cloud when it is back. Other phones and tablets pair with it over Wi-Fi.
       </p>
       <div className="mt-16">
-        {step(1, 'Install House Plating POS on the cashier device', <span className="muted">Android: install the APK. Windows: run the installer.</span>)}
+        {step(1, 'Install BhojMitra POS on the cashier device', <span className="muted">Android: install the APK. Windows: run the installer.</span>)}
         {step(
           2,
           'Open it and choose "This device is the hub"',

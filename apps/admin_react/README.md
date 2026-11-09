@@ -1,8 +1,8 @@
-# House Plating console — React
+# BhojMitra console — React
 
 The web console (Super Admin portal **and** restaurant console) rebuilt in React + TypeScript (Vite). It is a
 screen-for-screen port of the Flutter app in `apps/admin_web`: same API (`packages/contracts/openapi.json`), same
-hash routes, same sign-in flows, same permission gating and the same House Plating look (`packages/ui_kit/STYLE.md`).
+hash routes, same sign-in flows, same permission gating and the same BhojMitra look (`packages/ui_kit/STYLE.md`).
 
 ## Run
 
@@ -41,7 +41,7 @@ pnpm build                        # static site in dist/ (vercel.json rewrites t
 src/api/client.ts        ApiClient (port of api_client.dart)
 src/state/               auth state machine, theme, restaurant branding, cached plans / admin roles
 src/lib/                 money, dates, labels, PIN policy, menu rules, floor model, image prep, downloads
-src/ui/                  House Plating components, dialogs (openDialog / askReason / askStepUp / confirm), toasts
+src/ui/                  BhojMitra components, dialogs (openDialog / askReason / askStepUp / confirm), toasts
 src/shell/               sidebar / drawer shell and navigation
 src/screens/auth|platform|console
 src/test/                Vitest: lib, session and whole-app flows on packages/contracts/fixtures

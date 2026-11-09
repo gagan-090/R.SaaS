@@ -114,8 +114,8 @@ export class StaffController {
 
   /** No active plan (never issued, revoked or expired to read-only) means no new or re-activated employees. */
   private assertPlanActive(ent: Ent) {
-    if (ent.state === 'none') throw forbidden('no_active_plan', 'Your restaurant has no active plan, so employees cannot be added or changed. Ask House Plating to issue a plan.');
-    if (ent.readOnly) throw forbidden('license_read_only', `Your plan is ${ent.state.replace(/_/g, ' ')}, so employees cannot be added or changed. Renew or contact House Plating.`);
+    if (ent.state === 'none') throw forbidden('no_active_plan', 'Your restaurant has no active plan, so employees cannot be added or changed. Ask BhojMitra to issue a plan.');
+    if (ent.readOnly) throw forbidden('license_read_only', `Your plan is ${ent.state.replace(/_/g, ' ')}, so employees cannot be added or changed. Renew or contact BhojMitra.`);
   }
 
   private async emailTaken(email: string, exceptUserId?: string) {

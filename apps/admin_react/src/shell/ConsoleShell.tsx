@@ -44,7 +44,7 @@ export function ConsoleShell({ nav, brand, children }: { nav: NavItem[]; brand: 
             {look.name}
           </div>
         ) : (
-          <div className="brand-title">{'House\nPlating'}</div>
+          <div className="brand-title">{'BhojMitra'}</div>
         )}
         <div className="brand-sub">{brand} console</div>
       </div>
@@ -90,7 +90,7 @@ export function ConsoleShell({ nav, brand, children }: { nav: NavItem[]; brand: 
       {sidebar}
       <header className="topbar">
         <IconButton title="Menu" icon={Menu} testId="open-nav" onClick={() => setDrawer(true)} />
-        <span className="t-card ellipsis">{look?.brand && look.name ? look.name : 'House Plating'}</span>
+        <span className="t-card ellipsis">{look?.brand && look.name ? look.name : 'BhojMitra'}</span>
         <span className="muted ellipsis" style={{ marginLeft: 'auto', paddingRight: 8, fontSize: 13 }}>
           {idx >= 0 ? items[idx].label : ''}
         </span>

@@ -63,7 +63,7 @@ export function RestaurantDashboardScreen() {
                   <Lock size={22} aria-hidden />
                   <div>
                     <div className="t-label">Your restaurant has no active plan</div>
-                    <div className="muted">Menu, floors & tables, staff and the POS are locked until House Plating issues or renews your plan.</div>
+                    <div className="muted">Menu, floors & tables, staff and the POS are locked until BhojMitra issues or renews your plan.</div>
                   </div>
                 </div>
               )}

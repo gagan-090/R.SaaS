@@ -166,7 +166,7 @@ const actions: Record<string, string> = {
   'platform.admin.activated': 'Admin activated',
   'platform.admin.deleted': 'Admin removed',
   'platform.admin.mfa_policy_changed': 'Admin two-step setting changed',
-  'restaurant.activated_by_admin': 'Restaurant activated by House Plating',
+  'restaurant.activated_by_admin': 'Restaurant activated by BhojMitra',
   'restaurant.archived': 'Restaurant archived',
   'restaurant.restored': 'Restaurant restored',
   'restaurant.deleted': 'Restaurant deleted',

@@ -127,7 +127,7 @@ export function InventoryScreen() {
   if (error instanceof ApiException && error.code === 'feature_not_in_plan')
     return (
       <PageFrame title="Inventory">
-        <EmptyState testId="inventory-locked" icon={Lock} title="Inventory is not in your plan" message="Ask House Plating to add inventory to your plan. Stock, recipes and wastage tracking then appear here." />
+        <EmptyState testId="inventory-locked" icon={Lock} title="Inventory is not in your plan" message="Ask BhojMitra to add inventory to your plan. Stock, recipes and wastage tracking then appear here." />
       </PageFrame>
     );
   if (error != null) return <ErrorState message={errorText(error)} onRetry={load} />;

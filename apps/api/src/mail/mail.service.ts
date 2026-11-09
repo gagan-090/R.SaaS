@@ -49,7 +49,7 @@ export class ResendMailer extends Mailer {
   private log = new Logger('Mail(resend)');
   private client = new Resend(loadEnv().RESEND_API_KEY);
   async send(msg: MailMessage) {
-    const from = loadEnv().MAIL_FROM || 'House Plating <onboarding@resend.dev>';
+    const from = loadEnv().MAIL_FROM || 'BhojMitra <onboarding@resend.dev>';
     const { data, error } = await this.client.emails.send({ from, to: msg.to, subject: msg.subject, text: msg.text, html: msg.html });
     if (error) {
       // never log the key or the message body (it can carry a one-time link)

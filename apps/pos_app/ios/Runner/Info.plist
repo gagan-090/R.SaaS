@@ -39,7 +39,7 @@
 		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>House Plating POS connects to your branch hub on the local network to take orders and print bills.</string>
+	<string>BhojMitra POS connects to your branch hub on the local network to take orders and print bills.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

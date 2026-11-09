@@ -78,7 +78,7 @@ class _RestaurantDashboardScreenState extends ConsumerState<RestaurantDashboardS
                   child: ListTile(
                     leading: const Icon(Icons.lock_outline_rounded),
                     title: const Text('Your restaurant has no active plan'),
-                    subtitle: const Text('Menu, floors & tables, staff and the POS are locked until House Plating issues or renews your plan.'),
+                    subtitle: const Text('Menu, floors & tables, staff and the POS are locked until BhojMitra issues or renews your plan.'),
                   ),
                 ),
                 const SizedBox(height: HPSpace.lg),

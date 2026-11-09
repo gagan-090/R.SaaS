@@ -59,7 +59,7 @@ export class ImportsController {
     const kind = Kind.parse(kindRaw);
     const buf = await buildTemplate(kind);
     res.setHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('content-disposition', `attachment; filename="house-plating-${kind}-import-template.xlsx"`);
+    res.setHeader('content-disposition', `attachment; filename="bhojmitra-${kind}-import-template.xlsx"`);
     res.send(buf);
   }
 

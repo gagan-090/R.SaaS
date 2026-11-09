@@ -268,7 +268,7 @@ function BrandingCard() {
           <div>
             <div className="t-card">Custom branding is not in your plan</div>
             <p className="muted" style={{ margin: '4px 0 0' }}>
-              Ask House Plating to switch on "Custom branding" for your plan. Then you can add your logo, colour and text style, and they appear on this console and on every POS device.
+              Ask BhojMitra to switch on "Custom branding" for your plan. Then you can add your logo, colour and text style, and they appear on this console and on every POS device.
             </p>
           </div>
         </div>

@@ -165,7 +165,7 @@ class ThemeModeNotifier extends Notifier<ThemeMode> {
 final themeModeProvider = NotifierProvider<ThemeModeNotifier, ThemeMode>(ThemeModeNotifier.new);
 
 /// The signed-in restaurant's name and look. `brand` is null unless its plan includes "branding" and the owner set one;
-/// Super Admins always see House Plating. Bump [brandRefreshProvider] after saving branding.
+/// Super Admins always see BhojMitra. Bump [brandRefreshProvider] after saving branding.
 typedef RestaurantLook = ({String name, HPBrand? brand});
 final brandRefreshProvider = StateProvider<int>((ref) => 0);
 final restaurantLookProvider = FutureProvider<RestaurantLook?>((ref) async {

@@ -613,7 +613,7 @@ class _FloorEditorState extends State<FloorEditor> {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text('Moving tables is locked: the visual floor editor is not in your plan', style: HPType.label(p.text)),
                     const SizedBox(height: 2),
-                    Text('Ask House Plating to switch on "Visual floor editor" for your plan. Until then you can add tables in the List and see the live floor here.', style: HPType.body(p.muted)),
+                    Text('Ask BhojMitra to switch on "Visual floor editor" for your plan. Until then you can add tables in the List and see the live floor here.', style: HPType.body(p.muted)),
                   ]),
                 ),
               ]),

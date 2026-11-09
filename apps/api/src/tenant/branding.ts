@@ -12,7 +12,7 @@ export type Branding = z.infer<typeof BrandingBody> & { logoImageId: string | nu
 
 export const DEFAULT_BRANDING: Branding = { color: '#6B1F2A', textSize: 'standard', headingWeight: 'bold', headingCase: 'normal', logoImageId: null };
 
-/** Stored branding merged over the defaults; null when the plan does not include it (apps use the House Plating look). */
+/** Stored branding merged over the defaults; null when the plan does not include it (apps use the BhojMitra look). */
 export function effectiveBranding(stored: unknown, features: string[]): Branding | null {
   if (!features.includes('branding') || !stored || typeof stored !== 'object') return null;
   const parsed = BrandingBody.partial().extend({ logoImageId: z.string().uuid().nullable().optional() }).safeParse(stored);

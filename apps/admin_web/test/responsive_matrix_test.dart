@@ -138,7 +138,9 @@ void main() {
       }
 
       expect(await openNav(t, size, 'Plans'), isTrue);
-      expect(find.byKey(const Key('plans-kpi-on-sale')), findsOneWidget);
+      // the native phone/tablet app shows only the plans (KPIs stay in the web build and on desktop)
+      expect(find.byKey(const Key('plans-kpi-on-sale')), compact ? findsNothing : findsOneWidget);
+      expect(find.byKey(const Key('plans-cycle')), findsOneWidget);
       expect(await openNav(t, size, 'Admins'), isTrue);
       expect(await openNav(t, size, 'Audit log'), isTrue);
     });

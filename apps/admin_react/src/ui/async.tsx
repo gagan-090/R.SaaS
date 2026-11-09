@@ -34,7 +34,7 @@ export function LoadError({ error, page, onRetry }: { error: unknown; page: stri
         testId="plan-locked"
         icon={Lock}
         title="Not in your plan"
-        message={`${page} is not included in your restaurant's current plan, or the plan is no longer active.\nAsk House Plating to activate or upgrade your plan, then open this page again.`}
+        message={`${page} is not included in your restaurant's current plan, or the plan is no longer active.\nAsk BhojMitra to activate or upgrade your plan, then open this page again.`}
       />
     </PageFrame>
   );

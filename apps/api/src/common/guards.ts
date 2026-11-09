@@ -94,12 +94,12 @@ export class PermissionGuard implements CanActivate {
     if (!required || required.length === 0) throw forbidden('no_permission_declared', 'Route has no permission declaration');
     const missing = required.filter((p) => !actor.permissions.has(p));
     if (missing.length && missing.every((p) => actor.planBlocked?.has(p))) {
-      throw forbidden('feature_not_in_plan', `Your plan does not include this (${missing.join(', ')}). Ask House Plating to upgrade your plan.`);
+      throw forbidden('feature_not_in_plan', `Your plan does not include this (${missing.join(', ')}). Ask BhojMitra to upgrade your plan.`);
     }
     if (missing.length) throw forbidden('missing_permission', `Missing permission: ${missing.join(', ')}`);
     const any = meta<string[]>(this.reflector, ANY_PERMISSION, ctx);
     if (any?.length && !any.some((p) => actor.permissions.has(p))) {
-      if (any.every((p) => actor.planBlocked?.has(p))) throw forbidden('feature_not_in_plan', 'Your plan does not include this. Ask House Plating to upgrade your plan.');
+      if (any.every((p) => actor.planBlocked?.has(p))) throw forbidden('feature_not_in_plan', 'Your plan does not include this. Ask BhojMitra to upgrade your plan.');
       throw forbidden('missing_permission', `Needs one of: ${any.join(', ')}`);
     }
     return true;

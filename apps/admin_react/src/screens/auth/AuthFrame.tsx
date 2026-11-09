@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { ChefHat } from 'lucide-react';
 import { ThemeSwitch } from '../../ui/kit';
 
-/** The sign-in card: House Plating mark, title, subtitle and the form. */
+/** The sign-in card: BhojMitra mark, title, subtitle and the form. */
 export function AuthFrame({ title, subtitle, children, plain }: { title?: string; subtitle?: ReactNode; children: ReactNode; plain?: boolean }) {
   return (
     <div className="auth-wrap page-enter">
@@ -17,7 +17,7 @@ export function AuthFrame({ title, subtitle, children, plain }: { title?: string
                 <span className="auth-mark">
                   <ChefHat size={20} aria-hidden />
                 </span>
-                <span className="t-overline accent-text">House Plating</span>
+                <span className="t-overline accent-text">BhojMitra</span>
               </div>
               <h1 className="t-screen mt-16">{title}</h1>
               <div className="muted mt-4">{subtitle}</div>

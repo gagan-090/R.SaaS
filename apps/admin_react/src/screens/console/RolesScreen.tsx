@@ -74,7 +74,7 @@ export function RolesScreen() {
           {!inPlan ? (
             <div className="row" data-testid="roles-locked">
               <Lock size={22} className="muted" aria-hidden />
-              <span className="muted">Custom roles are not in your plan. Ask House Plating to switch on "Custom roles" for your plan.</span>
+              <span className="muted">Custom roles are not in your plan. Ask BhojMitra to switch on "Custom roles" for your plan.</span>
             </div>
           ) : custom.length === 0 ? (
             <span className="muted">None yet. A custom role is a name plus the exact permissions you choose — for example a "Floor manager" who arranges tables but cannot take payments.</span>

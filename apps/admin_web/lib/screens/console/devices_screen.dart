@@ -143,7 +143,7 @@ class _HowTo extends StatelessWidget {
           style: HPType.body(p.muted),
         ),
         const SizedBox(height: HPSpace.lg),
-        step(1, 'Install House Plating POS on the cashier device', Text('Android: install the APK. Windows: run the installer.', style: HPType.body(p.muted))),
+        step(1, 'Install BhojMitra POS on the cashier device', Text('Android: install the APK. Windows: run the installer.', style: HPType.body(p.muted))),
         step(
           2,
           'Open it and choose "This device is the hub"',

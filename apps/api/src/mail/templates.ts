@@ -1,11 +1,11 @@
-/** Branded transactional emails (House Plating). Plain text is always included for clients that block HTML. */
+/** Branded transactional emails (BhojMitra). Plain text is always included for clients that block HTML. */
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 function layout(title: string, body: string, button: { label: string; url: string }, footer: string) {
   return `<!doctype html><html><body style="margin:0;background:#FBF6EC;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#2A211C">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:32px 12px"><tr><td align="center">
 <table role="presentation" width="100%" style="max-width:520px;background:#FFFDF8;border:1px solid #E4D8C2;border-radius:20px;padding:32px">
-<tr><td style="font-size:12px;letter-spacing:2px;font-weight:700;color:#9A5A00">HOUSE PLATING</td></tr>
+<tr><td style="font-size:12px;letter-spacing:2px;font-weight:700;color:#9A5A00">BHOJMITRA</td></tr>
 <tr><td style="padding-top:16px;font-family:Georgia,'Times New Roman',serif;font-size:28px;font-weight:600;line-height:1.2">${title}</td></tr>
 <tr><td style="padding-top:12px;font-size:15px;line-height:1.6;color:#4A3F37">${body}</td></tr>
 <tr><td style="padding-top:24px"><a href="${esc(button.url)}" style="display:inline-block;background:#F0A93B;color:#1A0F0C;text-decoration:none;font-weight:700;font-size:16px;padding:14px 28px;border-radius:14px">${esc(button.label)}</a></td></tr>
@@ -15,14 +15,14 @@ function layout(title: string, body: string, button: { label: string; url: strin
 }
 
 export function verifyRestaurantEmail(o: { ownerName: string; restaurantName: string; url: string }) {
-  const subject = `Activate ${o.restaurantName} on House Plating`;
+  const subject = `Activate ${o.restaurantName} on BhojMitra`;
   const text =
-    `Hello ${o.ownerName},\n\n${o.restaurantName} is ready on House Plating. Confirm your email and set your password ` +
+    `Hello ${o.ownerName},\n\n${o.restaurantName} is ready on BhojMitra. Confirm your email and set your password ` +
     `(link valid for 72 hours):\n\n${o.url}\n\nAfter that, sign in to the restaurant console to add your menu, tables and staff.\n\n` +
     `If you did not expect this email, ignore it.`;
   const html = layout(
     `Welcome, ${esc(o.ownerName)}`,
-    `<strong>${esc(o.restaurantName)}</strong> is ready on House Plating. Confirm your email and choose a password — then add your menu, tables and staff from the restaurant console.`,
+    `<strong>${esc(o.restaurantName)}</strong> is ready on BhojMitra. Confirm your email and choose a password — then add your menu, tables and staff from the restaurant console.`,
     { label: 'Confirm email & set password', url: o.url },
     'This link works once and expires in 72 hours. If you did not expect this email, you can ignore it.',
   );
@@ -31,17 +31,17 @@ export function verifyRestaurantEmail(o: { ownerName: string; restaurantName: st
 
 export function staffPinEmail(o: { name: string; restaurantName: string; url: string; purpose: 'invite' | 'reset' }) {
   const invite = o.purpose === 'invite';
-  const subject = invite ? `You're invited to ${o.restaurantName} on House Plating` : `Reset your House Plating PIN for ${o.restaurantName}`;
+  const subject = invite ? `You're invited to ${o.restaurantName} on BhojMitra` : `Reset your BhojMitra PIN for ${o.restaurantName}`;
   const text =
     `Hello ${o.name},\n\n` +
     (invite
-      ? `${o.restaurantName} added you to House Plating. Choose your own PIN (6 to 8 digits) to sign in to the POS and the web portal:`
+      ? `${o.restaurantName} added you to BhojMitra. Choose your own PIN (6 to 8 digits) to sign in to the POS and the web portal:`
       : `A PIN reset was requested for your account at ${o.restaurantName}. Choose a new PIN (6 to 8 digits):`) +
     `\n\n${o.url}\n\nThe link works once and expires in 72 hours. Nobody from the restaurant will ever ask for your PIN.`;
   const html = layout(
     invite ? `Welcome, ${esc(o.name)}` : 'Choose a new PIN',
     invite
-      ? `<strong>${esc(o.restaurantName)}</strong> added you to House Plating. Choose your own PIN — you use it with your email to sign in.`
+      ? `<strong>${esc(o.restaurantName)}</strong> added you to BhojMitra. Choose your own PIN — you use it with your email to sign in.`
       : `Someone asked to reset your PIN at <strong>${esc(o.restaurantName)}</strong>. If it was not you, ignore this email; your current PIN keeps working.`,
     { label: invite ? 'Choose my PIN' : 'Choose a new PIN', url: o.url },
     'This link works once and expires in 72 hours. Nobody from the restaurant will ever ask for your PIN.',

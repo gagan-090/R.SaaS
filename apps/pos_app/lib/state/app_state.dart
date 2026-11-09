@@ -193,7 +193,7 @@ class ThemeModeNotifier extends Notifier<ThemeMode> {
 final themeModeProvider = NotifierProvider<ThemeModeNotifier, ThemeMode>(ThemeModeNotifier.new);
 
 /// The restaurant's name and look from the hub (plan feature "branding", set in the web console). `brand` is null
-/// for the House Plating look. Checked again every minute and on pull-down-to-refresh; the hub pulls it from the cloud.
+/// for the BhojMitra look. Checked again every minute and on pull-down-to-refresh; the hub pulls it from the cloud.
 typedef PosLook = ({String name, HPBrand? brand});
 final posLookProvider = FutureProvider<PosLook?>((ref) async {
   ref.watch(refreshTickProvider);
@@ -205,6 +205,6 @@ final posLookProvider = FutureProvider<PosLook?>((ref) async {
     final tenant = (await api.branch())['tenant'] as Map?;
     return (name: '${tenant?['name'] ?? ''}', brand: HPBrand.fromJson(tenant?['branding']));
   } catch (_) {
-    return null; // hub unreachable: keep the House Plating look
+    return null; // hub unreachable: keep the BhojMitra look
   }
 });

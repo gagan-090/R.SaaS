@@ -146,6 +146,8 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
           // the native phone app keeps the screen for the plans; the web build keeps the explanation
           subtitle: compact && !kIsWeb ? null : 'Standard, Professional, and Premium subscription plans. Customers can purchase monthly or yearly.',
           actions: [
+            // phones: the price toggle sits top right with the other plan controls
+            if (compact) cycleToggle,
             if (compact) archivedToggle,
             if (edit)
               compact
@@ -155,12 +157,11 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
           // short screens (phones in landscape) and phones: the plans come first so they are on screen without scrolling
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             if (!short && !compact) ...[KpiGrid(children: kpis), const SizedBox(height: HPSpace.lg)],
-            if (compact)
-              Center(child: cycleToggle)
-            else
+            if (!compact) ...[
               // the price toggle and filters come after the plan KPIs, right above the plans they change
               Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, crossAxisAlignment: WrapCrossAlignment.center, children: [cycleToggle, archivedToggle]),
-            const SizedBox(height: HPSpace.lg),
+              const SizedBox(height: HPSpace.lg),
+            ],
             if (plans.isEmpty)
               EmptyState(title: _archived ? 'No archived plans' : 'No plans', icon: Icons.workspace_premium_outlined)
             else
@@ -190,7 +191,8 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
                   ]),
                 );
               }),
-            if (short || compact) ...[const SizedBox(height: HPSpace.lg), KpiGrid(dense: compact, children: kpis)],
+            // the native phone app shows only the plans; the web build (phone browser too) keeps the KPIs below them
+            if ((short || compact) && kIsWeb) ...[const SizedBox(height: HPSpace.lg), KpiGrid(dense: compact, children: kpis)],
           ]),
         );
       },

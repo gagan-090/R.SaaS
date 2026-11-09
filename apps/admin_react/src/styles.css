@@ -1,4 +1,4 @@
-/* House Plating back-office theme (packages/ui_kit/STYLE.md). Tokens mirror HPPalette.backOfficeLight / backOfficeDark.
+/* BhojMitra back-office theme (packages/ui_kit/STYLE.md). Tokens mirror HPPalette.backOfficeLight / backOfficeDark.
    White is the default; the dark look is opt-in. A restaurant brand overrides --accent & co at runtime (state/brand.ts). */
 
 :root {

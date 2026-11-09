@@ -390,9 +390,10 @@ class _RestaurantsScreenState extends ConsumerState<RestaurantsScreen> {
     final canCreate = auth is SignedIn && auth.can('platform.restaurant.create');
     final narrow = isNarrowWeb(context);
     final compact = compactLayout(context);
-    final header = Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, runSpacing: HPSpace.md,
+    // phones: the app bar already says "Restaurants", so only the button shows (top right)
+    final header = Wrap(alignment: narrow ? WrapAlignment.end : WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, runSpacing: HPSpace.md,
       spacing: HPSpace.md, children: [
-          Text('Restaurants', style: Theme.of(context).textTheme.headlineMedium),
+          if (!narrow) Text('Restaurants', style: Theme.of(context).textTheme.headlineMedium),
           if (canCreate)
             SizedBox(width: 240, child: PrimaryButton(key: const Key('register-restaurant'), label: 'Register restaurant', icon: Icons.add_rounded, height: 52, onPressed: _register),
           ),
@@ -867,8 +868,8 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
   Future<void> _archive() async {
     final reason = await ReasonDialog.show(
       context,
-      title: 'Archive restaurant to cold storage?',
-      confirmLabel: 'Archive to Cold Storage',
+      title: 'Archive restaurant?',
+      confirmLabel: 'Archive',
       message: 'All restaurant logs, menu, orders, staff, licenses and tenant data will be bundled into a compressed archive (.json.gz) with SHA-256 integrity verification. The restaurant status transitions to Archived.',
       destructive: true,
     );
@@ -1029,7 +1030,7 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
               if (status == 'pending') btn(SecondaryButton(label: 'Activate', icon: Icons.check_circle_outline, height: 44, onPressed: () => _status('activate'))),
               if (status == 'active') btn(SecondaryButton(label: 'Suspend', icon: Icons.pause_circle_outline, height: 44, onPressed: () => _status('suspend'))),
               if (status == 'suspended' || status == 'blocked') btn(SecondaryButton(label: 'Reactivate', icon: Icons.play_circle_outline, height: 44, onPressed: () => _status('reactivate'))),
-              if (status == 'suspended') btn(SecondaryButton(label: l('Archive to cold storage', 'Archive'), icon: Icons.archive_outlined, height: 44, onPressed: _archive)),
+              if (status == 'suspended') btn(SecondaryButton(label: 'Archive', icon: Icons.archive_outlined, height: 44, onPressed: _archive)),
               if (status == 'archived') btn(SecondaryButton(label: l('Download cold storage (.json.gz)', 'Download archive'), icon: Icons.download_rounded, height: 44, onPressed: () => _downloadArchive('${r['code']}'))),
               if (status == 'archived') btn(SecondaryButton(label: l('Restore to Suspended', 'Restore'), icon: Icons.restore_page_outlined, height: 44, onPressed: _restore)),
               if (status == 'archived') btn(DangerButton(label: l('Delete (Housekeeping)', 'Delete'), icon: Icons.delete_forever_outlined, height: 44, onPressed: _deleteRestaurant)),

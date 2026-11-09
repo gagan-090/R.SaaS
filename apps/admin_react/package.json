@@ -2,7 +2,7 @@
   "name": "@rsaas/admin-react",
   "private": true,
   "version": "0.1.0",
-  "description": "House Plating web console (Super Admin + Restaurant console) in React — same API and flows as apps/admin_web.",
+  "description": "BhojMitra web console (Super Admin + Restaurant console) in React — same API and flows as apps/admin_web.",
   "type": "module",
   "scripts": {
     "dev": "vite --port 8080",

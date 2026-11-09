@@ -147,7 +147,7 @@ const UNIT_LISTS: Record<string, string[]> = {
 export async function buildTemplate(kind: 'menu' | 'inventory'): Promise<Buffer> {
   const sheets = kind === 'menu' ? MENU_SHEETS : INVENTORY_SHEETS;
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'House Plating';
+  wb.creator = 'BhojMitra';
   wb.created = new Date('2026-10-14T00:00:00Z');
   for (const s of sheets) {
     const ws = wb.addWorksheet(s.sheet, { views: [{ state: 'frozen', ySplit: 1 }] });

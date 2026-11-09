@@ -96,7 +96,7 @@ class _RolesScreenState extends ConsumerState<RolesScreen> {
               ? Row(key: const Key('roles-locked'), children: [
                   Icon(Icons.lock_outline_rounded, color: p.muted),
                   const SizedBox(width: HPSpace.md),
-                  Expanded(child: Text('Custom roles are not in your plan. Ask House Plating to switch on "Custom roles" for your plan.', style: HPType.body(p.muted))),
+                  Expanded(child: Text('Custom roles are not in your plan. Ask BhojMitra to switch on "Custom roles" for your plan.', style: HPType.body(p.muted))),
                 ])
               : custom.isEmpty
                   ? Text('None yet. A custom role is a name plus the exact permissions you choose — for example a "Floor manager" who arranges tables but cannot take payments.', style: HPType.body(p.muted))

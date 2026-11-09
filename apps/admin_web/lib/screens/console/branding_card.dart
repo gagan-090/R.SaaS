@@ -135,7 +135,7 @@ class _BrandingCardState extends ConsumerState<BrandingCard> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('Custom branding is not in your plan', style: HPType.titleCard(p.text)),
               const SizedBox(height: 4),
-              Text('Ask House Plating to switch on "Custom branding" for your plan. Then you can add your logo, colour and text style, '
+              Text('Ask BhojMitra to switch on "Custom branding" for your plan. Then you can add your logo, colour and text style, '
                   'and they appear on this console and on every POS device.', style: HPType.body(p.muted)),
             ]),
           ),

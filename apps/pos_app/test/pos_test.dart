@@ -484,7 +484,7 @@ void main() {
   testWidgets('restaurant branding from the hub: own colour, text size, heading case and logo for every role', (t) async {
     addTearDown(() => HPBrand.activate(null));
     final hub = await start(t, size: phone, brightness: Brightness.light);
-    expect(find.byKey(const Key('brand-name')), findsNothing); // House Plating look
+    expect(find.byKey(const Key('brand-name')), findsNothing); // BhojMitra look
     hub.branding = {'color': '#1A73E8', 'textSize': 'large', 'headingWeight': 'heavy', 'headingCase': 'upper', 'logoImageId': 'logo-1'};
     await t.fling(find.text('WHO IS WORKING?').evaluate().isEmpty ? find.text('Who is working?') : find.text('WHO IS WORKING?'), const Offset(0, 500), 1500);
     await t.pumpAndSettle();

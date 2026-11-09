@@ -236,7 +236,7 @@ Widget loadErrorView(Object error, {required String page, VoidCallback? onRetry}
       icon: Icons.lock_outline_rounded,
       title: 'Not in your plan',
       message: '$page is not included in your restaurant\'s current plan, or the plan is no longer active.\n'
-          'Ask House Plating to activate or upgrade your plan, then open this page again.',
+          'Ask BhojMitra to activate or upgrade your plan, then open this page again.',
     ),
   );
 }

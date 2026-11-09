@@ -31,7 +31,7 @@ class _Brand extends StatelessWidget {
           child: Icon(Icons.restaurant_rounded, color: HPColors.onSaffron, size: 22),
         ),
         const SizedBox(width: HPSpace.sm),
-        Text('HOUSE PLATING', style: HPType.overline(context.hp.accentInk)),
+        Text('BHOJMITRA', style: HPType.overline(context.hp.accentInk)),
       ]);
 }
 

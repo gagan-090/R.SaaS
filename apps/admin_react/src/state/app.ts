@@ -53,7 +53,7 @@ export const brandRefresh = new Store(0);
 export const restaurantLook = new Store<RestaurantLook | null>(null);
 export const bumpBrand = () => brandRefresh.update((n) => n + 1);
 
-/** Loads the restaurant look whenever the account or a branding save changes it. Super Admins always see House Plating. */
+/** Loads the restaurant look whenever the account or a branding save changes it. Super Admins always see BhojMitra. */
 export function useRestaurantLookLoader() {
   const s = useSession();
   const refresh = useStore(brandRefresh);

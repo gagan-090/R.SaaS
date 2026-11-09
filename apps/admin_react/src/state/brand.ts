@@ -80,7 +80,7 @@ export function inkOn(hex: string, dark: boolean): string {
   return c;
 }
 
-/** CSS custom properties that put the brand on the House Plating palette (null = House Plating look). */
+/** CSS custom properties that put the brand on the BhojMitra palette (null = BhojMitra look). */
 export function brandVars(b: Brand | null, dark: boolean): Record<string, string> {
   if (!b) return {};
   const fill = dark ? inkOn(b.color, true) : b.color;

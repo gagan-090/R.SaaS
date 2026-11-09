@@ -191,7 +191,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     if (_error is ApiException && (_error as ApiException).code == 'feature_not_in_plan') {
       return const PageFrame(
         title: 'Inventory',
-        child: EmptyState(key: Key('inventory-locked'), icon: Icons.lock_outline_rounded, title: 'Inventory is not in your plan', message: 'Ask House Plating to add inventory to your plan. Stock, recipes and wastage tracking then appear here.'),
+        child: EmptyState(key: Key('inventory-locked'), icon: Icons.lock_outline_rounded, title: 'Inventory is not in your plan', message: 'Ask BhojMitra to add inventory to your plan. Stock, recipes and wastage tracking then appear here.'),
       );
     }
     if (_error != null) return ErrorState(message: '$_error', onRetry: _load);

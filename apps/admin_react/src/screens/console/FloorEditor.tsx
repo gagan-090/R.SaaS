@@ -510,7 +510,7 @@ export function FloorEditor({ floorId, canEdit, canSetStatus, editorInPlan }: { 
           <Lock size={20} className="accent-text" aria-hidden />
           <div>
             <div className="t-label">Moving tables is locked: the visual floor editor is not in your plan</div>
-            <div className="muted">Ask House Plating to switch on "Visual floor editor" for your plan. Until then you can add tables in the List and see the live floor here.</div>
+            <div className="muted">Ask BhojMitra to switch on "Visual floor editor" for your plan. Until then you can add tables in the List and see the live floor here.</div>
           </div>
         </div>
       )}

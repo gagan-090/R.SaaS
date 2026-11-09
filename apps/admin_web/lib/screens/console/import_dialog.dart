@@ -55,7 +55,7 @@ class _ImportDialogState extends State<ImportDialog> {
 
   Future<void> _template() => _run(() async {
         final b = await widget.api.importTemplate(widget.kind);
-        await saveFile('house-plating-${widget.kind}-import-template.xlsx', b, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        await saveFile('bhojmitra-${widget.kind}-import-template.xlsx', b, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       });
 
   Future<void> _upload() async {
