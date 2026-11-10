@@ -113,6 +113,23 @@ describe('staff & staff web portal', () => {
         .send({ actorUserId: r.ownerUserId, name: 'Weak', email: mail(), role: 'waiter', pin: '123456' }).expect(400);
       // no or a wrong device token: nothing
       await t.http().post(api('/sync/staff')).send({ actorUserId: r.ownerUserId, name: 'X', email: mail(), role: 'waiter', pin: goodPin() }).expect(401);
+      // the owner opens the owner console from the POS without a second sign-in; the session works like a normal one
+      const cs = (await t.http().post(api('/sync/console-session')).set('X-Device-Token', hub.deviceToken).send({ actorUserId: r.ownerUserId }).expect(200)).body;
+      expect(cs).toMatchObject({ status: 'ok', accessToken: expect.any(String), refreshToken: expect.any(String) });
+      const me = (await t.http().get(api('/me')).set(bearer(cs.accessToken)).expect(200)).body;
+      expect(JSON.stringify(me)).toContain(r.ownerUserId);
+      await t.http().post(api('/auth/refresh')).send({ refreshToken: cs.refreshToken }).expect(200);
+      const login = await t.owner.auditEvent.findFirstOrThrow({ where: { action: 'auth.login', objectId: r.ownerUserId }, orderBy: { at: 'desc' } });
+      expect(login.after).toMatchObject({ via: 'pos_main_device', deviceId: hub.deviceId });
+      // a cashier cannot get a console session this way; nor can anyone without the device token, or from another restaurant
+      expect((await t.http().post(api('/sync/console-session')).set('X-Device-Token', hub.deviceToken).send({ actorUserId: added.id }).expect(403)).body.code).toBe('console_not_allowed');
+      await t.http().post(api('/sync/console-session')).send({ actorUserId: r.ownerUserId }).expect(401);
+      await t.http().post(api('/sync/console-session')).set('X-Device-Token', hub.deviceToken).send({ actorUserId: prem.ownerUserId }).expect(401);
+      // an owner who turned on two-step verification is never let in by PIN alone
+      const enrol = (await t.http().post(api('/me/mfa/enroll')).set(bearer(r.ownerToken)).expect(200)).body;
+      await t.owner.mFAEnrollment.updateMany({ where: { userId: r.ownerUserId }, data: { enrolledAt: new Date() } });
+      expect(enrol.secret).toBeDefined();
+      expect((await t.http().post(api('/sync/console-session')).set('X-Device-Token', hub.deviceToken).send({ actorUserId: r.ownerUserId }).expect(403)).body.code).toBe('mfa_required');
       // another restaurant's owner id through this device: not found as an active user of this restaurant
       await t.http().post(api('/sync/staff')).set('X-Device-Token', hub.deviceToken)
         .send({ actorUserId: prem.ownerUserId, name: 'X', email: mail(), role: 'waiter', pin: goodPin() }).expect(401);

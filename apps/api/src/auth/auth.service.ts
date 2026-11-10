@@ -99,6 +99,22 @@ export class AuthService {
     return { status: 'ok', ...pair };
   }
 
+  /**
+   * The POS main device opens the owner console for the owner / Restaurant Admin signed in on it with their PIN, so they
+   * do not sign in a second time. Only those two roles, only active users of the device's restaurant, and never past
+   * two-step verification: someone who turned MFA on gets `mfa_required` and signs in to the console normally.
+   */
+  async consoleSessionForHub(tenantId: string, userId: string, deviceId: string, meta: AuditMeta & { userAgent?: string }) {
+    const user = await this.db.tenant(tenantId, (tx) => tx.user.findUnique({ where: { id: userId }, include: { mfa: true, roles: true, tenant: true } }));
+    if (!user || user.status !== 'active' || ['archived', 'deleted'].includes(user.tenant.status)) throw unauthorized('inactive_account', 'Account is not active');
+    if (!user.roles.some((r) => r.role === 'owner' || r.role === 'it_admin')) throw forbidden('console_not_allowed', 'Only the owner or a Restaurant Admin can open the owner console');
+    if (user.mfa?.enrolledAt) throw forbidden('mfa_required', 'You turned on two-step verification: sign in to the owner console with your password and code');
+    const principal: Principal = { typ: 'user', id: user.id, tid: tenantId };
+    const pair = await this.issueTokens(principal, meta);
+    await this.audit.record({ action: 'auth.login', tenantId, objectType: 'user', objectId: user.id, after: { via: 'pos_main_device', deviceId } }, { type: 'user', id: user.id }, meta);
+    return { status: 'ok' as const, ...pair };
+  }
+
   async registerFailure(p: Principal) {
     await this.db.platform(async (tx) => {
       const model = (p.typ === 'admin' ? tx.platformAdmin : tx.user) as unknown as {

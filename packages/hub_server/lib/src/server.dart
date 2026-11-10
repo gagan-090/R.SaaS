@@ -14,13 +14,16 @@ import 'util.dart';
 /// HTTP + WebSocket API of the branch hub (Build Spec §09), served at /hub/v1.
 /// Devices send `X-Device-Token`; staff actions also send `Authorization: Bearer <session token>`.
 class HubServer {
-  HubServer(this.hub, {required this.hubName, this.certFingerprint, this.refreshStaff, this.addStaff});
+  HubServer(this.hub, {required this.hubName, this.certFingerprint, this.refreshStaff, this.addStaff, this.consoleSession});
 
   final HubService hub;
   final Future<void> Function()? refreshStaff;
 
   /// Forwards "add a person" to the cloud (null when the hub runs without a cloud link, e.g. in tests).
   final Future<Map<String, Object?>> Function(Map<String, Object?> body)? addStaff;
+
+  /// Asks the cloud for an owner-console session for a user (null without a cloud link).
+  final Future<Map<String, Object?>> Function(String actorUserId)? consoleSession;
   final String hubName;
 
   /// SHA-256 fingerprint of the hub's TLS certificate; clients pin it at pairing.
@@ -118,6 +121,15 @@ class HubServer {
         // the regular sync brings them within a minute
       }
       return _json(created, 201);
+    });
+
+    // the owner console in the POS opens signed in as the owner / Restaurant Admin using this device (no second sign-in)
+    r.post('/console-session', (Request q) async {
+      final a = await _staff(q);
+      a.require('staff.manage'); // owner and Restaurant Admin; the cloud checks the role again
+      final cs = consoleSession;
+      if (cs == null) throw HubError(503, 'offline', 'This main device has no cloud link');
+      return _json(await cs(a.userId!));
     });
 
     r.get('/menu', (Request q) async {

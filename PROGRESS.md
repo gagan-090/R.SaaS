@@ -402,3 +402,6 @@ Test: `flutter test` in apps/pos_app → **62 passed** (25 existing + 37 in `tes
 - Tests (this session): hub_server **51 passed** (new takeaway test); pos_app **84 passed** (new owner-console test);
   admin_web **143 passed**. POS APK builds (80.9 MB, console floor image bundled). Not tried on a real phone; Windows
   build not possible on macOS (CI job).
+- 2026-11-10 follow-up: owner console opens signed in through the main device (no second sign-in unless two-step
+  verification is on); More → "Tables & floors" and "Menu & dishes" open the console on those pages (add/edit tables,
+  reserved / out of use, dishes, prices, availability). Tests: API **163**, hub **52**, pos_app **85**, admin_web **143**.

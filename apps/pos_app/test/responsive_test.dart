@@ -99,8 +99,8 @@ Future<void> _tap(WidgetTester t, Finder f) async {
   // (side-by-side layouts have several: try each, innermost first)
   final lists = find.byWidgetPredicate((w) => w is Scrollable && w.axisDirection == AxisDirection.down);
   for (var l = lists.evaluate().length - 1; l >= 0 && f.evaluate().isEmpty; l--) {
-    for (var i = 0; i < 12 && f.evaluate().isEmpty && lists.evaluate().length > l; i++) {
-      await t.drag(lists.at(l), Offset(0, i < 6 ? -300 : 300), warnIfMissed: false);
+    for (var i = 0; i < 24 && f.evaluate().isEmpty && lists.evaluate().length > l; i++) {
+      await t.drag(lists.at(l), Offset(0, i < 12 ? -300 : 300), warnIfMissed: false);
       await t.pumpAndSettle();
     }
   }

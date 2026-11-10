@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rsaas_admin_web/embed.dart';
 import 'package:rsaas_pos/app.dart';
 import 'package:rsaas_pos/hub/hub_api.dart';
 import 'package:rsaas_pos/screens/owner_console.dart';
@@ -635,22 +636,53 @@ void main() {
     expect((await hub.login(kiran['id'] as String, '582914'))['user'], containsPair('name', 'Kiran'));
   });
 
-  testWidgets('owner opens the full owner console (web console screens) and comes back; cashiers do not see it', (t) async {
+  testWidgets('owner opens the owner console without a second sign-in (session from the main device) and comes back', (t) async {
+    addTearDown(() => EmbeddedAdminConsole.forget('u-own'));
     final store = _MemoryConsoleStore();
-    await start(t, extra: [consoleSessionStoreProvider.overrideWithValue(store)]);
+    final hub = await start(t, extra: [consoleSessionStoreProvider.overrideWithValue(store)]);
     await signIn(t, 'Owner', '9999');
     await nav(t, 'More');
+    expect(find.byKey(const Key('more-console-tables')), findsOneWidget);
+    expect(find.byKey(const Key('more-console-menu')), findsOneWidget);
     await t.ensureVisible(find.byKey(const Key('more-console')));
     await t.tap(find.byKey(const Key('more-console')));
     await t.pumpAndSettle();
     expect(find.byKey(const Key('owner-console')), findsOneWidget);
     expect(find.text('OWNER CONSOLE'), findsOneWidget);
-    expect(store.reads, ['u-own']); // the console sign-in is kept per POS person
-    expect(find.byType(TextField), findsWidgets); // console sign-in (email + password)
+    expect(hub.consoleSessions, 1); // asked the main device; nothing typed
+    expect(store.reads, isEmpty); // nothing kept on the device for this path
     await t.tap(find.byKey(const Key('admin-host-exit')));
     await t.pumpAndSettle();
     expect(find.byKey(const Key('owner-console')), findsNothing);
-    expect(find.byKey(const Key('more-console')), findsOneWidget);
+    // reopening in the same app run reuses the open console (no new session)
+    await t.ensureVisible(find.byKey(const Key('more-console-tables')));
+    await t.tap(find.byKey(const Key('more-console-tables')));
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('owner-console')), findsOneWidget);
+    expect(hub.consoleSessions, 1);
+    await t.tap(find.byKey(const Key('admin-host-exit')));
+    await t.pumpAndSettle();
+  });
+
+  testWidgets('owner console: two-step verification on → normal console sign-in (remembered); offline → clear message', (t) async {
+    addTearDown(() => EmbeddedAdminConsole.forget('u-own'));
+    final store = _MemoryConsoleStore();
+    final hub = await start(t, extra: [consoleSessionStoreProvider.overrideWithValue(store)]);
+    hub.consoleError = 'offline';
+    await signIn(t, 'Owner', '9999');
+    await nav(t, 'More');
+    await t.ensureVisible(find.byKey(const Key('more-console')));
+    await t.tap(find.byKey(const Key('more-console')));
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('owner-console')), findsNothing);
+    expect(find.text('The owner console needs internet on the main device.'), findsOneWidget);
+    hub.consoleError = 'mfa_required';
+    await t.tap(find.byKey(const Key('more-console')));
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('owner-console')), findsOneWidget);
+    expect(store.reads, ['u-own']);
+    await t.tap(find.byKey(const Key('admin-host-exit')));
+    await t.pumpAndSettle();
   });
 
   testWidgets('cashiers cannot add people (no Staff entry, no add button)', (t) async {
@@ -660,6 +692,7 @@ void main() {
     expect(find.byKey(const Key('more-staff')), findsNothing);
     expect(find.byKey(const Key('add-staff')), findsNothing);
     expect(find.byKey(const Key('more-console')), findsNothing);
+    expect(find.byKey(const Key('more-console-tables')), findsNothing);
   });
 
   testWidgets('admin flow: owner can access reports, toggle 86 item availability, view staff and license', (t) async {

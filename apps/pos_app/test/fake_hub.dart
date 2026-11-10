@@ -59,6 +59,15 @@ class FakeHubApi extends HubApi {
   @override
   Future<List<Json>> staff() async => [for (final s in staffList) {'id': s['id'], 'name': s['name'], 'roles': s['roles'], 'hasPin': s['pin'] != null}];
 
+  String? consoleError; // e.g. 'mfa_required' or 'offline'
+  int consoleSessions = 0;
+  @override
+  Future<Json> consoleSession() async {
+    if (consoleError != null) throw HubApiException(consoleError == 'offline' ? 503 : 403, consoleError!, consoleError == 'offline' ? 'The owner console needs internet on the main device.' : 'Sign in with your password and code');
+    consoleSessions++;
+    return {'status': 'ok', 'accessToken': 'a', 'refreshToken': 'r-$consoleSessions'};
+  }
+
   final addedStaff = <Json>[];
   @override
   Future<Json> addStaff(Json body) async {

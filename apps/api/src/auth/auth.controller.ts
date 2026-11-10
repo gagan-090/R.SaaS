@@ -9,6 +9,7 @@ import { AllowEnrollmentToken, AuthenticatedOnly, Public } from '../common/decor
 import { badRequest } from '../common/errors';
 import { apiBody, zbody } from '../common/validation';
 import { DbService } from '../db/db.service';
+import { SyncService } from '../sync/sync.service';
 import { AuthService } from './auth.service';
 
 
@@ -26,7 +27,18 @@ const meta = (req: AppRequest, ip: string, ua?: string) => ({ ip, userAgent: ua,
 @ApiTags('auth')
 @Controller()
 export class AuthController {
-  constructor(private auth: AuthService, private db: DbService) {}
+  constructor(private auth: AuthService, private db: DbService, private sync: SyncService) {}
+
+  /** POS owner console without a second sign-in: the main device vouches for the person signed in on it with their PIN. */
+  @Public()
+  @Throttle(authLimit())
+  @Post('sync/console-session')
+  @HttpCode(200)
+  @ApiBody(apiBody(z.object({ actorUserId: z.string().uuid() })))
+  async consoleSession(@Headers('x-device-token') token: string | undefined, @Body(zbody(z.object({ actorUserId: z.string().uuid() }))) b: { actorUserId: string }, @Req() req: AppRequest, @Ip() ip: string, @Headers('user-agent') ua?: string) {
+    const dev = await this.sync.authenticateDevice(token);
+    return this.auth.consoleSessionForHub(dev.tenantId, b.actorUserId, dev.deviceId, meta(req, ip, ua));
+  }
 
   @Public()
   @Throttle(authLimit())

@@ -83,6 +83,12 @@ class MoreScreen extends ConsumerWidget {
                         tile('console', Icons.admin_panel_settings_outlined, 'Owner console',
                             'Everything from the web console: menu & photos, floors, staff, roles, inventory, expenses, imports, reports, audit, settings',
                             () => openOwnerConsole(context, ref)),
+                      if (canOpenOwnerConsole(s))
+                        tile('console-tables', Icons.table_restaurant_rounded, 'Tables & floors', 'Add or edit tables and floors, mark tables reserved or out of use',
+                            () => openOwnerConsole(context, ref, location: '/console/tables')),
+                      if (canOpenOwnerConsole(s))
+                        tile('console-menu', Icons.menu_book_rounded, 'Menu & dishes', 'Add dishes, prices, sizes, photos, availability',
+                            () => openOwnerConsole(context, ref, location: '/console/menu')),
                       if (s.can('reports.read') || s.roles.contains('owner'))
                         tile('reports', Icons.bar_chart_rounded, 'Sales & Reports', 'Daily sales, bills, payments & KPIs', () => push(const ReportsDashboardScreen())),
                       if (s.can('menu.read') || s.roles.contains('owner'))

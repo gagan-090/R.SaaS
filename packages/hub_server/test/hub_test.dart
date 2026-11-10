@@ -141,6 +141,27 @@ void main() {
       expect((await h.post('/staff', session: owner, body: {'name': 'Z', 'email': 'z@demo.test', 'role': 'waiter', 'pin': '582914'})).status, 503);
     });
 
+    test('owner console session: asked from the cloud for the signed-in owner only; cashiers refused', () async {
+      final asked = <String>[];
+      final hubServer = HubServer(h.hub, hubName: 'Console', consoleSession: (u) async {
+        asked.add(u);
+        return {'status': 'ok', 'accessToken': 'a', 'refreshToken': 'r'};
+      });
+      final server = await hubServer.start(address: InternetAddress.loopbackIPv4, port: 0);
+      Future<http.Response> ask(String session) => http.post(Uri.parse('http://127.0.0.1:${server.port}/hub/v1/console-session'),
+          headers: {'x-device-token': h.deviceToken, 'authorization': 'Bearer $session', 'content-type': 'application/json'}, body: '{}');
+      try {
+        final ok = await ask(owner);
+        expect(ok.statusCode, 200);
+        expect(jsonDecode(ok.body)['refreshToken'], 'r');
+        expect(asked, [Harness.owner]);
+        expect((await ask(cashier)).statusCode, 403);
+        expect(asked, hasLength(1));
+      } finally {
+        await hubServer.stop();
+      }
+    });
+
     test('Standard plan: email + PIN join is refused too (only the main device)', () async {
       await h.hub.applyConfig(await h.configPull(plan: 'standard'));
       final r = await h.post('/pairing/staff-claim', body: {'email': 'ravi@demo.test', 'pin': Harness.pins[Harness.cashier], 'deviceName': 'x', 'platform': 'android'});

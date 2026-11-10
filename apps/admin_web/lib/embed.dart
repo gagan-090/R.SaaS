@@ -23,14 +23,20 @@ class AdminHost extends InheritedWidget {
 /// [userKey] for the app's lifetime, so closing and reopening keeps the person signed in; the refresh token is kept by
 /// the host ([initialSession] / [onSessionChanged]) — never shared between POS users.
 class EmbeddedAdminConsole extends StatefulWidget {
-  const EmbeddedAdminConsole({super.key, required this.userKey, required this.onExit, this.initialSession, this.onSessionChanged, this.exitLabel = 'Back to POS'});
+  const EmbeddedAdminConsole({super.key, required this.userKey, required this.onExit, this.initialSession, this.onSessionChanged, this.exitLabel = 'Back to POS', this.initialLocation});
   final String userKey;
   final VoidCallback onExit;
   final String? initialSession;
   final void Function(String? refreshToken)? onSessionChanged;
   final String exitLabel;
 
+  /// Page to open on, e.g. '/console/tables' (after sign-in the console stays on it).
+  final String? initialLocation;
+
   static final Map<String, ProviderContainer> _containers = {};
+
+  /// True when this person already has a console open in this app run (signed in or signing in).
+  static bool isOpenFor(String userKey) => _containers.containsKey(userKey);
 
   /// Forget a person's console state (e.g. when they sign out of the POS).
   static void forget(String userKey) => _containers.remove(userKey)?.dispose();
@@ -52,6 +58,13 @@ class _EmbeddedAdminConsoleState extends State<EmbeddedAdminConsole> {
       )),
     ]);
   });
+
+  @override
+  void initState() {
+    super.initState();
+    final loc = widget.initialLocation;
+    if (loc != null) WidgetsBinding.instance.addPostFrameCallback((_) => _container.read(routerProvider).go(loc));
+  }
 
   @override
   Widget build(BuildContext context) {

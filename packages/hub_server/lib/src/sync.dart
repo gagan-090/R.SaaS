@@ -49,6 +49,19 @@ class CloudClient {
     return j;
   }
 
+  /// A console session (access + refresh token) for the owner / Restaurant Admin signed in on this hub.
+  Future<Map<String, Object?>> consoleSession(String actorUserId) async {
+    final http.Response r;
+    try {
+      r = await _http.post(Uri.parse('$baseUrl/sync/console-session'), headers: _h, body: jsonEncode({'actorUserId': actorUserId})).timeout(const Duration(seconds: 20));
+    } catch (_) {
+      throw HubError(503, 'offline', 'The owner console needs internet on the main device.');
+    }
+    final j = r.body.isEmpty ? const <String, Object?>{} : jsonDecode(r.body) as Map<String, Object?>;
+    if (r.statusCode != 200) throw HubError(r.statusCode >= 500 ? 502 : r.statusCode, '${j['code'] ?? 'cloud_error'}', '${j['message'] ?? 'The server refused it'}');
+    return j;
+  }
+
   Future<List<Map<String, Object?>>> push(List<Map<String, Object?>> events) async {
     final r = await _http
         .post(Uri.parse('$baseUrl/sync/push'), headers: _h, body: jsonEncode({'events': events}))
