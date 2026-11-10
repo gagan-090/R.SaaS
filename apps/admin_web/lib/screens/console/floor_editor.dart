@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 
+import '../../embed.dart';
 import '../../api/api_client.dart';
 import '../../widgets/common.dart';
 import '../../util/image_prep.dart';
@@ -363,7 +364,7 @@ class _FloorEditorState extends State<FloorEditor> {
                         child: DecoratedBox(
                           decoration: BoxDecoration(
                             color: p.ground,
-                            image: DecorationImage(image: _background == null ? const AssetImage('assets/classic-floor.jpg') : MemoryImage(base64Decode(_background!.split(',').last)) as ImageProvider, fit: BoxFit.cover, opacity: .45),
+                            image: DecorationImage(image: _background == null ? AssetImage('assets/classic-floor.jpg', package: adminAssetPackage) : MemoryImage(base64Decode(_background!.split(',').last)) as ImageProvider, fit: BoxFit.cover, opacity: .45),
                             border: Border.all(color: p.outline),
                           ),
                           child: CustomPaint(painter: FloorGridPainter(p.line.withValues(alpha: .25))),

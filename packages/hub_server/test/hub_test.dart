@@ -32,6 +32,22 @@ void main() {
     return r.json;
   }
 
+  test('tapping Takeaway again reuses your empty takeaway; empty takeaways stay out of the queue; another cashier gets their own', () async {
+    final a = await h.post('/orders', session: cashier, body: {'type': 'takeaway'});
+    final b = await h.post('/orders', session: cashier, body: {'type': 'takeaway'});
+    expect(a.status, 201);
+    expect(b.json['id'], a.json['id']);
+    expect(((await h.get('/state', session: cashier)).json['openOrders']! as List).where((o) => (o as Map)['type'] == 'takeaway'), isEmpty);
+    final other = await h.post('/orders', session: owner, body: {'type': 'takeaway'});
+    expect(other.json['id'], isNot(a.json['id']));
+    // once it has an item it is a real order: in the queue, and the next tap starts a new one
+    await add(a.json['id']! as String, [{'menuItemId': Harness.naan, 'qty': 1}]);
+    final queue = ((await h.get('/state', session: cashier)).json['openOrders']! as List).where((o) => (o as Map)['type'] == 'takeaway').toList();
+    expect(queue.map((o) => (o as Map)['id']), [a.json['id']]);
+    final c = await h.post('/orders', session: cashier, body: {'type': 'takeaway'});
+    expect(c.json['id'], isNot(a.json['id']));
+  });
+
   group('session & pairing', () {
     test('staff PIN login; wrong PIN rejected; staff routes need a session', () async {
       final bad = await h.post('/session/login', body: {'userId': Harness.cashier, 'pin': '0000'});

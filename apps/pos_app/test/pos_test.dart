@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rsaas_pos/app.dart';
 import 'package:rsaas_pos/hub/hub_api.dart';
+import 'package:rsaas_pos/screens/owner_console.dart';
 import 'package:rsaas_pos/screens/setup_screens.dart';
 import 'package:rsaas_pos/state/app_state.dart';
 import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
@@ -594,6 +595,8 @@ void main() {
     final hub = await start(t);
     await signIn(t, 'Owner', '9999');
     await nav(t, 'More');
+    await t.ensureVisible(find.byKey(const Key('more-staff')));
+    await t.pumpAndSettle();
     await t.tap(find.byKey(const Key('more-staff')));
     await t.pumpAndSettle();
     await t.tap(find.byKey(const Key('add-staff')));
@@ -632,12 +635,31 @@ void main() {
     expect((await hub.login(kiran['id'] as String, '582914'))['user'], containsPair('name', 'Kiran'));
   });
 
+  testWidgets('owner opens the full owner console (web console screens) and comes back; cashiers do not see it', (t) async {
+    final store = _MemoryConsoleStore();
+    await start(t, extra: [consoleSessionStoreProvider.overrideWithValue(store)]);
+    await signIn(t, 'Owner', '9999');
+    await nav(t, 'More');
+    await t.ensureVisible(find.byKey(const Key('more-console')));
+    await t.tap(find.byKey(const Key('more-console')));
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('owner-console')), findsOneWidget);
+    expect(find.text('OWNER CONSOLE'), findsOneWidget);
+    expect(store.reads, ['u-own']); // the console sign-in is kept per POS person
+    expect(find.byType(TextField), findsWidgets); // console sign-in (email + password)
+    await t.tap(find.byKey(const Key('admin-host-exit')));
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('owner-console')), findsNothing);
+    expect(find.byKey(const Key('more-console')), findsOneWidget);
+  });
+
   testWidgets('cashiers cannot add people (no Staff entry, no add button)', (t) async {
     await start(t);
     await signIn(t, 'Ravi', '1234');
     await nav(t, 'More');
     expect(find.byKey(const Key('more-staff')), findsNothing);
     expect(find.byKey(const Key('add-staff')), findsNothing);
+    expect(find.byKey(const Key('more-console')), findsNothing);
   });
 
   testWidgets('admin flow: owner can access reports, toggle 86 item availability, view staff and license', (t) async {
@@ -651,6 +673,8 @@ void main() {
     expect(find.byKey(const Key('more-settings')), findsOneWidget);
 
     // Open Menu & 86 Management
+    await t.ensureVisible(find.byKey(const Key('more-menu')));
+    await t.pumpAndSettle();
     await t.tap(find.byKey(const Key('more-menu')));
     await t.pumpAndSettle();
     expect(find.text('Menu & Stock'), findsOneWidget);
@@ -667,6 +691,8 @@ void main() {
     await t.pumpAndSettle();
 
     // Open Staff
+    await t.ensureVisible(find.byKey(const Key('more-staff')));
+    await t.pumpAndSettle();
     await t.tap(find.byKey(const Key('more-staff')));
     await t.pumpAndSettle();
     expect(find.text('Staff & Team'), findsOneWidget);
@@ -675,9 +701,24 @@ void main() {
     await t.pumpAndSettle();
 
     // Open Reports
+    await t.ensureVisible(find.byKey(const Key('more-reports')));
+    await t.pumpAndSettle();
     await t.tap(find.byKey(const Key('more-reports')));
     await t.pumpAndSettle();
     expect(find.text('Sales & Reports'), findsOneWidget);
     expect(find.byKey(const Key('kpi-sales')), findsOneWidget);
   });
+}
+
+class _MemoryConsoleStore implements ConsoleSessionStore {
+  final reads = <String>[];
+  final saved = <String, String?>{};
+  @override
+  Future<String?> read(String userId) async {
+    reads.add(userId);
+    return saved[userId];
+  }
+
+  @override
+  Future<void> write(String userId, String? refreshToken) async => saved[userId] = refreshToken;
 }

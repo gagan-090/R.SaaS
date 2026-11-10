@@ -18,6 +18,18 @@ subprojects {
 subprojects {
     project.evaluationDependsOn(":app")
 }
+// file_picker 11 (used by the embedded owner console) skips the Kotlin plugin on AGP 9 (expects built-in Kotlin), but
+// gradle.properties keeps android.builtInKotlin=false, so its Kotlin sources would not compile. Apply Kotlin to it only.
+subprojects {
+    if (name == "file_picker") {
+        pluginManager.withPlugin("com.android.library") {
+            pluginManager.apply("org.jetbrains.kotlin.android")
+            extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinAndroidProjectExtension> {
+                compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) }
+            }
+        }
+    }
+}
 
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)

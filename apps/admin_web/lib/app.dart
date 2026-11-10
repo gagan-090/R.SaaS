@@ -21,6 +21,7 @@ import 'screens/verify_screen.dart';
 import 'state/providers.dart';
 import 'util/open_link.dart';
 import 'widgets/common.dart';
+import 'embed.dart';
 
 /// One web app, two consoles: platform admins get the Super Admin console, restaurant owners / IT admins the
 /// Restaurant console (menu, tables, staff, hubs). The account type from /me decides; the API enforces it.
@@ -103,7 +104,16 @@ class AdminApp extends ConsumerWidget {
       themeMode: ref.watch(themeModeProvider), // white (Light) by default; Auto follows the device; Dark if chosen
       routerConfig: ref.watch(routerProvider),
       // touching anywhere outside a text field closes the on-screen keyboard (Android / iOS keep it open otherwise)
-      builder: (c, child) => DismissKeyboardOnTapOutside(child: _appBody(c, child, authState, brand)),
+      builder: (c, child) {
+        final body = DismissKeyboardOnTapOutside(child: _appBody(c, child, authState, brand));
+        // inside the POS: a "Back to POS" bar on every page, and the pages below it lose the top inset it already used
+        final host = AdminHost.maybeOf(c);
+        if (host == null) return body;
+        return Column(children: [
+          AdminHostBar(host: host),
+          Expanded(child: MediaQuery.removePadding(context: c, removeTop: true, child: body)),
+        ]);
+      },
     );
   }
 

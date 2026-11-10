@@ -460,6 +460,8 @@ class HubService {
     final live = <Map<String, Object?>>[];
     for (final o in rawLive) {
       final lines = await _lines(o['id']! as String);
+      // a takeaway started but never given an item is not a real order yet: keep it out of the queue
+      if (o['type'] == 'takeaway' && lines.isEmpty) continue;
       final bill = o['status'] == 'billed' ? await db.selectOne('SELECT total_paise FROM bills WHERE order_id = ?', [o['id']]) : null;
       live.add({
         ...o,
@@ -536,6 +538,14 @@ class HubService {
         final table = await db.selectOne('SELECT id, name, manual_status FROM tables WHERE id = ? AND deleted = 0', [tableId]);
         if (table == null) throw notFound('Table');
         if (table['manual_status'] == 'unavailable') throw conflict('table_unavailable', 'Table ${table['name']} is marked out of use');
+      }
+      if (type == 'takeaway') {
+        // tapping Takeaway again must not pile up empty orders: continue this person's takeaway that has no items yet
+        final empty = await db.selectOne(
+            "SELECT o.id FROM orders o WHERE o.type = 'takeaway' AND o.status = 'open' AND o.opened_by = ? "
+            'AND NOT EXISTS (SELECT 1 FROM order_lines l WHERE l.order_id = o.id) ORDER BY o.opened_at DESC LIMIT 1',
+            [a.id]);
+        if (empty != null) return _order(empty['id']! as String);
       }
       final id = uuidv7();
       final at = nowIso(clock());

@@ -14,6 +14,7 @@ dependencies:
   rsaas_core: any
   rsaas_ui_kit: any
   rsaas_hub: any
+  rsaas_admin_web: any # the full restaurant console, opened from More → Owner console
   flutter_riverpod: ^2.6.1
   http: ^1.2.0
   crypto: ^3.0.0

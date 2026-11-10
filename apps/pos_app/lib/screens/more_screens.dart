@@ -7,6 +7,7 @@ import '../state/app_state.dart';
 import '../ui/common.dart';
 import '../ui/shell.dart';
 import 'admin_screens.dart';
+import 'owner_console.dart';
 import 'setup_screens.dart';
 
 /// "More" tab: who is signed in, and the extra tools their role may use.
@@ -78,6 +79,10 @@ class MoreScreen extends ConsumerWidget {
                         padding: const EdgeInsets.fromLTRB(HPSpace.lg, HPSpace.md, HPSpace.lg, HPSpace.xs),
                         child: Text('RESTAURANT ADMIN', style: HPType.overline(p.muted)),
                       ),
+                      if (canOpenOwnerConsole(s))
+                        tile('console', Icons.admin_panel_settings_outlined, 'Owner console',
+                            'Everything from the web console: menu & photos, floors, staff, roles, inventory, expenses, imports, reports, audit, settings',
+                            () => openOwnerConsole(context, ref)),
                       if (s.can('reports.read') || s.roles.contains('owner'))
                         tile('reports', Icons.bar_chart_rounded, 'Sales & Reports', 'Daily sales, bills, payments & KPIs', () => push(const ReportsDashboardScreen())),
                       if (s.can('menu.read') || s.roles.contains('owner'))
@@ -309,6 +314,20 @@ class AdminHomeScreen extends ConsumerWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 640),
             child: ListView(padding: const EdgeInsets.all(HPSpace.lg), children: [
+              if (canOpenOwnerConsole(s)) ...[
+                Card(
+                  child: ListTile(
+                    key: const Key('admin-Owner console'),
+                    contentPadding: const EdgeInsets.all(HPSpace.lg),
+                    leading: Container(width: 48, height: 48, decoration: BoxDecoration(color: HPColors.saffron.withValues(alpha: .18), borderRadius: BorderRadius.circular(14)), child: Icon(Icons.admin_panel_settings_outlined, color: p.accentInk)),
+                    title: Text('Owner console', style: HPType.titleCard(p.text)),
+                    subtitle: Text('Everything from the web console: menu, floors, staff, inventory, expenses, reports, settings', style: HPType.body(p.muted)),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => openOwnerConsole(context, ref),
+                  ),
+                ),
+                const SizedBox(height: HPSpace.md),
+              ],
               tile('Printers', 'Bill and kitchen printers, test print', Icons.print_rounded, () => const PrintersScreen()),
               const SizedBox(height: HPSpace.md),
               tile('Hub & devices', 'Add devices for staff, sync health', Icons.router_rounded, () => const HubStatusScreen()),

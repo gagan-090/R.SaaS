@@ -393,3 +393,12 @@ Test: `flutter test` in apps/pos_app → **62 passed** (25 existing + 37 in `tes
   weak PIN, no token, another restaurant's owner id); hub_server **50 passed** (new: forwarded as the signed-in owner,
   spoofed actor ignored, cashier refused, offline 503); pos_app **83 passed** (new: add person flow, cashier has no entry);
   admin_web **143**, admin_react **50**. Not tried on real devices.
+
+### POS: owner console (all web powers) + Takeaway fix — 2026-11-10
+- More → Owner console (owner, Restaurant Admin): the full restaurant console inside the POS — menu & photos & sizes, floor
+  editor, staff & roles, inventory, expenses, Excel import, branding, settings, reports, audit, devices, license. Sign in
+  once with console email + password (MFA if on); kept per POS person in secure storage. Needs internet (cloud console).
+- Takeaway no longer creates a new empty order on every tap (hub reuses your empty takeaway; empty ones hidden).
+- Tests (this session): hub_server **51 passed** (new takeaway test); pos_app **84 passed** (new owner-console test);
+  admin_web **143 passed**. POS APK builds (80.9 MB, console floor image bundled). Not tried on a real phone; Windows
+  build not possible on macOS (CI job).
