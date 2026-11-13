@@ -441,3 +441,10 @@ device keeps uploading its bills) or "Join "<name>" with my PIN". Setup cloud ca
 Tests: `flutter analyze` no issues; `flutter test` (pos_app) **91 passed, 5 skipped** incl. new
 `test/setup_take_over_test.dart` (phone size: take over, cancel, join instead). No API change.
 Release APK rebuilt: `release/2026-11-13/BhojMitra-POS-android.apk` (API_BASE_URL=https://rsaas-api.onrender.com/api/v1).
+
+## Fix: owner console phone layout — page header order, dashboard amounts (2026-11-13)
+Phone: page headers (every console page, via `PageFrame`) squeezed the subtitle beside a column of right-aligned
+buttons. Now stacked in order: subtitle → full-width search → full-width main action → other actions from the left.
+Dashboard "Discounts, reversals, corrections": amounts sat mid-row; now on the card's right edge.
+Tests: admin_web `flutter test` **145 passed, 8 skipped** (2 new phone-layout tests, confirmed failing before the fix);
+pos_app **91 passed, 5 skipped**. Release APKs rebuilt (POS + Admin, API_BASE_URL=https://rsaas-api.onrender.com/api/v1).

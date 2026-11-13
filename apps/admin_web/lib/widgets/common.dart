@@ -180,18 +180,26 @@ class PageFrame extends StatelessWidget {
       builder: (c, box) {
         if (actions.isEmpty) return titleBlock;
         final actionsWrap = Wrap(alignment: WrapAlignment.end, spacing: HPSpace.sm, runSpacing: HPSpace.sm, children: actions);
-        // no heading left to show: the actions sit alone at the top right
-        if (noHeading) return Align(alignment: Alignment.centerRight, child: actionsWrap);
-        if (box.maxWidth < 560 && showTitle) {
+        // phone: subtitle on its own line, then search (full width), the main action (full width), then the other
+        // actions from the left edge — never squeezed beside the text
+        if (box.maxWidth < 560) {
+          final wide = actions.where((w) => w is SizedBox && w.width == double.infinity).toList();
+          final primary = actions.whereType<PrimaryButton>().toList();
+          final rest = actions.where((w) => !wide.contains(w) && !primary.contains(w)).toList();
+          final gap = const SizedBox(height: HPSpace.sm);
           return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            key: const Key('page-actions-stacked'),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              titleBlock,
-              const SizedBox(height: HPSpace.md),
-              actionsWrap,
-      ],
+              if (!noHeading) ...[titleBlock, const SizedBox(height: HPSpace.md)],
+              for (final w in wide) ...[w, gap],
+              for (final w in primary) ...[SizedBox(width: double.infinity, child: w), gap],
+              if (rest.isNotEmpty) Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, crossAxisAlignment: WrapCrossAlignment.center, children: rest),
+            ],
           );
         }
+        // no heading left to show: the actions sit alone at the top right
+        if (noHeading) return Align(alignment: Alignment.centerRight, child: actionsWrap);
         return Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [

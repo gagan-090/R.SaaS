@@ -394,7 +394,8 @@ class _Leakage extends StatelessWidget {
             const SizedBox(width: HPSpace.sm),
             Expanded(child: Text(label, style: HPType.label(p.text))),
             const SizedBox(width: HPSpace.sm),
-            Flexible(child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [Text(value, textAlign: TextAlign.right, style: HPType.label(p.text)), Text(sub, textAlign: TextAlign.right, style: HPType.body(p.muted).copyWith(fontSize: 12))])),
+            // amount and its note on the right edge, lined up under each other
+            Flexible(child: Align(alignment: Alignment.centerRight, child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [Text(value, textAlign: TextAlign.right, style: HPType.label(p.text)), Text(sub, textAlign: TextAlign.right, style: HPType.body(p.muted).copyWith(fontSize: 12))]))),
           ]),
         );
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

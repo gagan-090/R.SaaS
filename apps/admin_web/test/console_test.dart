@@ -600,6 +600,35 @@ void main() {
     expect(() => prepareDishPhoto(Uint8List.fromList(utf8.encode('not an image'))), throwsFormatException);
   });
 
+  testWidgets('phone: page header in order — subtitle, full-width search, full-width main action, then the rest from the left', (t) async {
+    await start(t, size: phone);
+    await go(t, 'Menu', size: phone);
+    expect(find.byKey(const Key('page-actions-stacked')), findsOneWidget);
+    final subtitle = t.getRect(find.textContaining('changes reach your terminals'));
+    final search = t.getRect(find.byType(HPSearchField));
+    final add = t.getRect(find.byKey(const Key('add-dish')));
+    final seed = t.getRect(find.byKey(const Key('seed-categories')));
+    expect(search.top, greaterThan(subtitle.bottom)); // nothing beside the subtitle
+    expect(add.top, greaterThan(search.bottom));
+    expect(seed.top, greaterThan(add.bottom));
+    expect(search.width, closeTo(phone.width - 2 * HPSpace.lg, 1)); // full width
+    expect(add.width, closeTo(search.width, 1));
+    expect(seed.left, closeTo(search.left, 1)); // lined up on the left, not floating right
+    expect(t.takeException(), isNull);
+  });
+
+  testWidgets('phone: discount / reversal / correction amounts line up on the right edge of the card', (t) async {
+    await start(t, size: phone);
+    await t.scrollUntilVisible(find.text('Bill corrections'), 300, scrollable: find.byType(Scrollable).first);
+    await t.pumpAndSettle();
+    final rights = [for (final l in ['on paid bills', 'lines', 'adjustments']) t.getRect(find.textContaining(l).last).right];
+    final card = t.getRect(find.ancestor(of: find.text('Bill corrections'), matching: find.byType(Card)).first);
+    for (final r in rights) {
+      expect(r, closeTo(rights.first, 1));
+      expect(card.right - r, lessThan(40)); // at the edge, not in the middle
+    }
+  });
+
   for (final size in [desktop, phone]) {
     testWidgets('[${size.width.toInt()}] dashboard: range switch, every section, bill drill-down', (t) async {
       final api = await start(t, size: size);
