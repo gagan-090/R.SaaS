@@ -409,3 +409,12 @@ Test: `flutter test` in apps/pos_app → **62 passed** (25 existing + 37 in `tes
   commits were never pushed, so `/sync/console-session` and `/sync/staff` answer 404 live). POS now falls back to the
   normal console sign-in when the cloud cannot vouch for the PIN sign-in (only offline / not allowed / inactive stop).
   Needs: push `main` + redeploy the API. Tests: pos_app **86 passed** (new 404-fallback test).
+
+### BhojMitra logo everywhere — 2026-11-13
+- `packages/ui_kit`: `BhojMitraLogo` widget + `assets/brand/bhojmitra_logo.png` (from "Refined Bhoj Mitra Restaurant
+  Logo.png", trimmed); on a dark ground it sits on a white plate.
+- POS: device setup, PIN sign-in (restaurant's own logo below it when branded), start-up screen, side rail, and the top
+  bar of every main screen for all roles. Console (web + inside the POS): every sign-in screen, sidebar, phone app bar.
+- App icons (Android legacy + adaptive, iOS, web/PWA, favicon, Windows .ico) and splash screens (Android < 12 and 12+,
+  iOS launch screen, web loading splash) for both apps, on white.
+- Tests (this session): ui_kit **15 passed** (new logo test), pos_app **86 passed**, admin_web **143 passed**.

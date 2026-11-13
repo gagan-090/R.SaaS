@@ -3,7 +3,7 @@
     "short_name": "BhojMitra Admin",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#FBF6EC",
+    "background_color": "#FFFFFF",
     "theme_color": "#6B1F2A",
     "description": "BhojMitra restaurant console",
     "orientation": "portrait-primary",

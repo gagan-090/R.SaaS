@@ -31,8 +31,23 @@
 
   <title>BhojMitra Admin</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    html, body { margin: 0; background: #ffffff; }
+    #bm-splash { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #ffffff; z-index: 9999; transition: opacity .25s ease; }
+    #bm-splash img { width: min(240px, 60vw); height: auto; }
+  </style>
 </head>
 <body>
+  <!-- BhojMitra splash while the app loads; removed on the first Flutter frame -->
+  <div id="bm-splash"><img src="splash-logo.png" alt="BhojMitra"></div>
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      var s = document.getElementById('bm-splash');
+      if (!s) return;
+      s.style.opacity = '0';
+      setTimeout(function () { s.remove(); }, 300);
+    });
+  </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader

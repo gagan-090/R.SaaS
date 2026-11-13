@@ -196,6 +196,8 @@ class ConsoleShell extends ConsumerWidget {
               final header = <Widget>[Padding(
                 padding: const EdgeInsets.fromLTRB(HPSpace.x2, HPSpace.x2, HPSpace.x2, HPSpace.x3),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  BhojMitraLogo(height: 64, plate: _onSidebar(p) == HPColors.paper),
+                  const SizedBox(height: HPSpace.md),
                   if (logoId != null) ...[
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxHeight: 56, maxWidth: 180),
@@ -204,9 +206,7 @@ class ConsoleShell extends ConsumerWidget {
                     const SizedBox(height: HPSpace.md),
                   ],
                   if (look?.brand != null && look!.name.isNotEmpty)
-                    Text(HPType.heading(look.name), key: const Key('brand-name'), style: HPType.titleScreen(_onSidebar(p)).copyWith(fontSize: 22, height: 1.1))
-                  else
-                    Text('BhojMitra', style: HPType.titleScreen(_onSidebar(p)).copyWith(fontSize: 26, height: 1.05)),
+                    Text(HPType.heading(look.name), key: const Key('brand-name'), style: HPType.titleScreen(_onSidebar(p)).copyWith(fontSize: 22, height: 1.1)),
                   const SizedBox(height: HPSpace.sm),
                   Text('$brand console'.toUpperCase(), style: HPType.overline(_onSidebar(p).withValues(alpha: .65)).copyWith(fontSize: 10)),
                 ]),
@@ -299,7 +299,12 @@ class ConsoleShell extends ConsumerWidget {
     if (narrow) {
       return Scaffold(
         appBar: AppBar(
-          title: Text(idx >= 0 ? items[idx].$2 : 'BhojMitra Admin'),
+          titleSpacing: 0,
+          title: Row(children: [
+            const BhojMitraLogo(height: 30),
+            const SizedBox(width: HPSpace.sm),
+            Flexible(child: Text(idx >= 0 ? items[idx].$2 : 'BhojMitra Admin', overflow: TextOverflow.ellipsis)),
+          ]),
           leading: Builder(builder: (c) => IconButton(key: const Key('open-nav'), tooltip: 'Menu', icon: const Icon(Icons.menu_rounded), onPressed: () => Scaffold.of(c).openDrawer())),
         ),
         drawer: Drawer(backgroundColor: p.sidebar, child: sidebar(inDrawer: true)),

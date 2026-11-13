@@ -35,7 +35,7 @@ class PosApp extends ConsumerWidget {
       home: AnimatedSwitcher(
         duration: const Duration(milliseconds: 220),
         child: setup.when(
-          loading: () => const Scaffold(key: ValueKey('loading'), body: LoadingState(label: 'Starting…')),
+          loading: () => const Scaffold(key: ValueKey('loading'), backgroundColor: Colors.white, body: Center(child: BhojMitraLogo(height: 160, plate: false))),
           error: (e, _) => Scaffold(key: const ValueKey('error'), body: ErrorState(message: '$e', onRetry: () => ref.invalidate(setupProvider))),
           data: (s) => s == null
               ? const DeviceSetupScreen(key: ValueKey('setup'))

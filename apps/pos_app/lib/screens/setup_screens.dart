@@ -26,16 +26,7 @@ final pairFnProvider = Provider<Future<String> Function(PairingPayload, String n
 class _Brand extends StatelessWidget {
   const _Brand();
   @override
-  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(color: HPColors.saffron, shape: BoxShape.circle),
-          child: Icon(Icons.restaurant_rounded, color: HPColors.onSaffron, size: 22),
-        ),
-        const SizedBox(width: HPSpace.sm),
-        Text('BHOJMITRA', style: HPType.overline(context.hp.accentInk)),
-      ]);
+  Widget build(BuildContext context) => const BhojMitraLogo(height: 96);
 }
 
 /// S1 Device setup — one sign-in, no "join a hub" choice:
@@ -620,7 +611,9 @@ class _StaffLoginScreenState extends ConsumerState<StaffLoginScreen> with Single
   }
 
   Widget _pickUser(List<Json> staff, HPPalette p, bool narrow) => Column(key: const ValueKey('pick'), children: [
-        const BrandLogo(height: 72, maxWidth: 220),
+        const BhojMitraLogo(height: 88),
+        const SizedBox(height: HPSpace.sm),
+        const BrandLogo(height: 56, maxWidth: 200),
         if (ref.watch(posLookProvider).valueOrNull case (:final name, :final brand) when brand != null && name.isNotEmpty) ...[
           const SizedBox(height: HPSpace.sm),
           Text(HPType.heading(name), key: const Key('brand-name'), style: HPType.titleCard(p.accentInk), textAlign: TextAlign.center),

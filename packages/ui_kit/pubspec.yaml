@@ -18,6 +18,8 @@ dev_dependencies:
   flutter_lints: ^5.0.0
 
 flutter:
+  assets:
+    - assets/brand/bhojmitra_logo.png
   # Liberation Sans (SIL OFL 1.1, fonts/LICENSE-LiberationSans.txt) has Arial's exact letter widths. It is the
   # fallback wherever Arial itself is missing: Flutter web (cannot use the computer's fonts) and Android.
   fonts:

@@ -3,9 +3,9 @@
     "short_name": "BhojMitra",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FFFFFF",
+    "theme_color": "#0B3D66",
+    "description": "BhojMitra restaurant POS",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

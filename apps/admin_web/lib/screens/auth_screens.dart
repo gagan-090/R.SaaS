@@ -34,16 +34,7 @@ class _AuthFrame extends ConsumerWidget {
                 child: Padding(
                   padding: EdgeInsets.all(MediaQuery.sizeOf(context).width < 480 ? HPSpace.lg : HPSpace.x4),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    Row(children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(color: HPColors.saffron, shape: BoxShape.circle),
-                        child: Icon(Icons.restaurant_rounded, size: 20, color: HPColors.onSaffron),
-                      ),
-                      const SizedBox(width: HPSpace.sm),
-                      Flexible(child: Text('BHOJMITRA', style: HPType.overline(context.hp.accentInk), overflow: TextOverflow.ellipsis)),
-                    ]),
+                    const Center(child: BhojMitraLogo(height: 96)),
                     const SizedBox(height: HPSpace.lg),
                     Text(title, style: HPType.titleScreen(context.hp.text)),
                     const SizedBox(height: HPSpace.xs),

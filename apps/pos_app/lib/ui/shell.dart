@@ -45,7 +45,13 @@ class PosTopBar extends ConsumerWidget {
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: narrow ? HPSpace.xs : HPSpace.md),
               child: Row(children: [
-                if (canPop) IconButton(tooltip: 'Back', icon: const Icon(Icons.arrow_back_rounded), onPressed: () => Navigator.of(context).maybePop()) else const SizedBox(width: HPSpace.sm),
+                if (canPop)
+                  IconButton(tooltip: 'Back', icon: const Icon(Icons.arrow_back_rounded), onPressed: () => Navigator.of(context).maybePop())
+                else ...[
+                  const SizedBox(width: HPSpace.sm),
+                  BhojMitraLogo(height: narrow ? 32 : 38),
+                  const SizedBox(width: HPSpace.sm),
+                ],
                 Expanded(
                   child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(HPType.heading(title), style: HPType.titleCard(p.text).copyWith(fontSize: narrow ? 21 : 24), overflow: TextOverflow.ellipsis, maxLines: 1),
@@ -212,16 +218,10 @@ class _PosShellState extends ConsumerState<PosShell> {
           ? null
           : Padding(
               padding: const EdgeInsets.symmetric(vertical: HPSpace.lg),
-              child: BrandLogo(
-                height: 44,
-                maxWidth: extended ? 180 : 72,
-                fallback: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(color: HPColors.saffron, shape: BoxShape.circle),
-                  child: Icon(Icons.restaurant_rounded, color: HPColors.onSaffron),
-                ),
-              ),
+              child: Column(children: [
+                BhojMitraLogo(height: extended ? 72 : 40),
+                if (extended) ...[const SizedBox(height: HPSpace.sm), const BrandLogo(height: 40, maxWidth: 180)],
+              ]),
             ),
       destinations: [
         for (final d in dest)

@@ -1,6 +1,7 @@
 /// "BhojMitra" design system — follow STYLE.md for every screen.
 library;
 
+export 'src/brand.dart';
 export 'src/components.dart';
 export 'src/floor.dart';
 export 'src/format.dart';
