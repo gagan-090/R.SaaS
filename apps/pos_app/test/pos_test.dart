@@ -685,6 +685,22 @@ void main() {
     await t.pumpAndSettle();
   });
 
+  testWidgets('owner console: server cannot vouch (e.g. older cloud answers 404) → normal console sign-in, no dead end', (t) async {
+    addTearDown(() => EmbeddedAdminConsole.forget('u-own'));
+    final store = _MemoryConsoleStore();
+    final hub = await start(t, extra: [consoleSessionStoreProvider.overrideWithValue(store)]);
+    hub.consoleError = 'cloud_error';
+    await signIn(t, 'Owner', '9999');
+    await nav(t, 'More');
+    await t.ensureVisible(find.byKey(const Key('more-console')));
+    await t.tap(find.byKey(const Key('more-console')));
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('owner-console')), findsOneWidget);
+    expect(store.reads, ['u-own']);
+    await t.tap(find.byKey(const Key('admin-host-exit')));
+    await t.pumpAndSettle();
+  });
+
   testWidgets('cashiers cannot add people (no Staff entry, no add button)', (t) async {
     await start(t);
     await signIn(t, 'Ravi', '1234');

@@ -53,11 +53,12 @@ Future<void> openOwnerConsole(BuildContext context, WidgetRef ref, {String? loca
     try {
       session = (await ref.read(hubApiProvider)!.consoleSession())['refreshToken'] as String?;
     } on HubApiException catch (e) {
-      if (e.code != 'mfa_required') {
+      if (const {'offline', 'console_not_allowed', 'inactive_account'}.contains(e.code)) {
         if (context.mounted) toast(context, e.message, error: true);
         return;
       }
-      // two-step verification is on: the normal console sign-in, remembered on this device
+      // two-step verification is on, or the cloud cannot vouch for the PIN sign-in (e.g. an older server):
+      // the normal console sign-in, remembered on this device
       session = await store.read(s.userId);
       remember = true;
     }

@@ -405,3 +405,7 @@ Test: `flutter test` in apps/pos_app → **62 passed** (25 existing + 37 in `tes
 - 2026-11-10 follow-up: owner console opens signed in through the main device (no second sign-in unless two-step
   verification is on); More → "Tables & floors" and "Menu & dishes" open the console on those pages (add/edit tables,
   reserved / out of use, dishes, prices, availability). Tests: API **163**, hub **52**, pos_app **85**, admin_web **143**.
+- 2026-11-13 fix: on the phone "Cannot POST /api/v1/sync/console-session" — the Render API was an old build (the last 5
+  commits were never pushed, so `/sync/console-session` and `/sync/staff` answer 404 live). POS now falls back to the
+  normal console sign-in when the cloud cannot vouch for the PIN sign-in (only offline / not allowed / inactive stop).
+  Needs: push `main` + redeploy the API. Tests: pos_app **86 passed** (new 404-fallback test).
