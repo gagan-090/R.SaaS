@@ -418,3 +418,17 @@ Test: `flutter test` in apps/pos_app → **62 passed** (25 existing + 37 in `tes
 - App icons (Android legacy + adaptive, iOS, web/PWA, favicon, Windows .ico) and splash screens (Android < 12 and 12+,
   iOS launch screen, web loading splash) for both apps, on white.
 - Tests (this session): ui_kit **15 passed** (new logo test), pos_app **86 passed**, admin_web **143 passed**.
+
+### Fix: owner console asked to sign in again on the POS — 2026-11-13
+- Cause: the POS waited only 8 s for the main device, which asks the cloud (Render free tier takes up to a minute to
+  wake) → "hub offline" → the console's sign-in page. And once the console had shown that page (or "Sign out" inside it),
+  every reopen reused it until the app restarted.
+- Now: "Opening the owner console…" waits up to 90 s (main device → cloud 75 s, one automatic retry while the cloud starts);
+  failures show a clear message, never the sign-in page; a console that lost its sign-in is signed in again through the
+  main device (also mid-use when the session runs out); no "Sign out" inside the POS console. Only two-step verification
+  (turned on by the owner) still asks for password + code. "OWNER CONSOLE" bar no longer overflows on small phones.
+- Tests (this session): pos_app **89 passed** (new: signed in with no sign-in page on a 360 dp phone, 40 s slow cloud,
+  cloud starting retried, session ended → renewed, offline / unreachable → message, MFA); admin_web **143**, hub **52**.
+  New end-to-end `apps/pos_app/test/e2e_owner_console_test.dart` against a real API (local Postgres, throwaway DB):
+  owner PIN → main device → cloud → console signed in, menu / floors / staff load, renewal after logout, Restaurant
+  Admin in, cashier refused — **passed**. Not tried on a real phone.

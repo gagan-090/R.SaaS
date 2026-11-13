@@ -59,13 +59,28 @@ class FakeHubApi extends HubApi {
   @override
   Future<List<Json>> staff() async => [for (final s in staffList) {'id': s['id'], 'name': s['name'], 'roles': s['roles'], 'hasPin': s['pin'] != null}];
 
-  String? consoleError; // e.g. 'mfa_required' or 'offline'
-  int consoleSessions = 0;
+  String? consoleError; // every call fails with it, e.g. 'mfa_required', 'offline', 'hub_offline'
+  final consoleFailOnce = <String>[]; // the next calls fail with these, one each (e.g. the cloud still waking up)
+  Duration consoleDelay = Duration.zero; // how long the main device + cloud take to answer
+  int consoleSessions = 0; // sessions handed out
+  int consoleCalls = 0;
+  String Function()? mintRefreshToken; // the fake cloud's tokens, so the console really signs in with them
   @override
   Future<Json> consoleSession() async {
-    if (consoleError != null) throw HubApiException(consoleError == 'offline' ? 503 : 403, consoleError!, consoleError == 'offline' ? 'The owner console needs internet on the main device.' : 'Sign in with your password and code');
+    consoleCalls++;
+    if (consoleDelay > Duration.zero) await Future<void>.delayed(consoleDelay);
+    final e = consoleFailOnce.isNotEmpty ? consoleFailOnce.removeAt(0) : consoleError;
+    if (e != null) {
+      final (status, msg) = switch (e) {
+        'offline' => (503, 'The owner console needs internet on the main device.'),
+        'cloud_starting' => (503, 'The server is starting up. Try again in a minute.'),
+        'hub_offline' => (0, 'Kitchen hub offline'),
+        _ => (403, 'Sign in with your password and code'),
+      };
+      throw HubApiException(status, e, msg);
+    }
     consoleSessions++;
-    return {'status': 'ok', 'accessToken': 'a', 'refreshToken': 'r-$consoleSessions'};
+    return {'status': 'ok', 'accessToken': 'a', 'refreshToken': mintRefreshToken?.call() ?? 'r-$consoleSessions'};
   }
 
   final addedStaff = <Json>[];

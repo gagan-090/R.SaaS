@@ -21,11 +21,15 @@ typedef Json = Map<String, dynamic>;
 /// Thin client for the cloud API (contract: packages/contracts/openapi.json).
 /// The refresh token survives reloads in this tab only; access tokens remain in memory.
 class ApiClient {
-  ApiClient({String baseUrl = apiBaseUrl, http.Client? client, String? Function()? sessionReader, void Function(String?)? sessionWriter})
+  ApiClient({String baseUrl = apiBaseUrl, http.Client? client, String? Function()? sessionReader, void Function(String?)? sessionWriter, this.renewSession})
       : _base = baseUrl,
         _http = client ?? http.Client(),
         _readSession = sessionReader ?? readSession,
         _writeSession = sessionWriter ?? writeSession;
+
+  /// Hosted console (POS): a fresh refresh token from the host when there is none or it stopped working, so the person
+  /// is never sent to the sign-in page. Null on the web.
+  final Future<String?> Function()? renewSession;
 
   final String? Function() _readSession;
   final void Function(String?) _writeSession;
@@ -44,7 +48,7 @@ class ApiClient {
     if (tok != null) req.headers['authorization'] = 'Bearer $tok';
     if (body != null) req.body = jsonEncode(body);
     final res = await http.Response.fromStream(await _http.send(req));
-    if (res.statusCode == 401 && retry && bearer == null && refreshToken != null && !path.startsWith('/auth/')) {
+    if (res.statusCode == 401 && retry && bearer == null && (refreshToken != null || renewSession != null) && !path.startsWith('/auth/')) {
       if (await _refresh()) return _send(method, path, body: body, query: query, headers: headers, retry: false);
       onSessionExpired?.call();
     }
@@ -61,7 +65,7 @@ class ApiClient {
     final req = http.Request('GET', Uri.parse('$_base$path'));
     if (accessToken != null) req.headers['authorization'] = 'Bearer $accessToken';
     final res = await http.Response.fromStream(await _http.send(req));
-    if (res.statusCode == 401 && retry && refreshToken != null && await _refresh()) return getBytes(path, retry: false);
+    if (res.statusCode == 401 && retry && (refreshToken != null || renewSession != null) && await _refresh()) return getBytes(path, retry: false);
     if (res.statusCode >= 400) {
       final m = (() {
         try {
@@ -78,12 +82,24 @@ class ApiClient {
   Future<bool>? _refreshing;
   Future<bool> restoreSession() async {
     refreshToken = _readSession();
-    return refreshToken != null && await _refresh();
+    return await _refresh();
   }
 
   Future<bool> _refresh() => _refreshing ??= _rotate().whenComplete(() => _refreshing = null);
 
   Future<bool> _rotate() async {
+    if (refreshToken != null && await _tryRefresh()) return true;
+    final renew = renewSession;
+    if (renew == null) return false;
+    try {
+      refreshToken = await renew();
+    } catch (_) {
+      refreshToken = null;
+    }
+    return refreshToken != null && await _tryRefresh();
+  }
+
+  Future<bool> _tryRefresh() async {
     try {
       final r = await _send('POST', '/auth/refresh', body: {'refreshToken': refreshToken}, retry: false) as Json;
       _setTokens(r);

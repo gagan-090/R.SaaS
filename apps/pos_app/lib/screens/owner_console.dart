@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:rsaas_admin_web/embed.dart';
+import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 
 import '../hub/hub_api.dart';
 import '../state/app_state.dart';
@@ -44,23 +45,23 @@ bool canOpenOwnerConsole(StaffSession? s) => s != null && (s.roles.contains('own
 
 Future<void> openOwnerConsole(BuildContext context, WidgetRef ref, {String? location}) async {
   final s = ref.read(sessionProvider);
-  if (!canOpenOwnerConsole(s)) return;
+  final hub = ref.read(hubApiProvider);
+  if (!canOpenOwnerConsole(s) || hub == null) return;
   final store = ref.read(consoleSessionStoreProvider);
   String? session;
-  var remember = false;
-  if (!EmbeddedAdminConsole.isOpenFor(s!.userId)) {
+  var mfa = false;
+  if (!EmbeddedAdminConsole.isSignedInFor(s!.userId)) {
     // signed in on the POS with the PIN: the main device gets the console session — no second sign-in
     try {
-      session = (await ref.read(hubApiProvider)!.consoleSession())['refreshToken'] as String?;
+      session = await _withProgress(context, () => _consoleSession(hub));
     } on HubApiException catch (e) {
-      if (const {'offline', 'console_not_allowed', 'inactive_account'}.contains(e.code)) {
-        if (context.mounted) toast(context, e.message, error: true);
+      if (e.code != 'mfa_required') {
+        if (context.mounted) toast(context, _why(e), error: true);
         return;
       }
-      // two-step verification is on, or the cloud cannot vouch for the PIN sign-in (e.g. an older server):
-      // the normal console sign-in, remembered on this device
+      // the person turned on two-step verification: only then the console's own sign-in (remembered on this device)
       session = await store.read(s.userId);
-      remember = true;
+      mfa = true;
     }
   }
   if (!context.mounted) return;
@@ -71,8 +72,54 @@ Future<void> openOwnerConsole(BuildContext context, WidgetRef ref, {String? loca
       userKey: s.userId,
       initialSession: session,
       initialLocation: location,
-      onSessionChanged: remember ? (t) => store.write(s.userId, t) : null,
+      onSessionChanged: mfa ? (t) => store.write(s.userId, t) : null,
+      // a console session that runs out while open is renewed the same way, never by the sign-in page
+      renewSession: mfa ? null : () => _consoleSession(hub),
       onExit: () => Navigator.of(c).pop(),
     ),
   ));
+}
+
+/// The console refresh token through the main device; one more try when the cloud was still waking up.
+Future<String?> _consoleSession(HubApi hub) async {
+  for (var attempt = 0;; attempt++) {
+    try {
+      return (await hub.consoleSession())['refreshToken'] as String?;
+    } on HubApiException catch (e) {
+      final waking = const {'cloud_starting', 'cloud_error', 'internal'}.contains(e.code) || (e.status >= 500 && e.code != 'offline');
+      if (attempt > 0 || !waking) rethrow;
+    }
+  }
+}
+
+String _why(HubApiException e) => switch (e.code) {
+      'hub_offline' => 'Cannot reach the main device. Check it is on and on this Wi-Fi, then try again.',
+      'offline' => 'The owner console needs internet on the main device.',
+      _ => e.message,
+    };
+
+/// "Opening the owner console…" over the POS while the main device asks the cloud (can take a while the first time).
+Future<T> _withProgress<T>(BuildContext context, Future<T> Function() task) async {
+  final nav = Navigator.of(context, rootNavigator: true);
+  var shown = true;
+  showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (c) => PopScope(
+      canPop: false,
+      child: AlertDialog(
+        key: const Key('console-opening'),
+        content: Row(children: [
+          const SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 3)),
+          const SizedBox(width: HPSpace.lg),
+          Expanded(child: Text('Opening the owner console…', style: HPType.body(c.hp.text))),
+        ]),
+      ),
+    ),
+  ).whenComplete(() => shown = false);
+  try {
+    return await task();
+  } finally {
+    if (shown) nav.pop();
+  }
 }

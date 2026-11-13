@@ -9,12 +9,15 @@ import 'package:rsaas_pos/screens/setup_screens.dart';
 import 'package:rsaas_pos/state/app_state.dart';
 import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 
+import 'fake_cloud.dart';
 import 'fake_hub.dart';
 
 const paired = DeviceSetup(hubBaseUrl: 'https://10.0.0.5:8443/hub/v1', deviceToken: 'dev-token', fingerprint: 'AA:BB');
 const tablet = Size(1280, 800);
 const phone = Size(360, 740); // small Android phone (dp)
 const bigPhone = Size(411, 891);
+
+late FakeCloud lastCloud;
 
 Future<FakeHubApi> start(WidgetTester t, {Size size = tablet, Brightness brightness = Brightness.dark, DeviceSetup? setup = paired, List<Override> extra = const []}) async {
   t.view.physicalSize = size;
@@ -23,6 +26,11 @@ Future<FakeHubApi> start(WidgetTester t, {Size size = tablet, Brightness brightn
   addTearDown(t.view.reset);
   addTearDown(t.platformDispatcher.clearPlatformBrightnessTestValue);
   final fake = FakeHubApi();
+  // the owner console's cloud: sessions handed out by the main device really sign the console in
+  lastCloud = FakeCloud();
+  fake.mintRefreshToken = lastCloud.issue;
+  EmbeddedAdminConsole.debugHttpClient = lastCloud.client();
+  addTearDown(() => EmbeddedAdminConsole.debugHttpClient = null);
   await t.pumpWidget(ProviderScope(overrides: [
     deviceStoreProvider.overrideWithValue(MemoryDeviceStore(setup)),
     hubApiFactoryProvider.overrideWithValue((_) => fake),
@@ -636,69 +644,134 @@ void main() {
     expect((await hub.login(kiran['id'] as String, '582914'))['user'], containsPair('name', 'Kiran'));
   });
 
-  testWidgets('owner opens the owner console without a second sign-in (session from the main device) and comes back', (t) async {
+  // The owner signed in on the POS with the PIN opens the owner console: never a second sign-in page.
+  bool consoleSignInPage() => find.byKey(const Key('login-password')).evaluate().isNotEmpty || find.byKey(const Key('login-email')).evaluate().isNotEmpty;
+
+  Future<FakeHubApi> ownerOnMore(WidgetTester t, {ConsoleSessionStore? store}) async {
     addTearDown(() => EmbeddedAdminConsole.forget('u-own'));
-    final store = _MemoryConsoleStore();
-    final hub = await start(t, extra: [consoleSessionStoreProvider.overrideWithValue(store)]);
+    final hub = await start(t, size: phone, extra: [consoleSessionStoreProvider.overrideWithValue(store ?? _MemoryConsoleStore())]);
     await signIn(t, 'Owner', '9999');
     await nav(t, 'More');
+    return hub;
+  }
+
+  Future<void> tapConsole(WidgetTester t, [String key = 'more-console']) async {
+    await t.ensureVisible(find.byKey(Key(key)));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(Key(key)));
+    await t.pump();
+  }
+
+  Future<void> exitConsole(WidgetTester t) async {
+    await t.tap(find.byKey(const Key('admin-host-exit')));
+    await t.pumpAndSettle();
+  }
+
+  testWidgets('owner console opens signed in from the POS PIN: no sign-in page, reopening is instant', (t) async {
+    final store = _MemoryConsoleStore();
+    final hub = await ownerOnMore(t, store: store);
     expect(find.byKey(const Key('more-console-tables')), findsOneWidget);
     expect(find.byKey(const Key('more-console-menu')), findsOneWidget);
-    await t.ensureVisible(find.byKey(const Key('more-console')));
-    await t.tap(find.byKey(const Key('more-console')));
+    await tapConsole(t);
     await t.pumpAndSettle();
     expect(find.byKey(const Key('owner-console')), findsOneWidget);
-    expect(find.text('OWNER CONSOLE'), findsOneWidget);
-    expect(hub.consoleSessions, 1); // asked the main device; nothing typed
-    expect(store.reads, isEmpty); // nothing kept on the device for this path
-    await t.tap(find.byKey(const Key('admin-host-exit')));
-    await t.pumpAndSettle();
-    expect(find.byKey(const Key('owner-console')), findsNothing);
-    // reopening in the same app run reuses the open console (no new session)
-    await t.ensureVisible(find.byKey(const Key('more-console-tables')));
-    await t.tap(find.byKey(const Key('more-console-tables')));
-    await t.pumpAndSettle();
-    expect(find.byKey(const Key('owner-console')), findsOneWidget);
+    expect(EmbeddedAdminConsole.isSignedInFor('u-own'), isTrue);
+    expect(consoleSignInPage(), isFalse);
     expect(hub.consoleSessions, 1);
-    await t.tap(find.byKey(const Key('admin-host-exit')));
-    await t.pumpAndSettle();
-  });
-
-  testWidgets('owner console: two-step verification on → normal console sign-in (remembered); offline → clear message', (t) async {
-    addTearDown(() => EmbeddedAdminConsole.forget('u-own'));
-    final store = _MemoryConsoleStore();
-    final hub = await start(t, extra: [consoleSessionStoreProvider.overrideWithValue(store)]);
-    hub.consoleError = 'offline';
-    await signIn(t, 'Owner', '9999');
-    await nav(t, 'More');
-    await t.ensureVisible(find.byKey(const Key('more-console')));
-    await t.tap(find.byKey(const Key('more-console')));
-    await t.pumpAndSettle();
+    expect(lastCloud.calls, containsAll(['POST /auth/refresh', 'GET /me']));
+    expect(store.reads, isEmpty); // nothing kept on the device for this path
+    // inside the POS the console has no "sign out" (that would leave a sign-in page behind); Back to POS instead
+    expect(find.byKey(const Key('sign-out')), findsNothing);
+    await exitConsole(t);
     expect(find.byKey(const Key('owner-console')), findsNothing);
-    expect(find.text('The owner console needs internet on the main device.'), findsOneWidget);
-    hub.consoleError = 'mfa_required';
-    await t.tap(find.byKey(const Key('more-console')));
+    // reopening (Tables shortcut) in the same app run: no new session, straight in
+    await tapConsole(t, 'more-console-tables');
     await t.pumpAndSettle();
     expect(find.byKey(const Key('owner-console')), findsOneWidget);
-    expect(store.reads, ['u-own']);
-    await t.tap(find.byKey(const Key('admin-host-exit')));
-    await t.pumpAndSettle();
+    expect(consoleSignInPage(), isFalse);
+    expect(hub.consoleCalls, 1);
+    await exitConsole(t);
   });
 
-  testWidgets('owner console: server cannot vouch (e.g. older cloud answers 404) → normal console sign-in, no dead end', (t) async {
-    addTearDown(() => EmbeddedAdminConsole.forget('u-own'));
-    final store = _MemoryConsoleStore();
-    final hub = await start(t, extra: [consoleSessionStoreProvider.overrideWithValue(store)]);
-    hub.consoleError = 'cloud_error';
-    await signIn(t, 'Owner', '9999');
-    await nav(t, 'More');
-    await t.ensureVisible(find.byKey(const Key('more-console')));
-    await t.tap(find.byKey(const Key('more-console')));
+  testWidgets('owner console: slow cloud (waking up) shows "Opening…" and then opens signed in, not a sign-in page', (t) async {
+    final hub = await ownerOnMore(t);
+    hub.consoleDelay = const Duration(seconds: 40); // longer than the old 8 s limit that sent people to the sign-in page
+    await tapConsole(t);
+    await t.pump(const Duration(seconds: 1));
+    expect(find.byKey(const Key('console-opening')), findsOneWidget);
+    expect(find.byKey(const Key('owner-console')), findsNothing);
+    await t.pump(const Duration(seconds: 40));
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('console-opening')), findsNothing);
+    expect(find.byKey(const Key('owner-console')), findsOneWidget);
+    expect(EmbeddedAdminConsole.isSignedInFor('u-own'), isTrue);
+    expect(consoleSignInPage(), isFalse);
+    await exitConsole(t);
+  });
+
+  testWidgets('owner console: the cloud still starting up is retried once by itself', (t) async {
+    final hub = await ownerOnMore(t);
+    hub.consoleFailOnce.add('cloud_starting');
+    await tapConsole(t);
+    await t.pumpAndSettle();
+    expect(hub.consoleCalls, 2);
+    expect(find.byKey(const Key('owner-console')), findsOneWidget);
+    expect(EmbeddedAdminConsole.isSignedInFor('u-own'), isTrue);
+    expect(consoleSignInPage(), isFalse);
+    await exitConsole(t);
+  });
+
+  testWidgets('owner console: session ended on the server while away → signed in again through the main device, no sign-in page', (t) async {
+    final hub = await ownerOnMore(t);
+    await tapConsole(t);
+    await t.pumpAndSettle();
+    await exitConsole(t);
+    lastCloud.revokeAll(); // e.g. expired, or signed out everywhere from the web
+    // the console still thinks it is signed in: its next call is refused, it renews through the main device
+    await tapConsole(t, 'more-console-menu');
     await t.pumpAndSettle();
     expect(find.byKey(const Key('owner-console')), findsOneWidget);
-    expect(store.reads, ['u-own']);
-    await t.tap(find.byKey(const Key('admin-host-exit')));
+    expect(consoleSignInPage(), isFalse);
+    expect(hub.consoleSessions, greaterThanOrEqualTo(2));
+    expect(EmbeddedAdminConsole.isSignedInFor('u-own'), isTrue);
+    await exitConsole(t);
+  });
+
+  testWidgets('owner console: main device unreachable or offline → clear message, never the sign-in page', (t) async {
+    final hub = await ownerOnMore(t);
+    for (final (code, text) in [
+      ('hub_offline', 'Cannot reach the main device. Check it is on and on this Wi-Fi, then try again.'),
+      ('offline', 'The owner console needs internet on the main device.'),
+    ]) {
+      hub.consoleError = code;
+      await tapConsole(t);
+      await t.pumpAndSettle();
+      expect(find.byKey(const Key('owner-console')), findsNothing);
+      expect(consoleSignInPage(), isFalse);
+      expect(find.text(text), findsOneWidget);
+      await t.pump(const Duration(seconds: 5));
+      await t.pumpAndSettle();
+    }
+    // back online: opens signed in straight away
+    hub.consoleError = null;
+    await tapConsole(t);
     await t.pumpAndSettle();
+    expect(find.byKey(const Key('owner-console')), findsOneWidget);
+    expect(EmbeddedAdminConsole.isSignedInFor('u-own'), isTrue);
+    expect(consoleSignInPage(), isFalse);
+    await exitConsole(t);
+  });
+
+  testWidgets('owner console: only with two-step verification turned on does it ask for the password + code (remembered)', (t) async {
+    final store = _MemoryConsoleStore();
+    final hub = await ownerOnMore(t, store: store);
+    hub.consoleError = 'mfa_required';
+    await tapConsole(t);
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('owner-console')), findsOneWidget);
+    expect(consoleSignInPage(), isTrue);
+    expect(store.reads, ['u-own']);
+    await exitConsole(t);
   });
 
   testWidgets('cashiers cannot add people (no Staff entry, no add button)', (t) async {

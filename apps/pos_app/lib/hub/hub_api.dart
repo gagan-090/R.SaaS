@@ -112,12 +112,12 @@ class HttpHubApi extends HubApi {
     return decoded;
   }
 
-  Future<dynamic> _send(String method, String path, {Object? body, Map<String, String>? extra}) async {
+  Future<dynamic> _send(String method, String path, {Object? body, Map<String, String>? extra, Duration timeout = const Duration(seconds: 8)}) async {
     final req = http.Request(method, Uri.parse('$baseUrl$path'))..headers.addAll({..._h, ...?extra});
     if (body != null) req.body = jsonEncode(body);
     final http.Response res;
     try {
-      res = await http.Response.fromStream(await _http.send(req).timeout(const Duration(seconds: 8)));
+      res = await http.Response.fromStream(await _http.send(req).timeout(timeout));
     } on TimeoutException {
       throw HubApiException(0, 'hub_offline', 'Kitchen hub offline');
     } catch (e) {
@@ -139,7 +139,8 @@ class HttpHubApi extends HubApi {
   Future<Json> addStaff(Json body) async => await _send('POST', '/staff', body: body) as Json;
 
   @override
-  Future<Json> consoleSession() async => await _send('POST', '/console-session', body: const {}) as Json;
+  // the main device asks the cloud, which can take most of a minute to wake up (free hosting): wait for it
+  Future<Json> consoleSession() async => await _send('POST', '/console-session', body: const {}, timeout: const Duration(seconds: 90)) as Json;
 
   @override
   Future<Json> login(String userId, String pin) async {

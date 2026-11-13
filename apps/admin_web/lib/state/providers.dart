@@ -124,6 +124,13 @@ class AuthNotifier extends Notifier<AuthState> with ChangeNotifier {
     await _api.logout();
     _set(const SignedOut());
   }
+
+  /// Hosted console: sign in again from the host's session (shows the start-up state, not the sign-in page, meanwhile).
+  Future<void> resume() async {
+    if (state is SignedIn || state is RestoringSession) return;
+    _set(const RestoringSession());
+    await _restore();
+  }
 }
 
 final authProvider = NotifierProvider<AuthNotifier, AuthState>(AuthNotifier.new);

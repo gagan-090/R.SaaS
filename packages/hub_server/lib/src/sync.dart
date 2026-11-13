@@ -53,11 +53,19 @@ class CloudClient {
   Future<Map<String, Object?>> consoleSession(String actorUserId) async {
     final http.Response r;
     try {
-      r = await _http.post(Uri.parse('$baseUrl/sync/console-session'), headers: _h, body: jsonEncode({'actorUserId': actorUserId})).timeout(const Duration(seconds: 20));
+      // the cloud may be waking up (free hosting): up to a minute
+      r = await _http.post(Uri.parse('$baseUrl/sync/console-session'), headers: _h, body: jsonEncode({'actorUserId': actorUserId})).timeout(const Duration(seconds: 75));
     } catch (_) {
       throw HubError(503, 'offline', 'The owner console needs internet on the main device.');
     }
-    final j = r.body.isEmpty ? const <String, Object?>{} : jsonDecode(r.body) as Map<String, Object?>;
+    final Map<String, Object?> j;
+    try {
+      final d = r.body.isEmpty ? null : jsonDecode(r.body);
+      j = d is Map<String, Object?> ? d : const {};
+    } on FormatException {
+      // e.g. the hosting's own "starting up" page
+      throw HubError(503, 'cloud_starting', 'The server is starting up. Try again in a minute.');
+    }
     if (r.statusCode != 200) throw HubError(r.statusCode >= 500 ? 502 : r.statusCode, '${j['code'] ?? 'cloud_error'}', '${j['message'] ?? 'The server refused it'}');
     return j;
   }
