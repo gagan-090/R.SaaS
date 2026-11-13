@@ -23,6 +23,9 @@ final pairFnProvider = Provider<Future<String> Function(PairingPayload, String n
   (ref) => (p, name, platform) => claimPairing(p, deviceName: name, platform: platform),
 );
 
+/// The cloud calls of the owner's first-device sign-in: overridable so tests need no server.
+final setupHttpClientProvider = Provider<http.Client>((ref) => http.Client());
+
 class _Brand extends StatelessWidget {
   const _Brand();
   @override
@@ -48,6 +51,9 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
   bool _busy = false, _needMfa = false, _needPin = false, _showPassword = false, _showAddress = false, _showServer = false;
   String? _access; // kept while the owner chooses a PIN, so they do not sign in twice
   String? _challenge, _error, _status;
+  /// The cloud already has a main device for this restaurant (often this same device before the app was reinstalled):
+  /// its name, while the owner chooses between making this device the main one and joining it with the PIN.
+  String? _existingHub;
 
   String get _platform => switch (Theme.of(context).platform) {
         TargetPlatform.windows => 'windows',
@@ -60,6 +66,7 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
   /// The one button: PIN → join the main device on the Wi-Fi; password → the owner's first device becomes the main one.
   Future<void> _signIn() async {
     final email = _email.text.trim(), secret = _password.text;
+    if (_existingHub != null) return;
     if (_access != null || _needMfa) return _becomeHub(); // owner half-way through MFA / choosing a PIN
     if (email.isEmpty || secret.isEmpty) return setState(() => _error = 'Enter your email and your PIN (or password)');
     if (!_pinShape.hasMatch(secret)) return _becomeHub();
@@ -93,7 +100,7 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
   }
 
   /// The owner's first device: signs in to the cloud once; the cloud registers this device as the branch's main device.
-  Future<void> _becomeHub() async {
+  Future<void> _becomeHub({bool replace = false}) async {
     if (!HubHost.supported) {
       return setState(() => _error = 'This device cannot be the main device. Sign in with your email and PIN while on the restaurant Wi-Fi to join the main device.');
     }
@@ -103,22 +110,25 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
       _status = null;
     });
     final base = _cloud.text.trim().replaceAll(RegExp(r'/$'), '');
+    final client = ref.read(setupHttpClientProvider);
+    String? hubName;
     Future<Map<String, dynamic>> call(String method, String path, {Object? body, String? bearer}) async {
       final http.Response r;
       try {
         final headers = {'content-type': 'application/json', if (bearer != null) 'authorization': 'Bearer $bearer'};
         final uri = Uri.parse('$base$path');
         r = await (switch (method) {
-          'GET' => http.get(uri, headers: headers),
-          'PUT' => http.put(uri, headers: headers, body: jsonEncode(body)),
-          _ => http.post(uri, headers: headers, body: jsonEncode(body)),
+          'GET' => client.get(uri, headers: headers),
+          'PUT' => client.put(uri, headers: headers, body: jsonEncode(body)),
+          _ => client.post(uri, headers: headers, body: jsonEncode(body)),
         })
-            .timeout(const Duration(seconds: 15));
+            .timeout(const Duration(seconds: 60)); // a sleeping cloud server can take most of a minute to wake
       } catch (_) {
         throw HubApiException(0, 'unreachable', 'No internet. The first (main) device needs internet once to sign in. '
             'Other devices join the main device with email + PIN over Wi-Fi, without internet.');
       }
       final j = r.body.isEmpty ? <String, dynamic>{} : jsonDecode(r.body) as Map<String, dynamic>;
+      if (j['hubName'] is String) hubName = j['hubName'] as String;
       if (r.statusCode >= 400) throw HubApiException(r.statusCode, '${j['code']}', '${j['message']}');
       return j;
     }
@@ -142,7 +152,9 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
           access = l['accessToken'] as String;
         }
       }
-      if (!_needPin) {
+      if (replace) {
+        // the owner chose to make this device the main device: same sign-in, no second password
+      } else if (!_needPin) {
         // Everyone signs in on the POS with a PIN. An owner who signed up on the web has none yet: choose it now.
         final me = await call('GET', '/me', bearer: access);
         if (me['hasPin'] == false) {
@@ -160,18 +172,17 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
       }
       final Map<String, dynamic> reg;
       try {
-        reg = await post('/devices/register-hub', {'name': _name.text.trim(), 'platform': _platform}, bearer: access);
+        reg = await post('/devices/register-hub', {'name': _name.text.trim(), 'platform': _platform, if (replace) 'replace': true}, bearer: access);
       } on HubApiException catch (e) {
         if (e.code != 'hub_exists') rethrow;
-        // the restaurant already runs on another device: this one joins it like any other terminal
+        // the restaurant already has a main device: the owner picks — this device takes over, or it joins that one
         setState(() {
-          _access = null;
+          _access = access;
           _needMfa = false;
           _needPin = false;
-          _password.clear();
-          _showAddress = true;
+          _existingHub = hubName ?? 'another device';
         });
-        throw HubApiException(409, e.code, '${e.message}\nType your PIN in the password box and tap Sign in.');
+        return;
       }
       final cfg = HubHostConfig(cloudUrl: base, cloudDeviceToken: reg['deviceToken'] as String, branchId: reg['branchId'] as String,
           branchCode: reg['branchCode'] as String, licensePublicKey: reg['licensePublicKey'] as String);
@@ -186,10 +197,29 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
     }
   }
 
+  /// Make this device the main device in place of [_existingHub] (signed in already: no second password).
+  Future<void> _takeOver() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Make this the main device?'),
+        content: Text('"$_existingHub" stops being the main device. Its bills already taken are kept and still upload. '
+            'Other devices then join this one: email + PIN on the restaurant Wi-Fi.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+          FilledButton(key: const Key('confirm-take-over'), onPressed: () => Navigator.pop(c, true), child: const Text('Make main device')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _existingHub = null);
+    await _becomeHub(replace: true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = context.hp;
-    final ownerStep = _needMfa || _needPin;
+    final ownerStep = _needMfa || _needPin || _existingHub != null;
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -274,6 +304,20 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
                           ),
                         ],
                         const SizedBox(height: HPSpace.x2),
+                        if (_existingHub != null)
+                          _HubExistsChoice(
+                            hubName: _existingHub!,
+                            busy: _busy,
+                            onTakeOver: _takeOver,
+                            onJoin: () => setState(() {
+                              _existingHub = null;
+                              _access = null;
+                              _password.clear();
+                              _showAddress = true;
+                              _error = null;
+                            }),
+                          )
+                        else
                         PrimaryButton(
                           key: const Key('setup-sign-in'),
                           label: _needPin ? 'Save PIN and continue' : (_needMfa ? 'Verify' : 'Sign in'),
@@ -320,6 +364,34 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The restaurant already has a main device: this device takes over (reinstalled / new phone), or joins it with the PIN.
+class _HubExistsChoice extends StatelessWidget {
+  const _HubExistsChoice({required this.hubName, required this.busy, required this.onTakeOver, required this.onJoin});
+  final String hubName;
+  final bool busy;
+  final VoidCallback onTakeOver, onJoin;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.hp;
+    return Container(
+      key: const Key('hub-exists'),
+      padding: const EdgeInsets.all(HPSpace.md),
+      decoration: BoxDecoration(color: HPColors.saffron.withValues(alpha: .14), borderRadius: BorderRadius.circular(12)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text('Your restaurant already has a main device', style: HPType.titleCard(p.text)),
+        const SizedBox(height: 2),
+        Text('"$hubName" is the main device now. Reinstalled the app, or moving to a new phone? Make this one the main '
+            'device. Otherwise join "$hubName" with your PIN on the restaurant Wi-Fi.', style: HPType.body(p.muted)),
+        const SizedBox(height: HPSpace.md),
+        PrimaryButton(key: const Key('take-over-hub'), label: 'Make this the main device', icon: Icons.star_rounded, busy: busy, onPressed: onTakeOver),
+        const SizedBox(height: HPSpace.sm),
+        OutlinedButton.icon(key: const Key('join-instead'), onPressed: busy ? null : onJoin, icon: const Icon(Icons.wifi_rounded), label: Text('Join "$hubName" with my PIN')),
+      ]),
     );
   }
 }

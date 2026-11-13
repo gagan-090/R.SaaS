@@ -432,3 +432,12 @@ Test: `flutter test` in apps/pos_app → **62 passed** (25 existing + 37 in `tes
   New end-to-end `apps/pos_app/test/e2e_owner_console_test.dart` against a real API (local Postgres, throwaway DB):
   owner PIN → main device → cloud → console signed in, menu / floors / staff load, renewal after logout, Restaurant
   Admin in, cashier refused — **passed**. Not tried on a real phone.
+
+## Fix: "This restaurant already has a main device" dead end on owner setup (2026-11-13)
+Owner reinstalled the POS (or moved phones) and signed in with the password: the cloud still had the old main device,
+so setup stopped with an error that sent them to the web console. Now setup shows a choice instead:
+"Make this the main device" (confirm → `register-hub` with `replace: true`, same sign-in, no second password; the old
+device keeps uploading its bills) or "Join "<name>" with my PIN". Setup cloud calls wait 60 s (sleeping server).
+Tests: `flutter analyze` no issues; `flutter test` (pos_app) **91 passed, 5 skipped** incl. new
+`test/setup_take_over_test.dart` (phone size: take over, cancel, join instead). No API change.
+Release APK rebuilt: `release/2026-11-13/BhojMitra-POS-android.apk` (API_BASE_URL=https://rsaas-api.onrender.com/api/v1).
