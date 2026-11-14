@@ -15,8 +15,11 @@ import '../../util/image_prep.dart';
 /// feature) it is the live floor view: tables coloured by state, and staff who take orders can mark a table
 /// reserved or out of use.
 class FloorEditor extends StatefulWidget {
-  const FloorEditor({super.key, required this.api, required this.floorId, required this.canEdit, required this.canSetStatus, required this.editorInPlan});
+  const FloorEditor({super.key, required this.api, required this.floorId, required this.canEdit, required this.canSetStatus, required this.editorInPlan, this.toolbarTrailing = const []});
   final ApiClient api;
+
+  /// Shown at the end of the search row (the floor's rename / delete buttons), so they share one line.
+  final List<Widget> toolbarTrailing;
   final String floorId;
   final bool canEdit, canSetStatus, editorInPlan;
   @override
@@ -37,6 +40,39 @@ class _FloorEditorState extends State<FloorEditor> {
   static const _grid = 10.0;
   double _lastAvailW = 0, _lastTargetH = 0;
   bool _hasFitted = false;
+  int _sizeRev = 0; // bumps when the size buttons change a table, so the typed size fields show the new value
+
+  static const _sizeStep = 10.0;
+
+  /// Bigger / smaller in [_sizeStep] cm steps, keeping a long table's proportions; chairs re-arranged around it.
+  void _resize(HPFloorTable t, double by) => _change(() {
+    final w = (t.width + by).clamp(30.0, 800.0);
+    final f = w / t.width;
+    t.width = w;
+    t.height = t.shape == 'rect' ? (t.height * f).clamp(30.0, 800.0) : w;
+    t.chairs = null;
+    _sizeRev++;
+  });
+
+  Widget _sizeStepper(HPPalette p, HPFloorTable t, {bool compact = false}) => Row(mainAxisSize: MainAxisSize.min, children: [
+    IconButton(
+      key: Key(compact ? 'quick-smaller' : 'table-smaller'),
+      tooltip: 'Smaller',
+      icon: const Icon(Icons.remove_circle_outline_rounded),
+      onPressed: t.width > 30 ? () => _resize(t, -_sizeStep) : null,
+    ),
+    Text(
+      t.shape == 'rect' ? '${t.width.round()} × ${t.height.round()} cm' : '${t.width.round()} cm',
+      key: Key(compact ? 'quick-size' : 'table-size'),
+      style: HPType.label(p.text),
+    ),
+    IconButton(
+      key: Key(compact ? 'quick-bigger' : 'table-bigger'),
+      tooltip: 'Bigger',
+      icon: const Icon(Icons.add_circle_outline_rounded),
+      onPressed: t.width < 800 ? () => _resize(t, _sizeStep) : null,
+    ),
+  ]);
 
   void _fitToView(double viewportW, double viewportH) {
     if (viewportW <= 0 || viewportH <= 0 || _w <= 0 || _h <= 0) return;
@@ -416,7 +452,7 @@ class _FloorEditorState extends State<FloorEditor> {
     );
 
     final searchBox = SizedBox(
-      width: 220,
+      key: const Key('find-table'),
       height: 42,
       child: TextField(
         decoration: InputDecoration(
@@ -532,7 +568,15 @@ class _FloorEditorState extends State<FloorEditor> {
       ),
     );
 
+    Widget zoomButton(Key? key, String tip, IconData icon, VoidCallback on) => IconButton(
+      key: key,
+      tooltip: tip,
+      icon: Icon(icon, size: 20),
+      style: IconButton.styleFrom(fixedSize: const Size(34, 40), minimumSize: const Size(34, 40), padding: EdgeInsets.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+      onPressed: on,
+    );
     final zoomControls = Container(
+      key: const Key('zoom-controls'),
       decoration: BoxDecoration(
         border: Border.all(color: p.outline),
         borderRadius: BorderRadius.circular(10),
@@ -540,59 +584,62 @@ class _FloorEditorState extends State<FloorEditor> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          IconButton(tooltip: 'Zoom in', icon: const Icon(Icons.zoom_in_rounded, size: 20), visualDensity: VisualDensity.compact, onPressed: () => _zoom(1.25)),
-          IconButton(tooltip: 'Zoom out', icon: const Icon(Icons.zoom_out_rounded, size: 20), visualDensity: VisualDensity.compact, onPressed: () => _zoom(.8)),
-          IconButton(tooltip: 'Reset view', icon: const Icon(Icons.fit_screen_rounded, size: 20), visualDensity: VisualDensity.compact, onPressed: () => setState(() => _fitToView(_lastAvailW, _lastTargetH))),
-          IconButton(key: const Key('reload-plan'), tooltip: 'Reload', icon: const Icon(Icons.refresh_rounded, size: 20), visualDensity: VisualDensity.compact, onPressed: _dirty ? _cancel : _load),
+          zoomButton(null, 'Zoom in', Icons.zoom_in_rounded, () => _zoom(1.25)),
+          zoomButton(null, 'Zoom out', Icons.zoom_out_rounded, () => _zoom(.8)),
+          zoomButton(null, 'Reset view', Icons.fit_screen_rounded, () => setState(() => _fitToView(_lastAvailW, _lastTargetH))),
+          zoomButton(const Key('reload-plan'), 'Reload', Icons.refresh_rounded, _dirty ? _cancel : _load),
         ],
       ),
     );
 
-    final actions = Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, children: [
+    final actions = Row(children: [
         if (widget.canEdit && widget.editorInPlan && !_editing)
-          PrimaryButton(
-            key: const Key('edit-plan'),
-            label: 'Edit floor plan',
-            icon: Icons.edit_outlined,
-            height: 42,
-            onPressed: () => setState(() => _editing = true),
+          Expanded(
+            child: PrimaryButton(
+              key: const Key('edit-plan'),
+              label: 'Edit floor plan',
+              icon: Icons.edit_outlined,
+              height: 42,
+              onPressed: () => setState(() => _editing = true),
+            ),
           ),
         if (_editable) ...[
-          SecondaryButton(key: const Key('cancel-plan'), label: 'Cancel', height: 42, onPressed: _busy ? null : _cancel),
-          PrimaryButton(key: const Key('save-plan'), label: 'Save plan', busy: _busy, height: 42, onPressed: _dirty ? _save : null),
+          Expanded(child: SecondaryButton(key: const Key('cancel-plan'), label: 'Cancel', height: 42, onPressed: _busy ? null : _cancel)),
+          const SizedBox(width: HPSpace.sm),
+          Expanded(child: PrimaryButton(key: const Key('save-plan'), label: 'Save plan', busy: _busy, height: 42, onPressed: _dirty ? _save : null)),
         ],
       ],
     );
 
-    final topBar = Wrap(
-      alignment: WrapAlignment.spaceBetween,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: HPSpace.md,
-      runSpacing: HPSpace.sm,
+    // one line: search + the floor's rename / delete; one line: Edit floor plan (or Cancel / Save) + zoom;
+    // while editing, the drawing tools below
+    final topBar = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Wrap(
-          spacing: HPSpace.sm,
-          runSpacing: HPSpace.sm,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            searchBox,
-            if (_editable) ...[
+        Row(key: const Key('search-row'), children: [
+          Expanded(child: Align(alignment: Alignment.centerLeft, child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 360), child: searchBox))),
+          ...widget.toolbarTrailing,
+        ]),
+        const SizedBox(height: HPSpace.sm),
+        Row(key: const Key('plan-row'), children: [
+          Expanded(child: Align(alignment: Alignment.centerLeft, child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 340), child: actions))),
+          const SizedBox(width: HPSpace.sm),
+          zoomControls,
+        ]),
+        if (_editable) ...[
+          const SizedBox(height: HPSpace.sm),
+          Wrap(
+            spacing: HPSpace.sm,
+            runSpacing: HPSpace.sm,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
               addTableDropdown,
               imageMenu,
               FilterChip(key: const Key('snap'), label: const Text('Snap to grid'), selected: _snap, onSelected: (v) => setState(() => _snap = v)),
               FilterChip(key: const Key('chair-mode'), label: const Text('Move chairs'), selected: _chairMode, onSelected: (v) => setState(() => _chairMode = v)),
             ],
-          ],
-        ),
-        Wrap(
-          spacing: HPSpace.sm,
-          runSpacing: HPSpace.sm,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            zoomControls,
-            actions,
-          ],
-        ),
+          ),
+        ],
       ],
     );
 
@@ -624,6 +671,18 @@ class _FloorEditorState extends State<FloorEditor> {
         if (_editable)
           Padding(padding: const EdgeInsets.only(top: HPSpace.sm), child: Text('Drag a table to move it with all its chairs. Turn on Move chairs to adjust individual chairs on the selected table. Choose Save plan to keep your changes.', style: HPType.body(p.muted))),
         const SizedBox(height: HPSpace.sm),
+        // the selected table's size right above the plan (on a phone the full panel is below it)
+        if (_editable && _sel != null)
+          Container(
+            key: const Key('quick-size-bar'),
+            margin: const EdgeInsets.only(bottom: HPSpace.sm),
+            padding: const EdgeInsets.only(left: HPSpace.md),
+            decoration: BoxDecoration(color: p.raised, borderRadius: BorderRadius.circular(12), border: Border.all(color: p.outline)),
+            child: Row(children: [
+              Expanded(child: Text('Table ${_tables[_sel!].name} · size', style: HPType.label(p.muted), maxLines: 1, overflow: TextOverflow.ellipsis)),
+              _sizeStepper(p, _tables[_sel!], compact: true),
+            ]),
+          ),
         if (narrow) ...[
           canvas,
           const SizedBox(height: HPSpace.md),
@@ -755,11 +814,12 @@ class _FloorEditorState extends State<FloorEditor> {
           ],
         ),
         label('Size (cm)'),
+        Align(alignment: Alignment.centerLeft, child: _sizeStepper(p, t)),
         Row(
           children: [
             Expanded(
               child: _num(
-                'tw-${identityHashCode(t)}',
+                'tw-${identityHashCode(t)}-$_sizeRev',
                 t.shape == 'round' ? 'Diameter' : 'Width',
                 t.width,
                 30,
@@ -772,7 +832,7 @@ class _FloorEditorState extends State<FloorEditor> {
             ),
             if (t.shape == 'rect') ...[
               const SizedBox(width: HPSpace.sm),
-              Expanded(child: _num('th-${identityHashCode(t)}', 'Depth', t.height, 30, 800, (v) => _change(() => t.height = v))),
+              Expanded(child: _num('th-${identityHashCode(t)}-$_sizeRev', 'Depth', t.height, 30, 800, (v) => _change(() => t.height = v))),
             ],
           ],
         ),

@@ -64,8 +64,8 @@ class MoreScreen extends ConsumerWidget {
                 child: ListTile(
                   key: const Key('more-switch-user'),
                   leading: Container(width: 40, height: 40, decoration: BoxDecoration(color: p.danger.withValues(alpha: .12), borderRadius: BorderRadius.circular(12)), child: Icon(Icons.logout_rounded, color: p.danger)),
-                  title: Text('Switch user', style: HPType.label(p.text)),
-                  subtitle: Text('Sign out ${s.name} on this terminal', style: HPType.body(p.muted)),
+                  title: Text('Sign out', style: HPType.label(p.text)),
+                  subtitle: Text('${s.name} leaves this terminal', style: HPType.body(p.muted)),
                   onTap: () => switchUser(context, ref),
                 ),
               ),

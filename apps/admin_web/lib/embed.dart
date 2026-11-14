@@ -12,20 +12,26 @@ String? adminAssetPackage;
 
 /// Tells the console it is hosted: a "Back to …" bar on every page, including sign-in.
 class AdminHost extends InheritedWidget {
-  const AdminHost({super.key, required this.onExit, this.exitLabel = 'Back to POS', required super.child});
+  const AdminHost({super.key, required this.onExit, this.exitLabel = 'Back to POS', this.onSignOut, required super.child});
   final VoidCallback onExit;
   final String exitLabel;
+
+  /// Signs the person out of the host (POS: back to the PIN screen). Null: no Sign out inside the hosted console.
+  final VoidCallback? onSignOut;
   static AdminHost? maybeOf(BuildContext c) => c.dependOnInheritedWidgetOfExactType<AdminHost>();
   @override
-  bool updateShouldNotify(AdminHost old) => old.exitLabel != exitLabel;
+  bool updateShouldNotify(AdminHost old) => old.exitLabel != exitLabel || (old.onSignOut == null) != (onSignOut == null);
 }
 
 /// The full restaurant console inside the POS: same screens, same server checks as the web. One provider container per
 /// [userKey] for the app's lifetime, so closing and reopening keeps the person signed in; the refresh token is kept by
 /// the host ([initialSession] / [onSessionChanged]) — never shared between POS users.
 class EmbeddedAdminConsole extends StatefulWidget {
-  const EmbeddedAdminConsole({super.key, required this.userKey, required this.onExit, this.initialSession, this.onSessionChanged, this.renewSession, this.exitLabel = 'Back to POS', this.initialLocation});
+  const EmbeddedAdminConsole({super.key, required this.userKey, required this.onExit, this.initialSession, this.onSessionChanged, this.renewSession, this.exitLabel = 'Back to POS', this.initialLocation, this.onSignOut});
   final String userKey;
+
+  /// Sign out of the host app (see [AdminHost.onSignOut]); the console's own session is ended too.
+  final VoidCallback? onSignOut;
 
   /// A fresh refresh token from the host (POS: through the main device) when the console's own one stops working, so
   /// the person is not sent to the sign-in page. Null: the console's normal sign-in (two-step verification on).
@@ -92,7 +98,8 @@ class _EmbeddedAdminConsoleState extends State<EmbeddedAdminConsole> {
         ]));
     // reopened after the console lost its sign-in (expired, or it was showing the sign-in page): sign in again with
     // the session the host just brought, instead of showing the sign-in page
-    if (existed && fresh != null) _container.read(authProvider.notifier).resume();
+    // (after this build: the sign-in state must not change while the tree is being built)
+    if (existed && fresh != null) Future.microtask(() => _container.read(authProvider.notifier).resume());
     final loc = widget.initialLocation;
     if (loc != null) WidgetsBinding.instance.addPostFrameCallback((_) => _container.read(routerProvider).go(loc));
   }
@@ -103,6 +110,7 @@ class _EmbeddedAdminConsoleState extends State<EmbeddedAdminConsole> {
     return AdminHost(
       onExit: widget.onExit,
       exitLabel: widget.exitLabel,
+      onSignOut: widget.onSignOut,
       child: UncontrolledProviderScope(container: _container, child: const AdminApp()),
     );
   }
@@ -135,9 +143,30 @@ class AdminHostBar extends StatelessWidget {
                 child: Text('OWNER CONSOLE', style: HPType.overline(p.muted), maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right),
               ),
             ),
+            if (host.onSignOut != null)
+              // very small phones / large text: shrinks rather than pushing Back off the bar
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Consumer(builder: (c, ref, _) => TextButton.icon(
+                    key: const Key('admin-host-sign-out'),
+                    onPressed: () => signOutOfHost(host, ref),
+                    icon: const Icon(Icons.logout_rounded, size: 18),
+                    label: const Text('Sign out'),
+                  )),
+                ),
+              ),
           ]),
         ),
       ),
     );
   }
+}
+
+/// Hosted console's Sign out: leaves the host (POS: back to the PIN screen) and ends the console's own session, so the
+/// next person to open it gets a fresh one.
+void signOutOfHost(AdminHost host, WidgetRef ref) {
+  final auth = ref.read(authProvider.notifier);
+  host.onSignOut!();
+  auth.logout().catchError((_) {});
 }

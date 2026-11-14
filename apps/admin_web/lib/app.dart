@@ -283,12 +283,12 @@ class ConsoleShell extends ConsumerWidget {
                         Text('${me.me['email'] ?? ''}', style: HPType.body(_onSidebar(p).withValues(alpha: .7)).copyWith(fontSize: 12), overflow: TextOverflow.ellipsis),
                       ]),
                     ),
-                    // inside the POS the console follows the POS sign-in: leave with "Back to POS" / Switch user there
-                    if (AdminHost.maybeOf(context) == null)
+                    // inside the POS, Sign out leaves the POS sign-in too (back to the PIN screen)
+                    if (AdminHost.maybeOf(context) case final host when host == null || host.onSignOut != null)
                     IconButton(
                       key: const Key('sign-out'),
                       tooltip: 'Sign out',
-                      onPressed: () => ref.read(authProvider.notifier).logout(),
+                      onPressed: () => host == null ? ref.read(authProvider.notifier).logout() : signOutOfHost(host, ref),
                       icon: Icon(Icons.logout_rounded, color: _onSidebar(p), size: 20),
                     ),
                   ]),

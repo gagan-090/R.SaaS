@@ -121,7 +121,17 @@ class AuthNotifier extends Notifier<AuthState> with ChangeNotifier {
   /// Called once the admin has saved their recovery codes.
   Future<void> finishEnrollment() => _loadMe();
 
-  Future<void> _loadMe() async => _set(SignedIn(await _api.me()));
+  Future<void> _loadMe() async {
+    final me = await _api.me();
+    // an older server's /me has no plan: the staff limit tells whether the plan is for the owner alone
+    if (me['type'] == 'user' && me['plan'] == null && ((me['permissions'] as List?) ?? const []).contains('staff.read')) {
+      try {
+        final l = await _api.staffLimits();
+        if (l['employeeLimit'] == 0) me['plan'] = {'limits': {'staffPerBranch': 0}};
+      } catch (_) {}
+    }
+    _set(SignedIn(me));
+  }
 
   /// Re-reads who is signed in (after a PIN change, a plan change …).
   Future<void> refresh() => _loadMe();

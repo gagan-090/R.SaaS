@@ -142,6 +142,19 @@ class _TablesScreenState extends ConsumerState<TablesScreen> {
       ..sort((a, b) => (int.tryParse('${a['name']}') ?? 999).compareTo(int.tryParse('${b['name']}') ?? 999));
     final total = _floors!.fold<int>(0, (s, f) => s + (f['tables'] as List).length);
     final seats = _floors!.fold<int>(0, (s, f) => s + (f['tables'] as List).cast<Json>().fold<int>(0, (x, t) => x + (t['seats'] as int)));
+    List<Widget> floorButtons(Json floor) => [
+      if (edit) ...[
+        IconButton(key: const Key('rename-floor'), tooltip: 'Rename floor', icon: const Icon(Icons.edit_outlined), onPressed: () async {
+          final n = await _ask('Rename floor', 'Name', initial: '${floor['name']}');
+          if (n != null && n.isNotEmpty) await _run(() => _api.updateFloor(floor['id'] as String, {'name': n}), 'Floor renamed');
+        }),
+        IconButton(key: const Key('delete-floor'), tooltip: 'Delete floor', icon: const Icon(Icons.delete_outline_rounded), onPressed: () async {
+          if (await confirm(context, title: 'Delete ${floor['name']}?', message: 'Only floors without tables can be deleted.')) {
+            await _run(() => _api.deleteFloor(floor['id'] as String), 'Floor deleted');
+          }
+        }),
+      ],
+    ];
     return PageFrame(
       title: 'Floors & tables',
       subtitle: '$total tables · $seats seats · the POS table map shows exactly this',
@@ -175,7 +188,7 @@ class _TablesScreenState extends ConsumerState<TablesScreen> {
               if (floor != null)
                 Card(
                   child: Padding(
-                    padding: const EdgeInsets.all(HPSpace.lg),
+                    padding: EdgeInsets.all(MediaQuery.sizeOf(context).width < 600 ? HPSpace.md : HPSpace.lg),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                       Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, crossAxisAlignment: WrapCrossAlignment.center, alignment: WrapAlignment.spaceBetween, children: [
                         // the name once: here for a single floor, else on its tab above
@@ -187,17 +200,8 @@ class _TablesScreenState extends ConsumerState<TablesScreen> {
                           selected: {_plan},
                           onSelectionChanged: (v) => setState(() => _plan = v.first),
                         ),
-                        if (edit) ...[
-                          IconButton(tooltip: 'Rename floor', icon: const Icon(Icons.edit_outlined), onPressed: () async {
-                            final n = await _ask('Rename floor', 'Name', initial: '${floor['name']}');
-                            if (n != null && n.isNotEmpty) await _run(() => _api.updateFloor(floor['id'] as String, {'name': n}), 'Floor renamed');
-                          }),
-                          IconButton(tooltip: 'Delete floor', icon: const Icon(Icons.delete_outline_rounded), onPressed: () async {
-                            if (await confirm(context, title: 'Delete ${floor['name']}?', message: 'Only floors without tables can be deleted.')) {
-                              await _run(() => _api.deleteFloor(floor['id'] as String), 'Floor deleted');
-                            }
-                          }),
-                        ],
+                        // on the floor plan they sit on the search line instead
+                        if (!_plan) ...floorButtons(floor),
                       ]),
                       const SizedBox(height: HPSpace.lg),
                       if (_plan)
@@ -208,6 +212,7 @@ class _TablesScreenState extends ConsumerState<TablesScreen> {
                           canEdit: edit,
                           canSetStatus: ref.read(authProvider) is SignedIn && (ref.read(authProvider) as SignedIn).can('order.write'),
                           editorInPlan: _features.contains('floor.editor'),
+                          toolbarTrailing: floorButtons(floor),
                         )
                       else
                       LayoutBuilder(builder: (c, box) {

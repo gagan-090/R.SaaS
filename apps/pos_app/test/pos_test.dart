@@ -681,8 +681,7 @@ void main() {
     expect(hub.consoleSessions, 1);
     expect(lastCloud.calls, containsAll(['POST /auth/refresh', 'GET /me']));
     expect(store.reads, isEmpty); // nothing kept on the device for this path
-    // inside the POS the console has no "sign out" (that would leave a sign-in page behind); Back to POS instead
-    expect(find.byKey(const Key('sign-out')), findsNothing);
+    expect(find.byKey(const Key('admin-host-sign-out')), findsOneWidget); // Sign out is there too, next to Back to POS
     await exitConsole(t);
     expect(find.byKey(const Key('owner-console')), findsNothing);
     // reopening (Tables shortcut) in the same app run: no new session, straight in
@@ -691,6 +690,27 @@ void main() {
     expect(find.byKey(const Key('owner-console')), findsOneWidget);
     expect(consoleSignInPage(), isFalse);
     expect(hub.consoleCalls, 1);
+    await exitConsole(t);
+  });
+
+  testWidgets('Sign out from the owner console: back to "Who is working?", console session ended; next open gets a new one', (t) async {
+    final hub = await ownerOnMore(t);
+    expect(find.text('Sign out'), findsOneWidget); // the POS's own Sign out on More
+    await tapConsole(t);
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('admin-host-sign-out')));
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('owner-console')), findsNothing);
+    expect(find.text('Who is working?'), findsOneWidget);
+    expect(lastCloud.calls, contains('POST /auth/logout'));
+    expect(EmbeddedAdminConsole.isSignedInFor('u-own'), isFalse);
+    // the owner signs in again with the PIN: the console opens signed in through the main device, no sign-in page
+    await signIn(t, 'Owner', '9999');
+    await nav(t, 'More');
+    await tapConsole(t);
+    await t.pumpAndSettle();
+    expect(consoleSignInPage(), isFalse);
+    expect(hub.consoleCalls, 2);
     await exitConsole(t);
   });
 

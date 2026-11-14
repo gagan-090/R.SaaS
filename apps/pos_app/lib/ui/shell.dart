@@ -115,7 +115,7 @@ class _UserButton extends ConsumerWidget {
     final p = context.hp;
     return PopupMenuButton<String>(
       key: const Key('user-menu'),
-      tooltip: '${session.name} — switch user',
+      tooltip: '${session.name} — sign out',
       offset: const Offset(0, 52),
       onSelected: (v) {
         if (v == 'switch') switchUser(context, ref);
@@ -130,7 +130,7 @@ class _UserButton extends ConsumerWidget {
           ),
         ),
         const PopupMenuDivider(),
-        const PopupMenuItem(value: 'switch', key: Key('switch-user'), child: ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.logout_rounded), title: Text('Switch user'))),
+        const PopupMenuItem(value: 'switch', key: Key('switch-user'), child: ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.logout_rounded), title: Text('Sign out'))),
       ],
       child: Padding(
         padding: const EdgeInsets.all(HPSpace.xs),

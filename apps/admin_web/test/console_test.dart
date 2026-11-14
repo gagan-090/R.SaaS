@@ -44,6 +44,7 @@ class FakeRestaurantApi {
   Map<String, dynamic>? importJob;
   List<String> features = ['menu', 'tables', 'roles.extended', 'kds', 'floor.editor'];
   Map<String, dynamic> limits = {}; // plan limits (e.g. Standard: staffPerBranch 0, floorsPerBranch 1)
+  bool meHasPlan = true; // false: a server from before /me returned the plan
   int _n = 0;
   String id(String p) => '$p-${++_n}';
 
@@ -118,7 +119,7 @@ class FakeRestaurantApi {
           case ('POST', '/auth/login'):
             out = {'status': 'ok', 'accessToken': 'a', 'refreshToken': 'r', 'expiresIn': 900};
           case ('GET', '/me'):
-            out = {...me, 'plan': {'state': 'active', 'features': features, 'limits': limits}};
+            out = {...me, if (meHasPlan) 'plan': {'state': 'active', 'features': features, 'limits': limits}};
           case ('GET', '/tenant/overview'):
             out = overview();
           case ('GET', '/tenant/branding'):
@@ -694,6 +695,70 @@ void main() {
     await t.pumpAndSettle();
     expect(find.byType(MyPinDialog), findsOneWidget);
     expect(api.calls.where((r) => r.url.path.endsWith('/staff')), isEmpty);
+  });
+
+  testWidgets('owner-only plan on a server whose /me has no plan: Staff still hidden (from the staff limit)', (t) async {
+    await start(t, size: phone, setup: (f) => f
+      ..meHasPlan = false
+      ..limits = {'staffPerBranch': 0, 'floorsPerBranch': 1, 'devicesPerBranch': 1});
+    await t.tap(find.byKey(const Key('open-nav')));
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('nav-Staff')), findsNothing);
+    expect(find.byKey(const Key('nav-Roles')), findsNothing);
+    expect(find.byKey(const Key('nav-Menu')), findsOneWidget);
+  });
+
+  testWidgets('phone floor plan: search + rename + delete on one line, Edit floor plan + zoom on one line; tables resize', (t) async {
+    t.view.physicalSize = const Size(360, 780); // a small Android phone, as in the report
+    final api = await start(t, size: const Size(360, 780), setup: (f) => f.floors.add({'id': 'f1', 'name': 'DineRoom', 'branchId': 'b1', 'sortOrder': 0, 'version': 1, 'tables': [
+      {'id': 't1', 'name': '1', 'seats': 4, 'floorId': 'f1', 'shape': 'square', 'x': 150, 'y': 150, 'width': 80, 'height': 80, 'rotation': 0, 'chairs': null, 'status': 'available'},
+      {'id': 't5', 'name': '5', 'seats': 10, 'floorId': 'f1', 'shape': 'rect', 'x': 500, 'y': 300, 'width': 200, 'height': 80, 'rotation': 0, 'chairs': null, 'status': 'available'},
+    ]}));
+    await t.tap(find.byKey(const Key('open-nav')));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('nav-Floors & tables')));
+    await t.pumpAndSettle();
+    expect(t.takeException(), isNull);
+    double midY(Key k) => t.getCenter(find.byKey(k)).dy;
+    expect(midY(const Key('rename-floor')), moreOrLessEquals(midY(const Key('find-table')), epsilon: 1));
+    expect(midY(const Key('delete-floor')), moreOrLessEquals(midY(const Key('find-table')), epsilon: 1));
+    expect(midY(const Key('zoom-controls')), moreOrLessEquals(midY(const Key('edit-plan')), epsilon: 1));
+    expect(t.getRect(find.byKey(const Key('zoom-controls'))).right, lessThanOrEqualTo(360));
+
+    await t.tap(find.byKey(const Key('edit-plan')));
+    await t.pumpAndSettle();
+    expect(midY(const Key('zoom-controls')), moreOrLessEquals(midY(const Key('save-plan')), epsilon: 1)); // Cancel / Save + zoom
+    expect(find.byKey(const Key('quick-size-bar')), findsNothing); // no table chosen yet
+    await t.ensureVisible(find.byKey(const Key('table-1')));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('table-1')));
+    await t.pumpAndSettle();
+    await t.ensureVisible(find.byKey(const Key('quick-size-bar')));
+    await t.pumpAndSettle();
+    expect(find.text('80 cm'), findsWidgets);
+    await t.tap(find.byKey(const Key('quick-bigger')));
+    await t.tap(find.byKey(const Key('quick-bigger')));
+    await t.pumpAndSettle();
+    expect(t.widget<Text>(find.byKey(const Key('quick-size'))).data, '100 cm');
+    // the long table grows in proportion, from the panel's buttons
+    await t.ensureVisible(find.byKey(const Key('table-5')));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('table-5')));
+    await t.pumpAndSettle();
+    await t.ensureVisible(find.byKey(const Key('table-smaller')));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('table-smaller')));
+    await t.pumpAndSettle();
+    expect(t.widget<Text>(find.byKey(const Key('table-size'))).data, '190 × 76 cm');
+    expect(find.descendant(of: find.byType(TextFormField), matching: find.text('190')), findsOneWidget); // the typed field follows
+    await t.ensureVisible(find.byKey(const Key('save-plan')));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('save-plan')));
+    await t.pumpAndSettle();
+    final sent = (api.last('PUT', '/layout')['tables'] as List).cast<Map>();
+    final one = sent.firstWhere((x) => x['name'] == '1'), five = sent.firstWhere((x) => x['name'] == '5');
+    expect((one['width'], one['height']), (100, 100));
+    expect((five['width'], five['height']), (190, 76));
   });
 
   testWidgets('a plan with employees keeps Staff in the menu and no PIN card in Settings', (t) async {

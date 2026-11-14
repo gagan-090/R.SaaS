@@ -7,6 +7,7 @@ import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 import '../hub/hub_api.dart';
 import '../state/app_state.dart';
 import '../ui/common.dart';
+import '../ui/shell.dart' show switchUser;
 
 /// Where the owner console keeps its sign-in between app starts: per POS person, in the device's secure storage.
 abstract class ConsoleSessionStore {
@@ -76,6 +77,11 @@ Future<void> openOwnerConsole(BuildContext context, WidgetRef ref, {String? loca
       // a console session that runs out while open is renewed the same way, never by the sign-in page
       renewSession: mfa ? null : () => _consoleSession(hub),
       onExit: () => Navigator.of(c).pop(),
+      // Sign out from the console: off the console and off this terminal, back to "Who is working?"
+      onSignOut: () {
+        Navigator.of(c).pop();
+        if (context.mounted) switchUser(context, ref);
+      },
     ),
   ));
 }

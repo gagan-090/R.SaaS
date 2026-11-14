@@ -478,3 +478,15 @@ start-up read threw and the POS showed "Something went wrong" with no way out. N
 the device opens on the setup sign-in (owner: "Make this the main device"); writes retry once after wiping.
 `android:allowBackup="false"` so reinstalls start clean. Tests: new `test/secure_store_test.dart` (fails on the old
 code, passes now); pos_app **96 passed, 5 skipped**.
+
+## Floors toolbar on phones, table size, Sign out in the POS, Staff hidden on Standard (2026-11-14)
+- Floor plan: search + rename/delete floor on one line; Edit floor plan (or Cancel/Save) + zoom box on one line (fits a
+  360 dp phone); drawing tools below while editing.
+- Table size: Bigger / Smaller (10 cm steps, long tables keep proportions, chairs re-arranged) in a bar above the plan
+  for the selected table and in the table panel; typed size fields follow.
+- POS: "Sign out" (was "Switch user") on More and the user menu; the owner console inside the POS has Sign out in its
+  top bar and sidebar — leaves the console, ends its session, back to "Who is working?".
+- Console: Staff/Roles hidden on owner-only plans also when the server's /me has no plan yet (falls back to
+  /staff/limits employeeLimit 0). Reopening the console after a sign-out no longer changes state during build.
+- Tests: admin_web 154 passed (8 skipped); pos_app 97 passed (5 skipped). New: phone floor toolbar rows + resize
+  saved, Staff hidden with an old /me, console Sign out back to the PIN screen and next open signed in.
