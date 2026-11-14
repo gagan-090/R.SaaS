@@ -471,3 +471,10 @@ saves layouts); admin_web **150 passed, 8 skipped**; pos_app **93 passed, 5 skip
 - Standard (owner only): Staff and Roles removed from the console menu and Staff & Team from the POS More screen;
   the owner's POS PIN is set under Settings → Your POS PIN. `/me` returns `plan`.
 Tests: api **168 passed**; admin_web **152 passed, 8 skipped**; pos_app **93 passed, 5 skipped**.
+
+## Fix: POS start-up crash "PlatformException … BadPaddingException … BAD_DECRYPT" (2026-11-14)
+Android restored the app's encrypted setup from a backup after a reinstall, without the key that decrypts it; the
+start-up read threw and the POS showed "Something went wrong" with no way out. Now unreadable saved data is wiped and
+the device opens on the setup sign-in (owner: "Make this the main device"); writes retry once after wiping.
+`android:allowBackup="false"` so reinstalls start clean. Tests: new `test/secure_store_test.dart` (fails on the old
+code, passes now); pos_app **96 passed, 5 skipped**.

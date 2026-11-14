@@ -51,16 +51,41 @@ abstract class DeviceStore {
 }
 
 class SecureDeviceStore implements DeviceStore {
+  SecureDeviceStore([FlutterSecureStorage? storage]) : _s = storage ?? const FlutterSecureStorage();
   static const _key = 'rsaas.device.setup';
-  final _s = const FlutterSecureStorage();
+  final FlutterSecureStorage _s;
+
+  /// Saved setup that can no longer be decrypted (Android lost the key — e.g. the app was reinstalled and old data came
+  /// back from a backup) is wiped: the device starts at the setup sign-in instead of an error screen it cannot leave.
   @override
   Future<DeviceSetup?> read() async {
-    final v = await _s.read(key: _key);
-    return v == null ? null : DeviceSetup.fromJson(jsonDecode(v) as Map<String, dynamic>);
+    try {
+      final v = await _s.read(key: _key);
+      return v == null ? null : DeviceSetup.fromJson(jsonDecode(v) as Map<String, dynamic>);
+    } catch (_) {
+      await _wipe();
+      return null;
+    }
   }
 
   @override
-  Future<void> write(DeviceSetup? s) => s == null ? _s.delete(key: _key) : _s.write(key: _key, value: jsonEncode(s.toJson()));
+  Future<void> write(DeviceSetup? s) async {
+    Future<void> once() => s == null ? _s.delete(key: _key) : _s.write(key: _key, value: jsonEncode(s.toJson()));
+    try {
+      await once();
+    } catch (_) {
+      await _wipe(); // same unreadable leftovers: clear them and save again
+      await once();
+    }
+  }
+
+  Future<void> _wipe() async {
+    try {
+      await _s.deleteAll();
+    } catch (_) {
+      // nothing more to do: the next write starts a fresh store
+    }
+  }
 }
 
 class MemoryDeviceStore implements DeviceStore {
