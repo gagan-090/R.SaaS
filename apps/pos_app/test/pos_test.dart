@@ -5,6 +5,7 @@ import 'package:rsaas_admin_web/embed.dart';
 import 'package:rsaas_pos/app.dart';
 import 'package:rsaas_pos/hub/hub_api.dart';
 import 'package:rsaas_pos/screens/admin_screens.dart';
+import 'package:rsaas_pos/screens/bill_screens.dart' show showInvoicePdf;
 import 'package:rsaas_pos/screens/owner_console.dart';
 import 'package:rsaas_pos/screens/setup_screens.dart';
 import 'package:rsaas_pos/state/app_state.dart';
@@ -397,6 +398,29 @@ void main() {
       expect(find.byKey(const Key('kot-1-served')), findsOneWidget);
       expect(find.byKey(const Key('kot-1-to-served')), findsNothing);
       expect(find.byKey(const Key('bill-pay')), findsOneWidget); // and bills it as the cashier
+
+      // the invoice: generated, seen and printed BEFORE the money is collected (no bill printer: the phone's preview)
+      final shown = <String>[], phonePreview = showInvoicePdf;
+      showInvoicePdf = (pdf, name) async => shown.add('$name|${String.fromCharCodes(pdf)}');
+      addTearDown(() => showInvoicePdf = phonePreview);
+      await t.tap(find.byKey(const Key('bill-pay')));
+      await t.pumpAndSettle();
+      await scrollTo(t, find.byKey(const Key('generate-bill')));
+      await t.tap(find.byKey(const Key('generate-bill')));
+      await t.pumpAndSettle();
+      expect(hub.bills$.values.single['status'], isNot('paid'));
+      await scrollTo(t, find.byKey(const Key('bill-print')));
+      await t.tap(find.byKey(const Key('bill-print')));
+      await t.pumpAndSettle();
+      final bill = hub.bills$.values.single;
+      expect(shown, ['Bill ${bill['invoice_no']}|%PDF-1.5 ${bill['id']}']);
+      expect(bill['status'], isNot('paid')); // still to collect
+      // with a bill printer set up the same button prints on it
+      hub.printerSettings = {'bill': {'host': '192.168.1.50'}};
+      await t.tap(find.byKey(const Key('bill-print')));
+      await t.pumpAndSettle();
+      expect(hub.printed, [bill['id']]);
+      expect(shown, hasLength(1));
     });
 
     testWidgets('[$tag] IT admin sets the printer and test-prints; owner reprints a DUPLICATE and adjusts a paid bill', (t) async {
@@ -421,9 +445,13 @@ void main() {
       await scrollTo(t, find.widgetWithText(PrimaryButton, 'Pay CASH'));
       await t.tap(find.widgetWithText(PrimaryButton, 'Pay CASH'));
       await t.pumpAndSettle();
+      // no bill printer yet: the bill opens on the phone to print / share from there
+      final opened = <String>[], phonePreview = showInvoicePdf;
+      showInvoicePdf = (pdf, name) async => opened.add(name);
+      addTearDown(() => showInvoicePdf = phonePreview);
       await t.tap(find.byKey(const Key('paid-print')));
       await t.pumpAndSettle();
-      expect(find.text('No bill printer set up (More → Printers)'), findsOneWidget);
+      expect(opened, ['Bill ${hub.bills$.values.single['invoice_no']}']);
       await t.tap(find.widgetWithText(PrimaryButton, 'Back to tables'));
       await t.pumpAndSettle();
       await switchUser(t);

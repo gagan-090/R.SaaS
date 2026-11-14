@@ -500,3 +500,9 @@ code, passes now); pos_app **96 passed, 5 skipped**.
   opens tables as themselves (no waiter picker). Bill + print were already the owner's.
 - Tests: hub_server 54 passed (new: Standard owner order → KOT → ready → served → bill → print);
   pos_app 100 passed (5 skipped) (new: owner on Standard, phone and tablet).
+
+## See and print the bill before collecting payment (2026-11-14)
+- Payment screen: "View / print bill" — prints on the bill printer if set up, otherwise opens the invoice (the hub's
+  PDF) in the phone's print preview to see, print, save or share. Same for "Print bill" after payment.
+- Tests: pos_app 100 passed (5 skipped); new steps in the Standard owner flow (invoice seen before paying, then printed
+  on a printer once one is set up).

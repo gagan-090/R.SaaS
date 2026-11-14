@@ -248,7 +248,7 @@ class FakeHubApi extends HubApi {
   final printed = <String>[];
   @override
   Future<Json> printBill(String billId, {bool ifPrinter = false}) async {
-    if (printerSettings['bill'] == null) return ifPrinter ? {'status': 'no_printer'} : {'status': 'pdf', 'error': 'no_printer'};
+    if (printerSettings['bill'] == null) return ifPrinter ? {'status': 'no_printer'} : {'status': 'pdf', 'error': 'no_printer', 'pdf': Uint8List.fromList('%PDF-1.5 $billId'.codeUnits)};
     printed.add(billId);
     return {'status': 'printed', 'copyNo': printed.where((b) => b == billId).length};
   }

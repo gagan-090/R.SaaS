@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:printing/printing.dart';
 import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 
 import '../hub/hub_api.dart';
@@ -212,7 +213,7 @@ class _BillScreenState extends ConsumerState<BillScreen> {
             ]),
           ),
         const SizedBox(height: HPSpace.x2),
-        SecondaryButton(key: const Key('paid-print'), label: 'Print bill', icon: Icons.print_rounded, onPressed: () => printBillWithFeedback(context, _api, _bill!['id'] as String)),
+        SecondaryButton(key: const Key('paid-print'), label: 'Print bill', icon: Icons.print_rounded, onPressed: () => printBillWithFeedback(context, _api, _bill!['id'] as String, invoiceNo: '${_bill!['invoice_no'] ?? ''}')),
         const SizedBox(height: HPSpace.sm),
         PrimaryButton(label: 'Back to tables', icon: Icons.table_restaurant_rounded, onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst)),
       ]);
@@ -236,6 +237,15 @@ class _BillScreenState extends ConsumerState<BillScreen> {
       ]);
 
   Widget _paymentPanel(HPPalette p) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        // see and print the invoice before handing it over and collecting the money
+        SecondaryButton(
+          key: const Key('bill-print'),
+          label: 'View / print bill',
+          icon: Icons.print_rounded,
+          height: 52,
+          onPressed: () => printBillWithFeedback(context, _api, _bill!['id'] as String, invoiceNo: '${_bill!['invoice_no'] ?? ''}'),
+        ),
+        const SizedBox(height: HPSpace.lg),
         Text('STILL TO COLLECT', style: HPType.overline(p.muted)),
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 200),
@@ -453,7 +463,12 @@ Future<void> showBillActions(BuildContext context, WidgetRef ref, Json bill) asy
   await _adjust(context, api, s, bill);
 }
 
-Future<void> printBillWithFeedback(BuildContext context, HubApi api, String billId, {bool ifPrinter = false}) async {
+/// Shows an invoice PDF with the phone's own print preview (see it, then print to any printer the phone knows, or
+/// save / share it). Tests replace it.
+@visibleForTesting
+Future<void> Function(Uint8List pdf, String name) showInvoicePdf = (pdf, name) => Printing.layoutPdf(onLayout: (_) async => pdf, name: name);
+
+Future<void> printBillWithFeedback(BuildContext context, HubApi api, String billId, {bool ifPrinter = false, String? invoiceNo}) async {
   try {
     final r = await api.printBill(billId, ifPrinter: ifPrinter);
     if (!context.mounted) return;
@@ -463,6 +478,13 @@ Future<void> printBillWithFeedback(BuildContext context, HubApi api, String bill
       case 'no_printer':
         break; // auto-print after billing: nothing set up, stay quiet
       default:
+        // no bill printer (or it is off): open the invoice on the phone to see it and print from there
+        final pdf = r['pdf'];
+        if (pdf is Uint8List && pdf.isNotEmpty) {
+          if (r['error'] == 'printer_unreachable') toast(context, 'Bill printer not reachable — opening the bill on this phone', error: true);
+          await showInvoicePdf(pdf, 'Bill ${invoiceNo ?? ''}'.trim());
+          return;
+        }
         toast(context, r['error'] == 'printer_unreachable' ? 'Printer not reachable — check it is on and on the same Wi-Fi' : 'No bill printer set up (More → Printers)', error: true);
     }
   } catch (e) {

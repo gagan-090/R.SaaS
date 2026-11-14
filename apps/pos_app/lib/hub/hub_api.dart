@@ -105,7 +105,7 @@ class HttpHubApi extends HubApi {
       throw HubApiException(0, 'hub_offline', 'Kitchen hub offline');
     }
     if ((res.headers['content-type'] ?? '').startsWith('application/pdf')) {
-      return {'status': 'pdf', 'error': res.headers['x-print-error'], 'copyNo': int.tryParse(res.headers['x-print-copy'] ?? ''), 'pdfBytes': res.bodyBytes.length};
+      return {'status': 'pdf', 'error': res.headers['x-print-error'], 'copyNo': int.tryParse(res.headers['x-print-copy'] ?? ''), 'pdfBytes': res.bodyBytes.length, 'pdf': res.bodyBytes};
     }
     final decoded = res.body.isEmpty ? const <String, dynamic>{} : jsonDecode(utf8.decode(res.bodyBytes)) as Json;
     if (res.statusCode >= 400) throw HubApiException(res.statusCode, '${decoded['code'] ?? 'error'}', '${decoded['message'] ?? 'Print failed'}');
