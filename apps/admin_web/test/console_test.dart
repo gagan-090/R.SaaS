@@ -819,13 +819,13 @@ void main() {
     final subtitle = t.getRect(find.textContaining('changes reach your terminals'));
     final search = t.getRect(find.byType(HPSearchField));
     final add = t.getRect(find.byKey(const Key('add-dish')));
-    final seed = t.getRect(find.byKey(const Key('seed-categories')));
+    final quick = t.getRect(find.widgetWithText(SecondaryButton, 'Quick add / paste'));
     expect(search.top, greaterThan(subtitle.bottom)); // nothing beside the subtitle
     expect(add.top, greaterThan(search.bottom));
-    expect(seed.top, greaterThan(add.bottom));
+    expect(quick.top, greaterThan(add.bottom));
     expect(search.width, closeTo(phone.width - 2 * HPSpace.lg, 1)); // full width
     expect(add.width, closeTo(search.width, 1));
-    expect(seed.left, closeTo(search.left, 1)); // lined up on the left, not floating right
+    expect(quick.left, closeTo(search.left, 1)); // lined up on the left, not floating right
     expect(t.takeException(), isNull);
   });
 
@@ -1234,16 +1234,23 @@ void main() {
       expect(t.widget<PrimaryButton>(find.byKey(const Key('add-staff'))).onPressed, isNull);
     });
 
-    testWidgets('standard categories: the confirm button says "Add categories", not "Delete"', (t) async {
-      await start(t);
-      await go(t, 'Menu', size: desktop);
-      await t.tap(find.byKey(const Key('seed-categories')));
-      await t.pumpAndSettle();
-      expect(find.text('Add the standard categories?'), findsOneWidget);
-      expect(find.textContaining('Adds the 9 main categories: Beverages, Soups, Starters, Snacks & Fast Food, Main Course, Chinese, Indian Breads, Rice & Biryani, Desserts.'), findsOneWidget);
-      expect(find.widgetWithText(PrimaryButton, 'Add categories'), findsOneWidget);
-      expect(find.byType(DangerButton), findsNothing);
-      expect(find.text('Delete'), findsNothing);
+    testWidgets('phone menu: no "Add standard categories"; all 9 categories show at once (no sideways scroll)', (t) async {
+      await start(t, size: phone, setup: (f) {
+        f.cats.clear();
+        for (final (i, n) in ['Beverages', 'Soups', 'Starters', 'Snacks & Fast Food', 'Main Course', 'Chinese', 'Indian Breads', 'Rice & Biryani', 'Desserts'].indexed) {
+          f.cats.add({'id': 'c$i', 'name': n, 'sortOrder': (i + 1) * 10});
+        }
+      });
+      await go(t, 'Menu', size: phone);
+      expect(find.text('Add standard categories'), findsNothing);
+      final chips = t.getRect(find.byKey(const Key('category-chips')));
+      for (final n in ['All', 'Beverages', 'Soups', 'Starters', 'Snacks & Fast Food', 'Main Course', 'Chinese', 'Indian Breads', 'Rice & Biryani', 'Desserts']) {
+        final r = t.getRect(find.descendant(of: find.byKey(const Key('category-chips')), matching: find.text(n)));
+        expect(r.left, greaterThanOrEqualTo(0), reason: n);
+        expect(r.right, lessThanOrEqualTo(phone.width), reason: '$n is on screen, not scrolled away');
+        expect(chips.contains(r.center), isTrue, reason: n);
+      }
+      expect(t.takeException(), isNull);
     });
 
     testWidgets('a dish added under "Non-Veg Main Course" starts as non-veg', (t) async {

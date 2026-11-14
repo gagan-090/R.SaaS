@@ -23,7 +23,7 @@ const _palettes = [
   ['#D99A2B', '#8B4A2B', '#F2E4C2'], ['#F2B33D', '#F7D27A', '#E07A2E'], ['#EFE8D6', '#CFE3C2', '#6E9B4E'], ['#6E2A12', '#9C4520', '#E9C46A'],
 ];
 
-/// The 9 main menu categories the restaurant asked for ("Add standard categories" adds exactly these).
+/// The 9 main menu categories the restaurant asked for (every new restaurant starts with exactly these).
 const standardMenuCategories = [
   'Beverages', 'Soups', 'Starters', 'Snacks & Fast Food', 'Main Course', 'Chinese', 'Indian Breads', 'Rice & Biryani', 'Desserts',
 ];
@@ -320,22 +320,6 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     _taxes = (await _api.taxRules()).cast<Json>();
   }
 
-  Future<void> _seedCategories() async {
-    if (!await confirm(context,
-        title: 'Add the standard categories?',
-        message: 'Adds the 9 main categories: ${standardMenuCategories.join(', ')}. '
-            'Categories you already have are skipped, and nothing is deleted.',
-        confirmLabel: 'Add categories',
-        destructive: false)) {
-      return;
-    }
-    await _run(() async {
-      final r = await _api.seedCategories();
-      final created = r['created'] ?? 0;
-      if (mounted) showDone(context, created == 0 ? 'All standard categories are already on your menu' : 'Added $created standard categories');
-    });
-  }
-
   Future<void> _quickAdd() async {
     await _ensureTax();
     if (!mounted) return;
@@ -612,10 +596,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
             final done = await showDialog<bool>(barrierDismissible: false, context: context, builder: (_) => ImportDialog(api: _api, kind: 'menu'));
             if (done == true) await _load();
           }),
-        if (edit) ...[
-          SecondaryButton(key: const Key('seed-categories'), label: 'Add standard categories', icon: Icons.playlist_add_check_rounded, onPressed: _seedCategories),
-          SecondaryButton(label: 'Quick add / paste', onPressed: _quickAdd),
-        ],
+        // the 9 standard categories come with every new restaurant: no separate "Add standard categories" button
+        if (edit) SecondaryButton(label: 'Quick add / paste', onPressed: _quickAdd),
         PrimaryButton(key: const Key('add-dish'), label: 'Add dish', icon: Icons.add_rounded, height: 48, onPressed: () => _editItem()),
       ],
       child: narrow
@@ -835,26 +817,18 @@ class _CategoryList extends StatelessWidget {
     final p = context.hp;
     if (horizontal) {
       final current = selected == null ? null : cats.where((c) => c['id'] == selected).firstOrNull;
-      final chips = SizedBox(
-        height: 44,
-        child: ListView(scrollDirection: Axis.horizontal, children: [
-          Padding(padding: const EdgeInsets.only(right: HPSpace.sm), child: CategoryChip(label: 'All', count: _count(null), selected: selected == null, onTap: () => onSelect(null))),
-          for (final c in cats)
-            Padding(
-              padding: const EdgeInsets.only(right: HPSpace.sm),
-              child: GestureDetector(
-                onLongPress: canEdit ? () => onRename(c) : null,
-                child: CategoryChip(label: '${c['name']}', count: _count(c['id'] as String), selected: selected == c['id'], onTap: () => onSelect(c['id'] as String)),
-              ),
-            ),
-          if (canEdit) ActionChip(key: const Key('add-category'), avatar: const Icon(Icons.add_rounded, size: 18), label: const Text('Category'), onPressed: onAdd),
-          if (canEdit && onArrange != null)
-            Padding(
-              padding: const EdgeInsets.only(left: HPSpace.sm),
-              child: ActionChip(key: const Key('arrange-by-course'), avatar: const Icon(Icons.sort_rounded, size: 18), label: const Text('Arrange by course'), onPressed: onArrange),
-            ),
-        ]),
-      );
+      // every category in plain sight (rows that wrap), not hidden in a sideways scroll
+      final chips = Wrap(key: const Key('category-chips'), spacing: HPSpace.sm, runSpacing: HPSpace.sm, crossAxisAlignment: WrapCrossAlignment.center, children: [
+        CategoryChip(label: 'All', count: _count(null), selected: selected == null, onTap: () => onSelect(null)),
+        for (final c in cats)
+          GestureDetector(
+            onLongPress: canEdit ? () => onRename(c) : null,
+            child: CategoryChip(label: '${c['name']}', count: _count(c['id'] as String), selected: selected == c['id'], onTap: () => onSelect(c['id'] as String)),
+          ),
+        if (canEdit) ActionChip(key: const Key('add-category'), avatar: const Icon(Icons.add_rounded, size: 18), label: const Text('Category'), onPressed: onAdd),
+        if (canEdit && onArrange != null)
+          ActionChip(key: const Key('arrange-by-course'), avatar: const Icon(Icons.sort_rounded, size: 18), label: const Text('Arrange by course'), onPressed: onArrange),
+      ]);
       if (!canEdit || current == null) return chips;
       // phone: the chosen category's own actions, in plain sight (no hidden long-press)
       final hidden = current['active'] == false;

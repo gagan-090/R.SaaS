@@ -506,3 +506,9 @@ code, passes now); pos_app **96 passed, 5 skipped**.
   PDF) in the phone's print preview to see, print, save or share. Same for "Print bill" after payment.
 - Tests: pos_app 100 passed (5 skipped); new steps in the Standard owner flow (invoice seen before paying, then printed
   on a printer once one is set up).
+
+## Menu on phones: categories in plain sight; no "Add standard categories" (2026-11-14)
+- Every new restaurant already has the 9 categories, so the button (and its client call) is gone; the server route stays
+  for older restaurants.
+- Category chips wrap onto rows instead of a sideways scroll, so all 9 (plus All / + Category / Arrange by course) show.
+- Tests: admin_web 154 passed (8 skipped); new phone test: all 9 categories on screen, no seed button.
