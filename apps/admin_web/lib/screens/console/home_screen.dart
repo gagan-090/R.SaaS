@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 
 import '../../api/api_client.dart';
-import '../../app.dart' show restaurantNav;
+import '../../app.dart' show ownerOnlyHiddenPages, restaurantNav;
 import '../../state/providers.dart';
 import '../../widgets/common.dart';
 import 'dashboard_screen.dart';
@@ -26,7 +26,7 @@ class ConsoleHome extends ConsumerWidget {
     final role = a.me['customRoleName'] as String? ?? roleInfo[a.roles.firstOrNull ?? '']?.$1 ?? 'Team member';
     final items = restaurantNav
         .where((n) => n.$1 != '/console' && n.$4 != null && a.can(n.$4!))
-        .where((n) => !a.ownerOnlyPlan || (n.$1 != '/console/staff' && n.$1 != '/console/roles'))
+        .where((n) => !a.ownerOnlyPlan || !ownerOnlyHiddenPages.contains(n.$1))
         .toList();
     final p = context.hp;
     return PageFrame(

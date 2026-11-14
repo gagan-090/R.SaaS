@@ -490,3 +490,5 @@ code, passes now); pos_app **96 passed, 5 skipped**.
   /staff/limits employeeLimit 0). Reopening the console after a sign-out no longer changes state during build.
 - Tests: admin_web 154 passed (8 skipped); pos_app 97 passed (5 skipped). New: phone floor toolbar rows + resize
   saved, Staff hidden with an old /me, console Sign out back to the PIN screen and next open signed in.
+- Owner-only plans (Standard) also hide Roles and Hubs & devices from the console side menu and home tiles
+  (`ownerOnlyHiddenPages`). admin_web 154 passed (8 skipped).

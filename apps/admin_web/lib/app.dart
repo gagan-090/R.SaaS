@@ -148,6 +148,9 @@ const platformNav = <NavItem>[
   ('/audit', 'Audit log', Icons.receipt_long_outlined, 'platform.audit.read'),
 ];
 
+/// Pages an owner-only plan (Standard: one device, run by the owner) does not show: no team, no roles, no other devices.
+const ownerOnlyHiddenPages = {'/console/staff', '/console/roles', '/console/devices'};
+
 const restaurantNav = <NavItem>[
   ('/console', 'Dashboard', Icons.space_dashboard_outlined, null),
   ('/console/menu', 'Menu', Icons.restaurant_menu_rounded, 'menu.read'),
@@ -178,7 +181,7 @@ class ConsoleShell extends ConsumerWidget {
     // an owner-only plan has no team to manage: no Staff or Roles pages (the owner's PIN is under Settings)
     final items = nav
         .where((n) => n.$4 == null || (me?.can(n.$4!) ?? false))
-        .where((n) => !(me?.ownerOnlyPlan ?? false) || (n.$1 != '/console/staff' && n.$1 != '/console/roles'))
+        .where((n) => !(me?.ownerOnlyPlan ?? false) || !ownerOnlyHiddenPages.contains(n.$1))
         .toList();
     final root = items.isEmpty ? '/' : items.first.$1;
     final idx = items.lastIndexWhere((n) => n.$1 == root ? location == root : location.startsWith(n.$1));

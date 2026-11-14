@@ -686,6 +686,7 @@ void main() {
     await t.pumpAndSettle();
     expect(find.byKey(const Key('nav-Staff')), findsNothing);
     expect(find.byKey(const Key('nav-Roles')), findsNothing);
+    expect(find.byKey(const Key('nav-Hubs & devices')), findsNothing);
     expect(find.byKey(const Key('nav-Menu')), findsOneWidget);
     await t.tap(find.byKey(const Key('nav-Settings')));
     await t.pumpAndSettle();
@@ -705,6 +706,7 @@ void main() {
     await t.pumpAndSettle();
     expect(find.byKey(const Key('nav-Staff')), findsNothing);
     expect(find.byKey(const Key('nav-Roles')), findsNothing);
+    expect(find.byKey(const Key('nav-Hubs & devices')), findsNothing);
     expect(find.byKey(const Key('nav-Menu')), findsOneWidget);
   });
 
@@ -766,6 +768,8 @@ void main() {
     await t.tap(find.byKey(const Key('open-nav')));
     await t.pumpAndSettle();
     expect(find.byKey(const Key('nav-Staff')), findsOneWidget);
+    expect(find.byKey(const Key('nav-Roles')), findsOneWidget);
+    expect(find.byKey(const Key('nav-Hubs & devices')), findsOneWidget);
     await t.tap(find.byKey(const Key('nav-Settings')));
     await t.pumpAndSettle();
     expect(find.byKey(const Key('my-pin-card')), findsNothing);
