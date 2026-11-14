@@ -106,7 +106,7 @@ class FakeHubApi extends HubApi {
     // same grants as packages/hub_server/lib/src/permissions.dart
     final perms = switch ((u['roles'] as List).first) {
       'owner' => ['floor.read', 'floor.manage', 'menu.read', 'menu.publish', 'staff.read', 'staff.manage', 'restaurant.profile.read', 'license.read', 'order.read', 'order.write', 'order.transfer', 'order.reverse', 'order.reverse.sent', 'discount.apply',
-          'payment.take', 'bill.adjust', 'kds.read', 'device.manage', 'clock', 'reports.read', 'reports.own'],
+          'payment.take', 'bill.adjust', 'kds.read', 'kds.update', 'device.manage', 'clock', 'reports.read', 'reports.own'],
       'cashier' => ['floor.read', 'menu.read', 'order.read', 'order.write', 'order.transfer', 'order.reverse', 'payment.take', 'kds.read', 'clock', 'reports.own'],
       'waiter' => ['floor.read', 'menu.read', 'order.read', 'order.write', 'order.transfer', 'order.reverse', 'kds.read', 'clock', 'reports.own'],
       'chef' => ['menu.read', 'kds.read', 'kds.update', 'clock'],

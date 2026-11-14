@@ -1,3 +1,4 @@
+import 'package:http/http.dart' as http;
 import 'package:test/test.dart';
 
 import 'harness.dart';
@@ -79,5 +80,28 @@ void main() {
     expect((await h.get('/reports/tips', session: w2)).body, isEmpty);
     expect((await h.get('/reports/tips', session: waiter)).body, [{'waiter_id': Harness.waiter, 'waiter_name': 'Anita', 'tip_paise': 5000, 'bills': 1}]);
     expect((await h.get('/reports/tips', session: chef)).status, 403);
+  });
+
+  test('Standard (owner only): the owner takes the order, sends the KOT, marks it ready and served, bills and prints', () async {
+    final std = await Harness.start(plan: 'standard');
+    final owner = await std.login(Harness.owner);
+    final o = (await std.post('/orders', session: owner, body: {'type': 'dine_in', 'tableId': Harness.t2, 'waiterId': Harness.owner})).json;
+    final id = o['id']! as String;
+    await std.post('/orders/$id/lines', session: owner, body: {'lines': [{'menuItemId': Harness.naan, 'qty': 2}]});
+    final k = await std.post('/orders/$id/kot', session: owner);
+    expect(k.status, 201, reason: '$k');
+    final ticket = k.json['ticketId']! as String;
+    expect(((await std.get('/kds/tickets', session: owner)).body! as List), hasLength(1)); // checks the KOT
+    for (final s in ['ready', 'served']) {
+      final r = await std.post('/kds/tickets/$ticket/status', session: owner, body: {'status': s});
+      expect(r.status, 200, reason: '$s: $r');
+    }
+    expect((await std.get('/kds/tickets', session: owner)).body, isEmpty); // delivered to the table
+    final bill = await std.post('/orders/$id/bill', session: owner);
+    expect(bill.status, anyOf(200, 201), reason: '$bill');
+    // no printer set up: the bill comes back as a PDF to share / print from the phone
+    final pr = await http.post(Uri.parse('${std.base}/bills/${bill.json['id']}/print'), headers: std.headers(session: owner), body: '{}');
+    expect(pr.statusCode, 200, reason: pr.body);
+    await std.close();
   });
 }

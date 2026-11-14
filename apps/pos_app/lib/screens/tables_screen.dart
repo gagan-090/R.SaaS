@@ -46,6 +46,14 @@ class _TableMapScreenState extends ConsumerState<TableMapScreen> {
   Future<void> _openOrder(HubApi api, {String? tableId, String? tableName, required String type}) async {
     final session = ref.read(sessionProvider)!;
     String? waiterId = session.can('payment.take') ? null : session.userId; // a waiter opens tables as themselves
+    // owner-only plan (Standard): no waiters, the owner serves their own tables
+    if (waiterId == null && type == 'dine_in') {
+      try {
+        final limits = (await api.branch())['license']?['limits'] as Map?;
+        if (limits?['staffPerBranch'] == 0) waiterId = session.userId;
+      } catch (_) {}
+      if (!mounted) return;
+    }
     if (type == 'dine_in' && waiterId == null) {
       final staff = await api.staff();
       if (!mounted) return;

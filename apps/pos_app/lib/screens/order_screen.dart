@@ -55,6 +55,13 @@ class _OrderScreenState extends ConsumerState<OrderScreen> {
     }
   }
 
+  /// A KOT's next step from the order: cooking → ready at the pass → served at the table.
+  static const _nextKot = {
+    'new': ('ready', 'Mark ready', Icons.room_service_rounded),
+    'preparing': ('ready', 'Mark ready', Icons.room_service_rounded),
+    'ready': ('served', 'Served', Icons.check_rounded),
+  };
+
   Future<void> _do(Future<Object?> Function() f, {String? done}) async {
     try {
       await f();
@@ -378,14 +385,24 @@ class _OrderScreenState extends ConsumerState<OrderScreen> {
               Expanded(child: Text('Ready at the pass: KOT ${ready.map((k) => '#${k['kot_no']}').join(', ')}', style: HPType.label(p.text))),
             ]),
           ),
-        Wrap(spacing: HPSpace.xs, runSpacing: HPSpace.xs, children: [
-          for (final k in tickets)
+        Wrap(spacing: HPSpace.xs, runSpacing: HPSpace.xs, crossAxisAlignment: WrapCrossAlignment.center, children: [
+          for (final k in tickets) ...[
             StatusChip(
               key: Key('kot-${k['kot_no']}-${k['status']}'),
               label: 'KOT ${k['kot_no']} · ${k['status']}',
               icon: k['status'] == 'ready' ? Icons.notifications_active_rounded : Icons.soup_kitchen_outlined,
               tone: switch (k['status']) { 'ready' => HPTone.success, 'served' => HPTone.neutral, _ => HPTone.pending },
             ),
+            // whoever may move kitchen tickets (the owner on Standard runs kitchen and floor alone) moves it from here
+            if (session.can('kds.update') && _nextKot[k['status']] != null)
+              ActionChip(
+                key: Key('kot-${k['kot_no']}-to-${_nextKot[k['status']]!.$1}'),
+                avatar: Icon(_nextKot[k['status']]!.$3, size: 16),
+                label: Text(_nextKot[k['status']]!.$2),
+                visualDensity: VisualDensity.compact,
+                onPressed: () => _do(() => _api.setTicketStatus(k['id'] as String, _nextKot[k['status']]!.$1), done: 'KOT ${k['kot_no']}: ${_nextKot[k['status']]!.$2.toLowerCase()}'),
+              ),
+          ],
         ]),
         const SizedBox(height: HPSpace.sm),
         // short windows (phones in landscape): totals scroll with the lines so the list keeps the panel's height;

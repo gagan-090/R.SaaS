@@ -492,3 +492,11 @@ code, passes now); pos_app **96 passed, 5 skipped**.
   saved, Staff hidden with an old /me, console Sign out back to the PIN screen and next open signed in.
 - Owner-only plans (Standard) also hide Roles and Hubs & devices from the console side menu and home tiles
   (`ownerOnlyHiddenPages`). admin_web 154 passed (8 skipped).
+
+## Standard: the owner is waiter, cashier and kitchen (2026-11-14)
+- Hub: owner gets `kds.update` (the cloud owner already had every permission); on an owner-only plan
+  (staffPerBranch 0) marking a KOT ready / served needs no "kds" feature (other plans still do).
+- POS order: "Mark ready" / "Served" next to each KOT for anyone allowed to move tickets; on Standard the owner
+  opens tables as themselves (no waiter picker). Bill + print were already the owner's.
+- Tests: hub_server 54 passed (new: Standard owner order → KOT → ready → served → bill → print);
+  pos_app 100 passed (5 skipped) (new: owner on Standard, phone and tablet).

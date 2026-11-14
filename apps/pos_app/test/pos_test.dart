@@ -365,6 +365,40 @@ void main() {
       expect(find.textContaining('Ready at the pass'), findsOneWidget);
     });
 
+    testWidgets('[$tag] Standard: the owner orders, marks the KOT ready and served from the order, and bills', (t) async {
+      final hub = await start(t, size: size, brightness: brightness);
+      hub.license = {'plan': 'standard', 'state': 'active', 'limits': {'staffPerBranch': 0, 'devicesPerBranch': 1},
+        'features': ['tables', 'orders.dinein', 'orders.takeaway', 'menu', 'billing', 'offline.single', 'floor.editor']};
+      await signIn(t, 'Owner', '9999');
+      expect(navTabs(t), containsAll(['Tables', 'Kitchen', 'Bills'])); // waiter, kitchen and cashier in one
+      await t.tap(find.byKey(const Key('table-1')));
+      await t.pumpAndSettle();
+      expect(find.text('Who serves table 1?'), findsNothing); // no waiters on Standard: the owner serves
+      await t.tap(find.byKey(const Key('dish-Garlic Naan')));
+      await t.pumpAndSettle();
+      if (narrow) {
+        await t.tap(find.byKey(const Key('cart-send-kot')));
+        await t.pumpAndSettle();
+        await t.tap(find.byKey(const Key('view-order')));
+        await t.pumpAndSettle();
+      } else {
+        await t.tap(find.byKey(const Key('send-kot')));
+        await t.pumpAndSettle();
+      }
+      expect(hub.orders.values.single['waiter_id'], 'u-own');
+      expect(find.byKey(const Key('kot-1-new')), findsOneWidget);
+      await t.tap(find.byKey(const Key('kot-1-to-ready')));
+      await t.pumpAndSettle();
+      expect(hub.tickets.single['status'], 'ready');
+      expect(find.byKey(const Key('kot-1-ready')), findsOneWidget);
+      await t.tap(find.byKey(const Key('kot-1-to-served')));
+      await t.pumpAndSettle();
+      expect(hub.tickets.single['status'], 'served'); // delivered to the table
+      expect(find.byKey(const Key('kot-1-served')), findsOneWidget);
+      expect(find.byKey(const Key('kot-1-to-served')), findsNothing);
+      expect(find.byKey(const Key('bill-pay')), findsOneWidget); // and bills it as the cashier
+    });
+
     testWidgets('[$tag] IT admin sets the printer and test-prints; owner reprints a DUPLICATE and adjusts a paid bill', (t) async {
       final hub = await start(t, size: size, brightness: brightness);
       await signIn(t, 'Ravi', '1234');

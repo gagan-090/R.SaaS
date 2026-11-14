@@ -68,7 +68,7 @@ class Harness {
     }[plan]!;
     final t = now.millisecondsSinceEpoch ~/ 1000;
     return _sign({
-      'v': 1, 'lic': 'lic-1', 'tid': tid, 'plan': plan, 'features': features, 'limits': {'devicesPerBranch': null},
+      'v': 1, 'lic': 'lic-1', 'tid': tid, 'plan': plan, 'features': features, 'limits': {'devicesPerBranch': null, if (plan == 'standard') 'staffPerBranch': 0},
       'nbf': t + nbfDays * 86400, 'exp': t + expDays * 86400, 'grace_days': 7, 'iat': t,
     });
   }
