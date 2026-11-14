@@ -19,7 +19,7 @@ describe('restaurant console', () => {
     t = await createTestApp();
     const sa = await createAdmin(t, ['Super Admin']);
     saToken = (await loginAdmin(t, sa)).accessToken;
-    std = await onboardRestaurant(t, saToken, 'standard');
+    std = await onboardRestaurant(t, saToken, 'professional'); // employees, but no extended roles or staff portal (Standard is owner only)
     prem = await onboardRestaurant(t, saToken, 'premium');
   });
   afterAll(() => t.close());

@@ -97,11 +97,10 @@ describe('floor layout editor', () => {
     await t.http().post(api(`/tables/${one.id}/status`)).set(bearer(auditor.token)).send({ status: 'available' }).expect(403);
     // another restaurant cannot see or edit this floor
     await t.http().get(api(`/floors/${floor.id}/layout`)).set(bearer(std.ownerToken)).expect(404);
-    // a plan without the editor: viewing works, saving is refused even by a direct API call
+    // Standard includes the editor too: its owner moves tables on their own floor
     const sf = (await t.http().post(api('/floors')).set(bearer(std.ownerToken)).send({ branchId: std.branchId, name: 'Main' }).expect(201)).body;
     const sl = (await t.http().get(api(`/floors/${sf.id}/layout`)).set(bearer(std.ownerToken)).expect(200)).body;
-    const r403 = await t.http().put(api(`/floors/${sf.id}/layout`)).set(bearer(std.ownerToken)).send({ version: sl.floor.version, width: 1200, height: 800, tables: [] }).expect(403);
-    expect(r403.body.code).toBe('feature_not_in_plan');
+    await t.http().put(api(`/floors/${sf.id}/layout`)).set(bearer(std.ownerToken)).send({ version: sl.floor.version, width: 1200, height: 800, tables: [tbl('S1', 300, 200)] }).expect(200);
   });
 
   it('tables added with the simple form get their own spot on the plan', async () => {

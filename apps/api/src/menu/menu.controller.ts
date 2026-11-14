@@ -48,13 +48,9 @@ const ItemBody = z
     unit: z.string().max(20).optional(),
     quantity: z.number().int().positive().optional(),
   })
+/** The 9 main menu categories "Add standard categories" creates (same list as the console). */
 export const STANDARD_CATEGORIES = [
-  'Packaged Beverages', 'Cold Beverages', 'Fresh Juices', 'Shakes & Smoothies', 'Mocktails', 'Hot Beverages',
-  'Soups', 'Veg Starters', 'Non-Veg Starters', 'Tandoori Items', 'Chinese Starters', 'Snacks', 'Street Food / Chaat',
-  'Rolls & Wraps', 'Salads', 'Veg Main Course', 'Paneer Special', 'Dal Special', 'Non-Veg Main Course', 'Seafood',
-  'Chinese Main Course', 'South Indian', 'North Indian', 'Continental', 'Italian', 'Fast Food', 'Breakfast',
-  'Thali / Combos', 'Kids Menu', 'Jain Food', 'Chef Specials', 'Indian Breads', 'Rice', 'Biryani', 'Pulao',
-  'Raita & Curd', 'Papad & Accompaniments', 'Desserts', 'Cakes & Bakery', 'Ice Cream',
+  'Beverages', 'Soups', 'Starters', 'Snacks & Fast Food', 'Main Course', 'Chinese', 'Indian Breads', 'Rice & Biryani', 'Desserts',
 ];
 
 const QuickVariant = z.object({

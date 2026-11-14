@@ -23,30 +23,36 @@ const _palettes = [
   ['#D99A2B', '#8B4A2B', '#F2E4C2'], ['#F2B33D', '#F7D27A', '#E07A2E'], ['#EFE8D6', '#CFE3C2', '#6E9B4E'], ['#6E2A12', '#9C4520', '#E9C46A'],
 ];
 
-/// Standard 40 professional categories from Restaurant_POS_Menu_With_Serving_Sizes.xlsx
+/// The 9 main menu categories the restaurant asked for ("Add standard categories" adds exactly these).
 const standardMenuCategories = [
-  'Packaged Beverages', 'Cold Beverages', 'Fresh Juices', 'Shakes & Smoothies', 'Mocktails', 'Hot Beverages',
-  'Soups', 'Veg Starters', 'Non-Veg Starters', 'Tandoori Items', 'Chinese Starters', 'Snacks', 'Street Food / Chaat',
-  'Rolls & Wraps', 'Salads', 'Veg Main Course', 'Paneer Special', 'Dal Special', 'Non-Veg Main Course', 'Seafood',
-  'Chinese Main Course', 'South Indian', 'North Indian', 'Continental', 'Italian', 'Fast Food', 'Breakfast',
-  'Thali / Combos', 'Kids Menu', 'Jain Food', 'Chef Specials', 'Indian Breads', 'Rice', 'Biryani', 'Pulao',
-  'Raita & Curd', 'Papad & Accompaniments', 'Desserts', 'Cakes & Bakery', 'Ice Cream',
+  'Beverages', 'Soups', 'Starters', 'Snacks & Fast Food', 'Main Course', 'Chinese', 'Indian Breads', 'Rice & Biryani', 'Desserts',
 ];
 
-const popularExcelCategories = [
-  'Packaged Beverages',
-  'Cold Beverages',
-  'Hot Beverages',
-  'Fast Food',
-  'Biryani',
-  'Veg Main Course',
-  'Paneer Special',
-  'Dal Special',
-  'Desserts',
-];
+/// The detailed groups dish names are recognised by, folded into the 9 main categories.
+const _mainCategoryOf = {
+  'Packaged Beverages': 'Beverages', 'Cold Beverages': 'Beverages', 'Fresh Juices': 'Beverages', 'Shakes & Smoothies': 'Beverages',
+  'Mocktails': 'Beverages', 'Hot Beverages': 'Beverages',
+  'Soups': 'Soups',
+  'Veg Starters': 'Starters', 'Non-Veg Starters': 'Starters', 'Tandoori Items': 'Starters', 'Salads': 'Starters', 'Papad & Accompaniments': 'Starters',
+  'Veg Main Course': 'Main Course', 'Paneer Special': 'Main Course', 'Dal Special': 'Main Course', 'Non-Veg Main Course': 'Main Course',
+  'Seafood': 'Main Course', 'North Indian': 'Main Course', 'South Indian': 'Main Course', 'Continental': 'Main Course',
+  'Thali / Combos': 'Main Course', 'Kids Menu': 'Main Course', 'Jain Food': 'Main Course', 'Chef Specials': 'Main Course', 'Raita & Curd': 'Main Course',
+  'Indian Breads': 'Indian Breads',
+  'Rice': 'Rice & Biryani', 'Biryani': 'Rice & Biryani', 'Pulao': 'Rice & Biryani',
+  'Chinese Starters': 'Chinese', 'Chinese Main Course': 'Chinese',
+  'Snacks': 'Snacks & Fast Food', 'Street Food / Chaat': 'Snacks & Fast Food', 'Rolls & Wraps': 'Snacks & Fast Food', 'Fast Food': 'Snacks & Fast Food',
+  'Italian': 'Snacks & Fast Food', 'Breakfast': 'Snacks & Fast Food',
+  'Desserts': 'Desserts', 'Cakes & Bakery': 'Desserts', 'Ice Cream': 'Desserts',
+};
 
-/// Smart classification of dish name to the 40 standard categories in Restaurant_POS_Menu_With_Serving_Sizes.xlsx
+/// Which of the 9 main categories a dish belongs to, from its name (e.g. "Cold Coffee" → Beverages).
 String? detectMenuCategory(String rawName) {
+  final fine = detectDetailedCategory(rawName);
+  return fine == null ? null : _mainCategoryOf[fine] ?? fine;
+}
+
+/// The detailed group of a dish name (40 groups of Restaurant_POS_Menu_With_Serving_Sizes.xlsx).
+String? detectDetailedCategory(String rawName) {
   final name = rawName.trim().toLowerCase();
   if (name.isEmpty) return null;
 
@@ -316,8 +322,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   Future<void> _seedCategories() async {
     if (!await confirm(context,
         title: 'Add the standard categories?',
-        message: 'Adds up to 40 common restaurant categories (Soups, Starters, Main Course, Biryani, Breads, Desserts, Beverages, …) to your menu. '
-            'Categories you already have are skipped, and nothing is deleted. Empty ones you do not need can be removed later.',
+        message: 'Adds the 9 main categories: ${standardMenuCategories.join(', ')}. '
+            'Categories you already have are skipped, and nothing is deleted.',
         confirmLabel: 'Add categories',
         destructive: false)) {
       return;
@@ -544,8 +550,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
         ? EmptyState(
             icon: Icons.restaurant_menu_rounded,
             title: _items!.isEmpty ? 'Your menu is empty' : 'No dishes match',
-            message: _items!.isEmpty ? 'Add categories and dishes. Photos are optional — every dish gets an illustrated plate.' : null,
-            action: edit && _items!.isEmpty ? PrimaryButton(label: 'Add your first dish', icon: Icons.add_rounded, onPressed: () => _editItem()) : null,
+            // one "Add dish" button (at the top), never a second one here
+            message: _items!.isEmpty ? 'Tap "Add dish" above. Photos are optional — every dish gets an illustrated plate.' : null,
           )
         : Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1065,15 +1071,18 @@ class _ItemEditorState extends State<_ItemEditor> {
 
   void _onNameChanged(String val) {
     final detected = detectMenuCategory(val);
+    final fine = detectDetailedCategory(val);
     final isVeg = detectMenuIsVeg(val);
     setState(() {
       _detectedCategory = detected;
       if (!_vegTouched) _veg = isVeg;
       if (!_userChangedCategory && detected != null) {
-        final match = widget.categories.cast<Json?>().firstWhere(
-          (c) => (c?['name'] as String?)?.trim().toLowerCase() == detected.trim().toLowerCase(),
-          orElse: () => null,
-        );
+        // a restaurant that already has the detailed category (e.g. "Biryani") keeps using it; else the main one
+        Json? named(String n) => widget.categories.cast<Json?>().firstWhere(
+              (c) => (c?['name'] as String?)?.trim().toLowerCase() == n.trim().toLowerCase(),
+              orElse: () => null,
+            );
+        final match = (fine == null ? null : named(fine)) ?? named(detected);
         if (match != null) {
           _category = match['id'] as String;
         } else if (widget.categories.length > 1 || widget.categories.isEmpty) {
@@ -1093,33 +1102,6 @@ class _ItemEditorState extends State<_ItemEditor> {
     if (_vegTouched) return;
     final hint = categoryIsVeg(_categoryName(_category));
     _veg = detectMenuIsVeg(_name.text) && (hint ?? true);
-  }
-
-  void _selectCategoryByName(String catName, {bool userInitiated = true}) {
-    if (userInitiated) _userChangedCategory = true;
-    final match = widget.categories.cast<Json?>().firstWhere(
-      (c) => (c?['name'] as String?)?.trim().toLowerCase() == catName.trim().toLowerCase(),
-      orElse: () => null,
-    );
-    setState(() {
-      if (match != null) {
-        _category = match['id'] as String;
-      } else {
-        _category = 'standard:$catName';
-      }
-      _autoVeg();
-    });
-  }
-
-  bool _isCategorySelected(String catName) {
-    if (_category.startsWith('standard:')) {
-      return _category.substring('standard:'.length).toLowerCase() == catName.toLowerCase();
-    }
-    final current = widget.categories.cast<Json?>().firstWhere(
-      (c) => c?['id'] == _category,
-      orElse: () => null,
-    );
-    return (current?['name'] as String?)?.toLowerCase() == catName.toLowerCase();
   }
 
   List<DropdownMenuItem<String>> _buildCategoryDropdownItems() {
@@ -1147,7 +1129,7 @@ class _ItemEditorState extends State<_ItemEditor> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                 decoration: BoxDecoration(color: HPColors.cardamom.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
-                child: const Text('Excel Standard', style: TextStyle(fontSize: 10, color: HPColors.cardamom, fontWeight: FontWeight.w600)),
+                child: const Text('Suggested', style: TextStyle(fontSize: 10, color: HPColors.cardamom, fontWeight: FontWeight.w600)),
               ),
             ],
           ),
@@ -1207,8 +1189,13 @@ class _ItemEditorState extends State<_ItemEditor> {
 
   Future<void> _save() async {
     if (_name.text.trim().isEmpty) return setState(() => _error = 'Give the dish a name');
-    final problem = _sizes.map((s) => s.problem).whereType<String>().firstOrNull;
-    if (problem != null) return setState(() => _error = problem);
+    final bad = _sizes.where((s) => s.problem != null).firstOrNull;
+    if (bad != null) {
+      return setState(() {
+        _error = bad.problem;
+        if (bad.name.text.trim().isNotEmpty && bad.paise != null) bad.more = true; // the problem is under More details
+      });
+    }
     final codes = _sizes.map((s) => s.code.text.trim().toUpperCase()).where((c) => c.isNotEmpty).toList();
     if (codes.toSet().length != codes.length) return setState(() => _error = 'Two sizes have the same code');
     if (!_sizes.any((s) => s.isDefault)) _sizes.first.isDefault = true;
@@ -1347,27 +1334,6 @@ class _ItemEditorState extends State<_ItemEditor> {
         ),
         const SizedBox(height: HPSpace.sm),
 
-        // Quick Category Suggestions / Popular Chips
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              for (final cat in popularExcelCategories)
-                Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: ActionChip(
-                    visualDensity: VisualDensity.compact,
-                    label: Text(cat, style: TextStyle(fontSize: 11, fontWeight: _isCategorySelected(cat) ? FontWeight.bold : FontWeight.normal)),
-                    backgroundColor: _isCategorySelected(cat) ? p.accent.withValues(alpha: 0.15) : null,
-                    side: _isCategorySelected(cat) ? BorderSide(color: p.accent) : BorderSide(color: p.line.withValues(alpha: 0.5)),
-                    onPressed: () => _selectCategoryByName(cat),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(height: HPSpace.sm),
-
         // Category & GST side-by-side on wide screens, stacked on mobile (without invalid vertical Expanded)
         if (isMobile) ...[
           DropdownButtonFormField<String>(
@@ -1375,7 +1341,7 @@ class _ItemEditorState extends State<_ItemEditor> {
             isExpanded: true,
             decoration: InputDecoration(
               labelText: 'Category',
-              helperText: _detectedCategory != null ? 'Auto-detected: $_detectedCategory' : 'All 40 standard categories from Excel catalog',
+              helperText: _detectedCategory != null ? 'Auto-detected: $_detectedCategory' : 'Pick the category this dish belongs to',
               helperStyle: TextStyle(color: _detectedCategory != null ? p.success : p.muted, fontSize: 11),
             ),
             items: _buildCategoryDropdownItems(),
@@ -1406,7 +1372,7 @@ class _ItemEditorState extends State<_ItemEditor> {
                   isExpanded: true,
                   decoration: InputDecoration(
                     labelText: 'Category',
-                    helperText: _detectedCategory != null ? 'Auto-detected: $_detectedCategory' : 'All 40 standard categories from Excel catalog',
+                    helperText: _detectedCategory != null ? 'Auto-detected: $_detectedCategory' : 'Pick the category this dish belongs to',
                     helperStyle: TextStyle(color: _detectedCategory != null ? p.success : p.muted, fontSize: 11),
                   ),
                   items: _buildCategoryDropdownItems(),
@@ -1446,17 +1412,24 @@ class _ItemEditorState extends State<_ItemEditor> {
           ),
         ]),
         const SizedBox(height: 2),
-        Text('For single items (e.g. 1 Coke), just type the price below. Click presets for multi-size portions.', style: HPType.body(p.muted).copyWith(fontSize: 12)),
+        Text('One price? Just type it below. Several sizes? Pick a ready set or tap Add size.', style: HPType.body(p.muted).copyWith(fontSize: 12)),
         const SizedBox(height: HPSpace.sm),
-        Wrap(spacing: 8, runSpacing: 6, children: [
-          TextButton(onPressed: () => setState(() { _sizes.clear(); for (final quantity in [200, 300, 500, 1000]) { _sizes.add(_SizeDraft(name: '$quantity ml', qty: '$quantity', unit: 'ml', isDefault: quantity == 300)); } }), child: const Text('🥤 Drinks: 200 / 300 / 500 ml / 1 L')),
-          TextButton(onPressed: () => setState(() { _sizes.clear(); for (final (name, ratio) in [('Half', .5), ('Full', 1.0)]) { _sizes.add(_SizeDraft(name: '$name plate', portion: name.toLowerCase(), ratio: '$ratio', qty: '$ratio', unit: 'plate', isDefault: ratio == 1)); } }), child: const Text('🍛 Half / Full Plate')),
-          TextButton(onPressed: () => setState(() { _sizes.clear(); _sizes.add(_SizeDraft(name: 'Cup 150 ml', qty: '150', unit: 'ml', isDefault: false)); _sizes.add(_SizeDraft(name: 'Bowl 250 ml', qty: '250', unit: 'ml', isDefault: true)); }), child: const Text('🍵 Cup 150 ml / Bowl 250 ml')),
-          TextButton(onPressed: () => setState(() { _sizes.clear(); for (final s in ['Small 7"', 'Medium 10"', 'Large 12"']) { _sizes.add(_SizeDraft(name: s, unit: 'piece', isDefault: s.startsWith('Medium'))); } }), child: const Text('🍕 Pizza: 7" / 10" / 12"')),
-          TextButton(onPressed: () => setState(() { _sizes.clear(); for (final s in ['1 Scoop', '2 Scoops', '3 Scoops']) { _sizes.add(_SizeDraft(name: s, unit: 'scoop', isDefault: s.startsWith('1'))); } }), child: const Text('🍨 Ice cream: 1 / 2 / 3 scoops')),
-          TextButton(onPressed: () => setState(() { _sizes.clear(); for (final p in ['1 Piece', '2 Pieces', '4 Pieces']) { _sizes.add(_SizeDraft(name: p, unit: 'piece', isDefault: p.startsWith('2'))); } }), child: const Text('Pieces: 1 / 2 / 4')),
-          TextButton(onPressed: () => setState(() { _sizes.clear(); _sizes.add(_SizeDraft(name: '1 Thali / Combo', unit: 'combo', isDefault: true)); }), child: const Text('🍱 1 Thali / Combo')),
-        ]),
+        DropdownButtonFormField<int>(
+          key: const Key('size-presets'),
+          initialValue: null,
+          isExpanded: true,
+          decoration: const InputDecoration(labelText: 'Ready-made sizes', prefixIcon: Icon(Icons.straighten_rounded)),
+          hint: const Text('Choose a set of sizes'),
+          items: [for (final (i, (label, _)) in sizePresets.indexed) DropdownMenuItem(value: i, child: Text(label, overflow: TextOverflow.ellipsis))],
+          onChanged: (i) {
+            if (i == null) return;
+            setState(() {
+              _sizes
+                ..clear()
+                ..addAll(sizePresets[i].$2());
+            });
+          },
+        ),
         const SizedBox(height: HPSpace.sm),
         for (final (i, s) in _sizes.indexed)
           _SizeRow(
@@ -1518,6 +1491,18 @@ List<T> sortByCourse<T>(List<T> cats, String Function(T) name) {
   return out;
 }
 
+/// Ready-made size sets for the dish form ("Drinks: 200 / 300 / 500 ml / 1 L" …); the middle one is the default.
+final List<(String, List<_SizeDraft> Function())> sizePresets = [
+  ('Single price (Regular)', () => [_SizeDraft.blank(isDefault: true)]),
+  ('Drinks: 200 / 300 / 500 ml / 1 L', () => [for (final n in ['200 ml', '300 ml', '500 ml', '1 L']) _SizeDraft.named(n, isDefault: n == '300 ml')]),
+  ('Half / Full plate', () => [_SizeDraft.named('Half plate'), _SizeDraft.named('Full plate', isDefault: true)]),
+  ('Cup 150 ml / Bowl 250 ml', () => [_SizeDraft.named('Cup 150 ml'), _SizeDraft.named('Bowl 250 ml', isDefault: true)]),
+  ('Pizza: 7" / 10" / 12"', () => [for (final n in ['Small 7"', 'Medium 10"', 'Large 12"']) _SizeDraft.named(n, unit: 'piece', isDefault: n.startsWith('Medium'))]),
+  ('Ice cream: 1 / 2 / 3 scoops', () => [for (final n in ['1 Scoop', '2 Scoops', '3 Scoops']) _SizeDraft.named(n, unit: 'scoop', isDefault: n.startsWith('1'))]),
+  ('Pieces: 1 / 2 / 4', () => [for (final n in ['1 Piece', '2 Pieces', '4 Pieces']) _SizeDraft.named(n, unit: 'piece', isDefault: n.startsWith('2'))]),
+  ('Thali / Combo', () => [_SizeDraft.named('1 Thali / Combo', unit: 'combo', isDefault: true)]),
+];
+
 const servingUnits = ['ml', 'l', 'g', 'kg', 'piece', 'plate', 'bowl', 'glass', 'cup', 'portion', 'bottle', 'can', 'packet'];
 const portionLabels = ['half', 'full'];
 
@@ -1530,6 +1515,41 @@ class _SizeDraft {
         qty = TextEditingController(text: qty),
         ratio = TextEditingController(text: ratio);
   factory _SizeDraft.blank({bool isDefault = false}) => _SizeDraft(name: 'Regular', isDefault: isDefault);
+  /// A size whose serving amount and half / full portion come from its name ("300 ml", "Half plate").
+  factory _SizeDraft.named(String name, {String? unit, bool isDefault = false}) {
+    final d = _SizeDraft(name: name, isDefault: isDefault)..applyName();
+    if (unit != null && d.unit == null) {
+      d.unit = unit;
+      if (unit == 'piece' || unit == 'scoop') d.qty.text = RegExp(r'^\d+').firstMatch(name)?[0] ?? '1';
+      if (d.qty.text.isEmpty) d.qty.text = '1';
+    }
+    return d;
+  }
+
+  static final _measure = RegExp(r'(\d+(?:\.\d+)?)\s*(ml|ltr|litre|liter|l|kg|gm|g)\b', caseSensitive: false);
+
+  /// Reads the serving amount ("300 ml", "1 L", "250 g") and half / full from the size name, so nothing is typed twice.
+  void applyName() {
+    final n = name.text.toLowerCase();
+    final m = _measure.firstMatch(n);
+    if (m != null) {
+      qty.text = m[1]!;
+      unit = switch (m[2]!) { 'ltr' || 'litre' || 'liter' => 'l', 'gm' => 'g', final u => u };
+    }
+    if (RegExp(r'\bhalf\b').hasMatch(n)) {
+      portion = 'half';
+      ratio.text = '0.5';
+    } else if (RegExp(r'\bfull\b').hasMatch(n)) {
+      portion = 'full';
+      ratio.text = '1';
+    } else if (portion == 'half' || portion == 'full') {
+      portion = null;
+      ratio.text = '';
+    }
+  }
+
+  /// "More details" open (code, serving amount, recipe scale): closed unless something there needs attention.
+  bool more = false;
   factory _SizeDraft.from(Json v) {
     String n(Object? x) => x == null ? '' : ((x as num) % 1 == 0 ? '${x.toInt()}' : '$x');
     final paise = v['pricePaise'] as int;
@@ -1593,13 +1613,18 @@ class _SizeRow extends StatelessWidget {
   final VoidCallback onDefault, onRemove, onChanged;
   final VoidCallback? onRecipe;
 
+  /// " · 300 ml" next to "More details", so the owner sees what was read from the name.
+  static String _servingNote(_SizeDraft s) {
+    final q = s.qty.text.trim();
+    if (q.isEmpty || s.unit == null) return '';
+    final shown = '$q ${s.unit}';
+    return s.name.text.toLowerCase().replaceAll(' ', '').contains(shown.replaceAll(' ', '')) ? '' : ' · $shown';
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = context.hp;
     final isMobile = MediaQuery.sizeOf(context).width < 600;
-    final volumeOrQtyLabel = (size.unit == 'ml' || size.unit == 'l')
-        ? 'Volume'
-        : (size.unit == 'g' || size.unit == 'kg' ? 'Weight' : 'Portion qty');
 
     return Card(
       margin: const EdgeInsets.only(bottom: HPSpace.sm),
@@ -1619,8 +1644,11 @@ class _SizeRow extends StatelessWidget {
               TextField(
                 key: Key('size-name-$index'),
                 controller: size.name,
-                decoration: const InputDecoration(labelText: 'Size / portion', hintText: 'e.g. Regular, 300 ml, Half plate'),
-                onChanged: (_) => onChanged(),
+                decoration: const InputDecoration(labelText: 'Size name', hintText: 'e.g. Regular, 300 ml, Half plate'),
+                onChanged: (_) {
+                  size.applyName();
+                  onChanged();
+                },
               ),
               const SizedBox(height: HPSpace.sm),
               TextField(
@@ -1639,8 +1667,11 @@ class _SizeRow extends StatelessWidget {
                     child: TextField(
                       key: Key('size-name-$index'),
                       controller: size.name,
-                      decoration: const InputDecoration(labelText: 'Size / portion', hintText: 'e.g. Regular, 300 ml, Half plate'),
-                      onChanged: (_) => onChanged(),
+                      decoration: const InputDecoration(labelText: 'Size name', hintText: 'e.g. Regular, 300 ml, Half plate'),
+                      onChanged: (_) {
+                        size.applyName();
+                        onChanged();
+                      },
                     ),
                   ),
                   const SizedBox(width: HPSpace.sm),
@@ -1659,86 +1690,78 @@ class _SizeRow extends StatelessWidget {
             ],
             const SizedBox(height: HPSpace.sm),
 
-            // Row 2: Secondary / Portion Measurements (Qty, Unit, Portion, Ratio, Code)
-            Wrap(
-              spacing: HPSpace.sm,
-              runSpacing: HPSpace.sm,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                SizedBox(
-                  width: 110,
-                  child: TextField(
-                    key: Key('size-qty-$index'),
-                    controller: size.qty,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: InputDecoration(
-                      labelText: volumeOrQtyLabel,
-                      hintText: (size.unit == 'ml' || size.unit == 'l') ? 'e.g. 200' : 'e.g. 1',
-                    ),
-                    onChanged: (_) => onChanged(),
-                  ),
-                ),
-                SizedBox(
-                  width: 105,
-                  child: DropdownButtonFormField<String?>(
-                    key: Key('size-unit-$index'),
-                    initialValue: size.unit,
-                    isExpanded: true,
-                    decoration: const InputDecoration(labelText: 'Unit'),
-                    items: [
-                      const DropdownMenuItem<String?>(value: null, child: Text('—')),
-                      for (final u in servingUnits) DropdownMenuItem<String?>(value: u, child: Text(u)),
-                    ],
-                    onChanged: (v) {
-                      size.unit = v;
-                      onChanged();
-                    },
-                  ),
-                ),
-                SizedBox(
-                  width: 110,
-                  child: DropdownButtonFormField<String?>(
-                    initialValue: size.portion,
-                    isExpanded: true,
-                    decoration: const InputDecoration(labelText: 'Portion'),
-                    items: [
-                      const DropdownMenuItem<String?>(value: null, child: Text('—')),
-                      // an older dish may carry a label no longer offered (e.g. quarter): keep it selectable
-                      for (final l in {...portionLabels, if (size.portion != null) size.portion!}) DropdownMenuItem<String?>(value: l, child: Text(l.isEmpty ? '—' : '${l[0].toUpperCase()}${l.substring(1)}')),
-                    ],
-                    onChanged: (v) {
-                      size.portion = v;
-                      onChanged();
-                    },
-                  ),
-                ),
-                SizedBox(
-                  width: 90,
-                  child: Tooltip(
-                    message: 'Default recipe scale vs the full portion (1 = full). Prices are never derived from it.',
+            // the serving amount comes from the name; code and recipe scale only when someone needs them
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: Key('size-more-$index'),
+                style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4), visualDensity: VisualDensity.compact),
+                onPressed: () {
+                  size.more = !size.more;
+                  onChanged();
+                },
+                icon: Icon(size.more ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 18),
+                label: Text(size.more ? 'Fewer details' : 'More details${_servingNote(size)}', style: const TextStyle(fontSize: 12)),
+              ),
+            ),
+            if (size.more) ...[
+              const SizedBox(height: HPSpace.xs),
+              Wrap(
+                spacing: HPSpace.sm,
+                runSpacing: HPSpace.sm,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 120,
                     child: TextField(
-                      controller: size.ratio,
+                      key: Key('size-qty-$index'),
+                      controller: size.qty,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: 'Ratio'),
+                      decoration: const InputDecoration(labelText: 'Serving amount', hintText: 'e.g. 300'),
                       onChanged: (_) => onChanged(),
                     ),
                   ),
-                ),
-                SizedBox(
-                  width: 130,
-                  child: TextField(
-                    controller: size.code,
-                    textCapitalization: TextCapitalization.characters,
-                    decoration: InputDecoration(
-                      labelText: 'Code (optional)',
-                      hintText: restaurantPrefix.isNotEmpty ? 'e.g. ${restaurantPrefix}500' : 'e.g. COLA-500',
+                  SizedBox(
+                    width: 105,
+                    child: DropdownButtonFormField<String?>(
+                      key: Key('size-unit-$index'),
+                      initialValue: size.unit,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Unit'),
+                      items: [
+                        const DropdownMenuItem<String?>(value: null, child: Text('—')),
+                        for (final u in {...servingUnits, if (size.unit != null) size.unit!}) DropdownMenuItem<String?>(value: u, child: Text(u)),
+                      ],
+                      onChanged: (v) {
+                        size.unit = v;
+                        onChanged();
+                      },
                     ),
-                    onChanged: (_) => onChanged(),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: HPSpace.sm),
+                  SizedBox(
+                    width: 150,
+                    child: TextField(
+                      key: Key('size-code-$index'),
+                      controller: size.code,
+                      textCapitalization: TextCapitalization.characters,
+                      decoration: InputDecoration(labelText: 'Code (optional)', hintText: restaurantPrefix.isNotEmpty ? 'e.g. ${restaurantPrefix}500' : 'e.g. COLA-500'),
+                      onChanged: (_) => onChanged(),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 150,
+                    child: TextField(
+                      key: Key('size-ratio-$index'),
+                      controller: size.ratio,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: 'Recipe scale', hintText: '1 = full', helperText: 'Half = 0.5 (stock use)'),
+                      onChanged: (_) => onChanged(),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: HPSpace.xs),
 
             // Row 3: Action Controls (Default, Available, Recipe, Remove)
             Wrap(

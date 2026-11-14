@@ -138,17 +138,18 @@ export const FEATURE_FLAGS = {
 } as const;
 export type FeatureFlag = keyof typeof FEATURE_FLAGS;
 
-const STANDARD: FeatureFlag[] = ['tables', 'orders.dinein', 'orders.takeaway', 'menu', 'billing', 'offline.single'];
+// Standard: one device run by the owner (no employees), with the visual floor editor to move tables
+const STANDARD: FeatureFlag[] = ['tables', 'orders.dinein', 'orders.takeaway', 'menu', 'billing', 'offline.single', 'floor.editor'];
 const PROFESSIONAL: FeatureFlag[] = [...STANDARD, 'floors', 'multi_cashier', 'waiter_app', 'lan_hub'];
 const PREMIUM: FeatureFlag[] = [
   ...PROFESSIONAL, 'franchise', 'roles.extended', 'kds', 'recipes', 'menu.approval', 'inventory', 'shifts', 'branding',
-  'staff_portal', 'roles.custom', 'floor.editor', 'import.excel', 'expenses',
+  'staff_portal', 'roles.custom', 'import.excel', 'expenses',
 ];
 
 /** Seeded plans in tier order: Standard 1 (bottom), Professional 2 (mid), Premium 3 (top). Customers choose monthly or yearly. */
 export const PLAN_DEFAULTS = [
   { code: 'standard', name: 'Standard', tier: 1, featureFlags: STANDARD, pricePaise: 99900, yearlyPricePaise: 999000,
-    limits: { branches: 1, floorsPerBranch: 1, devicesPerBranch: 1, concurrentCashiers: 1, staffPerBranch: null } },
+    limits: { branches: 1, floorsPerBranch: 1, devicesPerBranch: 1, concurrentCashiers: 1, staffPerBranch: 0 } },
   { code: 'professional', name: 'Professional', tier: 2, featureFlags: PROFESSIONAL, pricePaise: 299900, yearlyPricePaise: 2999000,
     limits: { branches: 1, floorsPerBranch: null, devicesPerBranch: null, concurrentCashiers: null, staffPerBranch: null } },
   { code: 'premium', name: 'Premium', tier: 3, featureFlags: PREMIUM, pricePaise: 599900, yearlyPricePaise: 5999000,

@@ -25,7 +25,7 @@ describe('staff & staff web portal', () => {
     t = await createTestApp();
     saToken = (await loginAdmin(t, await createAdmin(t, ['Super Admin']))).accessToken;
     prem = await onboardRestaurant(t, saToken, 'premium');
-    std = await onboardRestaurant(t, saToken, 'standard');
+    std = await onboardRestaurant(t, saToken, 'professional'); // employees, but no extended roles or staff portal (Standard is owner only)
   });
   afterAll(() => t.close());
 

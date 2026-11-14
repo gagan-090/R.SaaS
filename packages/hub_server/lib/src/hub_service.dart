@@ -414,10 +414,23 @@ class HubService {
       ];
 
   /// Branch header for receipts and the hub screen.
-  Future<Map<String, Object?>> branchInfo() async => {
-        'tenant': jsonDecode(await db.getMeta('tenant') ?? '{}'),
-        'branch': jsonDecode(await db.getMeta('branch') ?? '{}'),
-      };
+  Future<Map<String, Object?>> branchInfo() async {
+    final l = await license();
+    final p = l.payload;
+    final exp = p?['exp'];
+    return {
+      'tenant': jsonDecode(await db.getMeta('tenant') ?? '{}'),
+      'branch': jsonDecode(await db.getMeta('branch') ?? '{}'),
+      // the plan as the signed license says it (what the console shows too), never a fixed label
+      'license': {
+        'plan': p?['plan'],
+        'state': l.state.name,
+        'features': l.features,
+        'limits': p?['limits'],
+        if (exp is int) 'endsAt': DateTime.fromMillisecondsSinceEpoch(exp * 1000, isUtc: true).toIso8601String(),
+      },
+    };
+  }
 
   // ------------------------------------------------------------------ menu photos (cached for offline use)
 

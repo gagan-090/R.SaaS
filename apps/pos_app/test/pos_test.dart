@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rsaas_admin_web/embed.dart';
 import 'package:rsaas_pos/app.dart';
 import 'package:rsaas_pos/hub/hub_api.dart';
+import 'package:rsaas_pos/screens/admin_screens.dart';
 import 'package:rsaas_pos/screens/owner_console.dart';
 import 'package:rsaas_pos/screens/setup_screens.dart';
 import 'package:rsaas_pos/state/app_state.dart';
@@ -772,6 +773,43 @@ void main() {
     expect(consoleSignInPage(), isTrue);
     expect(store.reads, ['u-own']);
     await exitConsole(t);
+  });
+
+  testWidgets('Restaurant & License shows the plan on the license (Standard), never a fixed "Premium"; owner-only plan has no Add person', (t) async {
+    final hub = await start(t, size: phone);
+    hub.license = {
+      'plan': 'standard', 'state': 'active', 'limits': {'staffPerBranch': 0, 'devicesPerBranch': 1, 'floorsPerBranch': 1},
+      'features': ['tables', 'orders.dinein', 'orders.takeaway', 'menu', 'billing', 'offline.single', 'floor.editor'],
+    };
+    await signIn(t, 'Owner', '9999');
+    await nav(t, 'More');
+    await t.ensureVisible(find.byKey(const Key('more-settings')));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('more-settings')));
+    await t.pumpAndSettle();
+    expect(find.text('Active · Standard'), findsOneWidget);
+    expect(find.textContaining('Premium'), findsNothing);
+    final summary = t.widget<Text>(find.byKey(const Key('plan-summary'))).data!;
+    expect(summary, contains('floor layout with movable tables'));
+    expect(summary, contains('one device'));
+    expect(summary, isNot(contains('KDS')));
+    expect(t.takeException(), isNull);
+    await t.tap(find.byTooltip('Back'));
+    await t.pumpAndSettle();
+
+    await t.ensureVisible(find.byKey(const Key('more-staff')));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('more-staff')));
+    await t.pumpAndSettle();
+    expect(find.text('Your plan is for the owner only'), findsOneWidget);
+    expect(find.byKey(const Key('add-staff')), findsNothing);
+  });
+
+  test('plan label follows the license state', () {
+    expect(planLabel({'plan': 'premium', 'state': 'active'}), 'Active · Premium');
+    expect(planLabel({'plan': 'professional', 'state': 'grace'}), 'Renew soon · Professional');
+    expect(planLabel({'plan': 'standard', 'state': 'readOnly'}), 'Expired · Standard');
+    expect(planLabel(const {}), 'No plan');
   });
 
   testWidgets('cashiers cannot add people (no Staff entry, no add button)', (t) async {

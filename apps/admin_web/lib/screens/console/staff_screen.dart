@@ -109,12 +109,13 @@ class _StaffScreenState extends ConsumerState<StaffScreen> {
     final limit = _limits?['employeeLimit'] as int?;
     final used = _limits?['activeEmployees'] as int? ?? 0;
     final full = limit != null && used >= limit;
+    final ownerOnly = limit == 0; // Standard: one device run by the owner, no employees
     final noPlan = _limits?['planActive'] == false;
     return PageFrame(
       title: 'Staff',
-      subtitle: '${active.length} ${active.length == 1 ? 'person' : 'people'} on the team${limit != null ? ' · $used of $limit employees in your plan' : ''}',
+      subtitle: '${active.length} ${active.length == 1 ? 'person' : 'people'} on the team${limit != null && limit > 0 ? ' · $used of $limit employees in your plan' : ''}',
       actions: [
-        if (_canEdit) PrimaryButton(key: const Key('add-staff'), label: 'Add person', icon: Icons.person_add_alt_1_rounded, height: 48, onPressed: full || noPlan ? null : () => _edit()),
+        if (_canEdit && !ownerOnly) PrimaryButton(key: const Key('add-staff'), label: 'Add person', icon: Icons.person_add_alt_1_rounded, height: 48, onPressed: full || noPlan ? null : () => _edit()),
       ],
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, children: [
@@ -123,7 +124,10 @@ class _StaffScreenState extends ConsumerState<StaffScreen> {
         if (noPlan && _canEdit)
           _Notice(key: const Key('staff-no-plan'), icon: Icons.lock_outline_rounded, title: 'No active plan',
               text: 'People cannot be added or changed until your restaurant has an active plan. ${_isOwner ? 'Ask BhojMitra to issue or renew your plan' : 'Ask the owner to renew the plan'}.'),
-        if (full && !noPlan && _canEdit)
+        if (ownerOnly && !noPlan)
+          _Notice(key: const Key('owner-only-plan'), icon: Icons.person_outline_rounded, title: 'Your plan is for the owner only',
+              text: 'This plan runs on one device, used by you. To add cashiers or waiters, ${_isOwner ? 'ask BhojMitra for the Professional plan' : 'ask the owner about the Professional plan'}.'),
+        if (full && !ownerOnly && !noPlan && _canEdit)
           _Notice(key: const Key('limit-reached'), icon: Icons.group_off_outlined, title: 'Employee limit reached',
               text: 'Your plan allows $limit active employees. Turn someone off, or ${_isOwner ? 'ask BhojMitra for a bigger plan' : 'ask the owner about a bigger plan'}.'),
         if (_limits?['staffPortal'] != true)

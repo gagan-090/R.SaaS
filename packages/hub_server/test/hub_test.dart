@@ -204,6 +204,18 @@ void main() {
       expect(await h.hub.db.getMeta('license_token'), isNot(forged));
     });
 
+    test('/branch tells the POS the plan from the signed license (not a fixed label)', () async {
+      await h.hub.setLicenseToken(await h.license(plan: 'standard'));
+      final lic = (await h.hub.branchInfo())['license']! as Map;
+      expect(lic['plan'], 'standard');
+      expect(lic['state'], 'active');
+      expect(lic['features'], isNot(contains('lan_hub')));
+      expect(lic['endsAt'], isA<String>());
+      await h.hub.setLicenseToken(await h.license(plan: 'premium', expDays: -3));
+      final p = (await h.hub.branchInfo())['license']! as Map;
+      expect((p['plan'], p['state']), ('premium', 'grace'));
+    });
+
     test('grace keeps full access; past expiry + 7 days the hub is read-only without the cloud', () async {
       await h.hub.setLicenseToken(await h.license(expDays: -3)); // in grace
       expect((await h.post('/orders', session: cashier, body: {'type': 'takeaway'})).status, 201);

@@ -33,6 +33,24 @@ export class LicenseService {
     return signLicense(payload, loadEnv().LICENSE_SIGNING_PRIVATE_KEY);
   }
 
+  /**
+   * Re-signs active licenses whose token no longer matches its plan's features / limits (a plan changed by a migration;
+   * the console's plan editor already re-signs on save). Same dates; hubs get the new token on their next pull.
+   */
+  async resyncWithPlans(tx: Tx): Promise<number> {
+    const key = loadEnv().LICENSE_PUBLIC_KEY;
+    const norm = (v: unknown) => JSON.stringify(v, (_k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort()) : x));
+    let n = 0;
+    for (const lic of await tx.license.findMany({ where: { status: 'active' }, include: { plan: true } })) {
+      const p = verifyLicense(lic.signedToken, key);
+      if (!p) continue; // a token that does not verify is left for a person to look at
+      if (norm([...p.features].sort()) === norm([...lic.plan.featureFlags].sort()) && norm(p.limits) === norm(lic.plan.limits)) continue;
+      await tx.license.update({ where: { id: lic.id }, data: { signedToken: this.buildToken(lic, lic.plan) } });
+      n++;
+    }
+    return n;
+  }
+
   /** Entitlement for a tenant, computed from the signed token (never from a bare DB flag). Runs inside the caller's tx. */
   async entitlement(tx: Tx, tenantId: string, now = new Date()): Promise<Entitlement> {
     const tenant = await tx.restaurantTenant.findUnique({ where: { id: tenantId } });

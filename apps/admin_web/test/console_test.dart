@@ -42,6 +42,7 @@ class FakeRestaurantApi {
   final expenses = <Map<String, dynamic>>[];
   Map<String, dynamic>? importJob;
   List<String> features = ['menu', 'tables', 'roles.extended', 'kds', 'floor.editor'];
+  Map<String, dynamic> limits = {}; // plan limits (e.g. Standard: staffPerBranch 0, floorsPerBranch 1)
   int _n = 0;
   String id(String p) => '$p-${++_n}';
 
@@ -62,7 +63,7 @@ class FakeRestaurantApi {
         'branches': [{'id': 'b1', 'code': 'BR01', 'name': 'MG Road'}],
         'license': noPlan
             ? {'state': 'none', 'plan': null, 'planName': null, 'features': <String>[], 'limits': {}, 'endsAt': null}
-            : {'state': 'active', 'plan': 'premium', 'planName': 'Premium', 'features': features, 'limits': {}, 'endsAt': '2026-11-12T00:00:00Z'},
+            : {'state': 'active', 'plan': 'premium', 'planName': 'Premium', 'features': features, 'limits': limits, 'endsAt': '2026-11-12T00:00:00Z'},
         'counts': {'items': items.length, 'categories': cats.length, 'tables': floors.fold<int>(0, (s, f) => s + (f['tables'] as List).length), 'staff': staff.where((u) => u['status'] == 'active').length, 'devices': devices.length},
         'hub': {'online': true, 'lastSeenAt': DateTime.now().toUtc().toIso8601String()},
       };
@@ -248,7 +249,7 @@ class FakeRestaurantApi {
           case ('GET', '/imports/job-1/errors.csv'):
             return http.Response('severity,sheet,row,column,problem', 200, headers: {'content-type': 'text/csv'});
           case ('GET', '/staff/limits'):
-            out = {'employeeLimit': null, 'activeEmployees': staff.where((u) => u['status'] == 'active').length - 1, 'staffPortal': true, 'customRoles': true, 'extendedRoles': true, 'planActive': !noPlan};
+            out = {'employeeLimit': limits['staffPerBranch'], 'activeEmployees': staff.where((u) => u['status'] == 'active').length - 1, 'staffPortal': true, 'customRoles': true, 'extendedRoles': true, 'planActive': !noPlan};
           case ('GET', '/roles'):
             out = {'builtIn': [], 'custom': customRoles, 'catalog': [], 'customRolesInPlan': true};
           case ('PUT', '/me/pin'):
@@ -388,6 +389,10 @@ void main() {
       await t.pumpAndSettle();
       await t.enterText(find.byKey(const Key('size-name-1')), 'Half plate');
       await t.enterText(find.byKey(const Key('size-price-1')), '150');
+      expect(find.byKey(const Key('size-qty-1')), findsNothing); // serving details stay folded away
+      await t.ensureVisible(find.byKey(const Key('size-more-1')));
+      await t.tap(find.byKey(const Key('size-more-1')));
+      await t.pumpAndSettle();
       await t.enterText(find.byKey(const Key('size-qty-1')), '1');
       await t.ensureVisible(find.byKey(const Key('save-dish')));
       await t.tap(find.byKey(const Key('save-dish')));
@@ -598,6 +603,93 @@ void main() {
     expect((back.width, back.height), (640, 640));
     expect(base64Decode(out.base64).length, out.bytes.length);
     expect(() => prepareDishPhoto(Uint8List.fromList(utf8.encode('not an image'))), throwsFormatException);
+  });
+
+  testWidgets('phone: empty menu has one "Add dish" button, not two', (t) async {
+    await start(t, size: phone);
+    await go(t, 'Menu', size: phone);
+    expect(find.text('Your menu is empty'), findsOneWidget);
+    expect(find.widgetWithText(PrimaryButton, 'Add dish'), findsOneWidget);
+    expect(find.byType(PrimaryButton), findsOneWidget);
+    expect(find.text('Add your first dish'), findsNothing);
+  });
+
+  testWidgets('phone: dish sizes — ready-made sets in one dropdown; a size is name + price, its amount read from the name', (t) async {
+    final api = await start(t, size: phone, setup: (f) => f.cats.add({'id': 'c-bev', 'name': 'Beverages', 'sortOrder': 0}));
+    await go(t, 'Menu', size: phone);
+    await t.tap(find.byKey(const Key('add-dish')));
+    await t.pumpAndSettle();
+    await t.enterText(find.byKey(const Key('dish-name')), 'Cold Coffee');
+    await t.pumpAndSettle();
+    // presets are one dropdown, not a row of buttons
+    expect(find.text('🥤 Drinks: 200 / 300 / 500 ml / 1 L'), findsNothing);
+    await t.ensureVisible(find.byKey(const Key('size-presets')));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('size-presets')));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Drinks: 200 / 300 / 500 ml / 1 L').last);
+    await t.pumpAndSettle();
+    // each size shows name + price only: no Volume / Portion / Ratio boxes repeating the name
+    for (final gone in ['Volume', 'Portion', 'Ratio', 'Recipe scale', 'Serving amount']) {
+      expect(find.widgetWithText(TextField, gone), findsNothing, reason: gone);
+    }
+    expect(find.byKey(const Key('size-qty-0')), findsNothing);
+    for (final (i, price) in ['40', '60', '90', '150'].indexed) {
+      await t.ensureVisible(find.byKey(Key('size-price-$i')));
+      await t.enterText(find.byKey(Key('size-price-$i')), price);
+    }
+    // a size typed by hand: its amount comes from the name
+    await t.enterText(find.byKey(const Key('size-name-3')), '750 ml');
+    await t.ensureVisible(find.byKey(const Key('save-dish')));
+    await t.tap(find.byKey(const Key('save-dish')));
+    await t.pumpAndSettle();
+    final sent = api.last('POST', '/menu/items');
+    final sizes = (sent['variants'] as List).cast<Map>();
+    expect([for (final v in sizes) (v['name'], v['pricePaise'], v['servingQuantity'], v['servingUnit'], v['isDefault'])], [
+      ('200 ml', 4000, 200, 'ml', false), ('300 ml', 6000, 300, 'ml', true), ('500 ml', 9000, 500, 'ml', false), ('750 ml', 15000, 750, 'ml', false),
+    ]);
+    expect(sent['categoryId'], 'c-bev'); // "Cold Coffee" → Beverages
+    expect(t.takeException(), isNull);
+  });
+
+  testWidgets('dish sizes: Half / Full plate sets the recipe scale itself', (t) async {
+    final api = await start(t, setup: (f) => f.cats.add({'id': 'c-m', 'name': 'Main Course', 'sortOrder': 0}));
+    await go(t, 'Menu', size: desktop);
+    await t.tap(find.byKey(const Key('add-dish')));
+    await t.pumpAndSettle();
+    await t.enterText(find.byKey(const Key('dish-name')), 'Dal Makhani');
+    await t.tap(find.byKey(const Key('size-presets')));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Half / Full plate').last);
+    await t.pumpAndSettle();
+    await t.enterText(find.byKey(const Key('size-price-0')), '120');
+    await t.enterText(find.byKey(const Key('size-price-1')), '200');
+    await t.ensureVisible(find.byKey(const Key('save-dish')));
+    await t.tap(find.byKey(const Key('save-dish')));
+    await t.pumpAndSettle();
+    final sizes = (api.last('POST', '/menu/items')['variants'] as List).cast<Map>();
+    expect([for (final v in sizes) (v['name'], v['portionLabel'], v['portionRatio'], v['isDefault'])], [('Half plate', 'half', 0.5, false), ('Full plate', 'full', 1.0, true)]);
+  });
+
+  testWidgets('owner-only plan (Standard): no "Add person", a clear note instead', (t) async {
+    await start(t, size: phone, setup: (f) => f.limits = {'staffPerBranch': 0, 'floorsPerBranch': 1, 'devicesPerBranch': 1});
+    await go(t, 'Staff', size: phone);
+    expect(find.byKey(const Key('add-staff')), findsNothing);
+    expect(find.byKey(const Key('owner-only-plan')), findsOneWidget);
+    expect(find.byKey(const Key('limit-reached')), findsNothing);
+    expect(find.textContaining('0 employees'), findsNothing);
+  });
+
+  testWidgets('floors: one floor shows its name once; Standard (one floor) has no "Add floor"; the editor moves tables', (t) async {
+    await start(t, size: phone, setup: (f) {
+      f.limits = {'staffPerBranch': 0, 'floorsPerBranch': 1, 'devicesPerBranch': 1};
+      f.floors.add({'id': 'f-1', 'name': 'DineRoom', 'branchId': 'b1', 'sortOrder': 0, 'tables': <Map<String, dynamic>>[]});
+    });
+    await go(t, 'Floors & tables', size: phone);
+    final name = (find.byKey(const Key('floor-title')).evaluate().single.widget as Text).data!;
+    expect(find.text(name), findsOneWidget); // no tab repeating it
+    expect(find.byKey(const Key('add-floor')), findsNothing);
+    expect(find.textContaining('Moving tables is locked'), findsNothing);
   });
 
   testWidgets('phone: page header in order — subtitle, full-width search, full-width main action, then the rest from the left', (t) async {
@@ -1028,6 +1120,7 @@ void main() {
       await t.tap(find.byKey(const Key('seed-categories')));
       await t.pumpAndSettle();
       expect(find.text('Add the standard categories?'), findsOneWidget);
+      expect(find.textContaining('Adds the 9 main categories: Beverages, Soups, Starters, Snacks & Fast Food, Main Course, Chinese, Indian Breads, Rice & Biryani, Desserts.'), findsOneWidget);
       expect(find.widgetWithText(PrimaryButton, 'Add categories'), findsOneWidget);
       expect(find.byType(DangerButton), findsNothing);
       expect(find.text('Delete'), findsNothing);

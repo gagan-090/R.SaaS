@@ -13,8 +13,8 @@ void main() {
     expect(courseRank('Ice Cream'), 9);
   });
 
-  test('the standard categories are already in serving order', () {
-    expect(standardMenuCategories.length, 40);
+  test('the 9 standard categories are already in serving order', () {
+    expect(standardMenuCategories.length, 9);
     expect(sortByCourse(standardMenuCategories, (c) => c), standardMenuCategories);
   });
 }

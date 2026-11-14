@@ -11,6 +11,11 @@ class FakeHubApi extends HubApi {
   final payCalls = <String>[]; // idempotency keys received
   int failNextPayments = 0;
   final _paid = <String, Json>{};
+  /// The plan on the hub's signed license (Premium by default, so every screen can be tried).
+  Json license = {
+    'plan': 'premium', 'state': 'active', 'limits': {'staffPerBranch': null, 'devicesPerBranch': null},
+    'features': ['tables', 'orders.dinein', 'orders.takeaway', 'menu', 'billing', 'offline.single', 'floor.editor', 'floors', 'multi_cashier', 'waiter_app', 'lan_hub', 'kds', 'inventory', 'recipes', 'expenses'],
+  };
 
   final staffList = [
     {'id': 'u-cash', 'name': 'Ravi', 'roles': ['cashier'], 'pin': '1234'},
@@ -148,7 +153,7 @@ class FakeHubApi extends HubApi {
   }
 
   @override
-  Future<Json> branch() async => {'tenant': {'name': 'Demo Dhaba', 'branding': ?branding, 'code': 'R000000', 'gstin': '07AAAAA0000A1Z5', 'address': '12 Connaught Place, New Delhi'}, 'branch': {'name': 'Demo Dhaba — MG Road', 'code': 'BR01'}};
+  Future<Json> branch() async => {'tenant': {'name': 'Demo Dhaba', 'branding': ?branding, 'code': 'R000000', 'gstin': '07AAAAA0000A1Z5', 'address': '12 Connaught Place, New Delhi'}, 'branch': {'name': 'Demo Dhaba — MG Road', 'code': 'BR01'}, 'license': license};
   Json? branding; // plan feature "branding", as pulled from the cloud
 
   final mediaRequests = <String>[];

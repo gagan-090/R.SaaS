@@ -585,14 +585,16 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
     final s = ref.watch(sessionProvider);
     if (api == null) return const Scaffold(body: LoadingState());
     final p = context.hp;
-    final canAdd = s?.can('staff.manage') ?? false;
+    // Standard: one device run by the owner — no employees to add (the cloud refuses them too)
+    final ownerOnly = ((ref.watch(planProvider).valueOrNull?['limits'] as Map?)?['staffPerBranch']) == 0;
+    final canAdd = (s?.can('staff.manage') ?? false) && !ownerOnly;
 
     return Scaffold(
       body: Column(
         children: [
           PosTopBar(
             title: 'Staff & Team',
-            subtitle: canAdd ? 'Add people, roles and PIN status' : 'Roles and terminal PIN status',
+            subtitle: ownerOnly ? 'Your plan is for the owner only' : (canAdd ? 'Add people, roles and PIN status' : 'Roles and terminal PIN status'),
             actions: [
               if (canAdd)
                 MediaQuery.sizeOf(context).width < 360
@@ -923,6 +925,7 @@ class RestaurantProfileScreen extends ConsumerWidget {
                 final data = snapshot.data!;
                 final tenant = (data['tenant'] as Map?)?.cast<String, dynamic>() ?? const {};
                 final branch = (data['branch'] as Map?)?.cast<String, dynamic>() ?? const {};
+                final lic = (data['license'] as Map?)?.cast<String, dynamic>() ?? const {};
 
                 return Center(
                   child: ConstrainedBox(
@@ -991,15 +994,11 @@ class RestaurantProfileScreen extends ConsumerWidget {
                                         Flexible(child: Text('Subscription Plan', style: HPType.titleCard(p.text))),
                                       ],
                                     ),
-                                    const StatusChip(label: 'Active · Premium', tone: HPTone.success),
+                                    StatusChip(key: const Key('plan-chip'), label: planLabel(lic), tone: planTone(lic)),
                                   ],
                                 ),
                                 const SizedBox(height: HPSpace.md),
-                                Text(
-                                  'Your subscription includes offline-first LAN hub, multi-terminal cashier sessions, '
-                                  'Kitchen Display System (KDS), recipe inventory, and real-time business reports.',
-                                  style: HPType.body(p.muted),
-                                ),
+                                Text(planSummary(lic), key: const Key('plan-summary'), style: HPType.body(p.muted)),
                               ],
                             ),
                           ),
@@ -1066,4 +1065,60 @@ class RestaurantProfileScreen extends ConsumerWidget {
       ],
     ),
   );
+}
+
+/// The plan on this restaurant's signed license, as the main device has it (features, limits, state).
+final planProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
+  final api = ref.watch(hubApiProvider);
+  if (api == null) return const {};
+  return ((await api.branch())['license'] as Map?)?.cast<String, dynamic>() ?? const {};
+});
+
+/// The plan from the hub's signed license ("Active · Standard"), the same plan the console shows.
+String planLabel(Map<String, dynamic> lic) {
+  final code = '${lic['plan'] ?? ''}';
+  final name = switch (code) {
+    'standard' => 'Standard',
+    'professional' => 'Professional',
+    'premium' => 'Premium',
+    '' => 'No plan',
+    _ => code[0].toUpperCase() + code.substring(1),
+  };
+  final state = switch (lic['state']) {
+    'active' => 'Active',
+    'grace' => 'Renew soon',
+    'readOnly' => 'Expired',
+    'notStarted' => 'Not started',
+    _ => code.isEmpty ? null : 'Not verified',
+  };
+  return state == null ? name : '$state · $name';
+}
+
+HPTone planTone(Map<String, dynamic> lic) => switch (lic['state']) {
+      'active' => HPTone.success,
+      'grace' => HPTone.saffron,
+      _ => HPTone.danger,
+    };
+
+/// What this plan includes, from its feature list.
+String planSummary(Map<String, dynamic> lic) {
+  final f = ((lic['features'] as List?) ?? const []).cast<String>().toSet();
+  if (f.isEmpty) return 'No active plan on this device yet. It appears after the main device syncs with the cloud.';
+  final limits = (lic['limits'] as Map?) ?? const {};
+  final parts = <String>[
+    'dine-in and takeaway billing',
+    if (f.contains('tables')) 'tables',
+    if (f.contains('floor.editor')) 'floor layout with movable tables',
+    if (f.contains('floors')) 'several floors',
+    if (f.contains('lan_hub') && f.contains('multi_cashier')) 'several devices and cashiers on the Wi-Fi'
+    else if (limits['devicesPerBranch'] == 1) 'one device',
+    if (f.contains('waiter_app')) 'waiter app',
+    if (f.contains('kds')) 'kitchen display (KDS)',
+    if (f.contains('inventory')) 'inventory',
+    if (f.contains('recipes')) 'recipes',
+    if (f.contains('expenses')) 'expenses',
+    if (f.contains('franchise')) 'several branches',
+  ];
+  final s = parts.join(', ');
+  return 'Your plan includes ${s[0].toUpperCase()}${s.substring(1)}.';
 }

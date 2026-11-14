@@ -448,3 +448,18 @@ buttons. Now stacked in order: subtitle → full-width search → full-width mai
 Dashboard "Discounts, reversals, corrections": amounts sat mid-row; now on the card's right edge.
 Tests: admin_web `flutter test` **145 passed, 8 skipped** (2 new phone-layout tests, confirmed failing before the fix);
 pos_app **91 passed, 5 skipped**. Release APKs rebuilt (POS + Admin, API_BASE_URL=https://rsaas-api.onrender.com/api/v1).
+
+## Fix: owner feedback on Standard plan, menu and floors (2026-11-14)
+- POS "Restaurant & License" showed a fixed "Active · Premium": now the plan and state from the hub's signed license
+  (hub `/branch` returns `license`), and a summary built from the plan's features.
+- Add dish: each size is name + price; amount ("300 ml") and half/full come from the name (no Volume box repeating it,
+  no Portion/Ratio boxes); code + recipe scale under "More details". Size presets are one dropdown. Category chips row removed.
+- Menu: one "Add dish" button (the empty state no longer has a second). "Add standard categories" adds the 9 main
+  categories (Beverages, Soups, Starters, Snacks & Fast Food, Main Course, Chinese, Indian Breads, Rice & Biryani, Desserts).
+- Standard plan: floor editor (move tables) included; owner only — no cashier/waiter (console + POS hide "Add person",
+  API refuses with `employee_limit`); one device (hub already refused other devices without `lan_hub`).
+  Migration updates the plan; API start re-signs existing licenses (verified on the built API: 117 re-signed after a
+  plan change, 0 on the next start).
+- Floors: the floor name shows once (tabs only with 2+ floors); "Add floor" hidden when the plan's floors are used.
+Tests: api **167 passed** (new `standard-plan.spec.ts`; staff/console specs moved to Professional, layout spec: Standard
+saves layouts); admin_web **150 passed, 8 skipped**; pos_app **93 passed, 5 skipped**; hub_server **53 passed, 1 skipped**.

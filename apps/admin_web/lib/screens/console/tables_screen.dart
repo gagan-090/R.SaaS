@@ -17,6 +17,7 @@ class TablesScreen extends ConsumerStatefulWidget {
 class _TablesScreenState extends ConsumerState<TablesScreen> {
   List<Json>? _floors;
   List<String> _features = const [];
+  int? _floorLimit; // floors per branch in the plan (null = unlimited)
   bool _plan = true; // floor plan view (else the simple list)
   String? _branchId;
   String? _floor;
@@ -41,7 +42,9 @@ class _TablesScreenState extends ConsumerState<TablesScreen> {
       setState(() {
         _floors = (r[0] as List).cast<Json>();
         _branchId = (((r[1] as Json)['branches'] as List).cast<Json>().firstOrNull)?['id'] as String?;
-        _features = (((r[1] as Json)['license'] as Json)['features'] as List).cast<String>();
+        final lic = (r[1] as Json)['license'] as Json;
+        _features = (lic['features'] as List).cast<String>();
+        _floorLimit = (lic['limits'] as Map?)?['floorsPerBranch'] as int?;
         if (_floor == null || !_floors!.any((f) => f['id'] == _floor)) _floor = _floors!.firstOrNull?['id'] as String?;
         _error = null;
       });
@@ -142,7 +145,11 @@ class _TablesScreenState extends ConsumerState<TablesScreen> {
     return PageFrame(
       title: 'Floors & tables',
       subtitle: '$total tables · $seats seats · the POS table map shows exactly this',
-      actions: [if (edit) SecondaryButton(key: const Key('add-floor'), label: 'Add floor', icon: Icons.layers_outlined, height: 48, onPressed: _addFloor)],
+      // no "Add floor" once the plan's floors are used (Standard: one floor)
+      actions: [
+        if (edit && (_floorLimit == null || _floors!.length < _floorLimit!))
+          SecondaryButton(key: const Key('add-floor'), label: 'Add floor', icon: Icons.layers_outlined, height: 48, onPressed: _addFloor),
+      ],
       child: _floors!.isEmpty
           ? EmptyState(
               icon: Icons.table_restaurant_outlined,
@@ -151,6 +158,8 @@ class _TablesScreenState extends ConsumerState<TablesScreen> {
               action: edit ? PrimaryButton(label: 'Add a floor', icon: Icons.add_rounded, onPressed: _addFloor) : null,
             )
           : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              // the floor tabs only when there is more than one floor to pick
+              if (_floors!.length > 1) ...[
               SizedBox(
                 height: 44,
                 child: ListView(scrollDirection: Axis.horizontal, children: [
@@ -162,13 +171,15 @@ class _TablesScreenState extends ConsumerState<TablesScreen> {
                 ]),
               ),
               const SizedBox(height: HPSpace.lg),
+              ],
               if (floor != null)
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(HPSpace.lg),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                       Wrap(spacing: HPSpace.sm, runSpacing: HPSpace.sm, crossAxisAlignment: WrapCrossAlignment.center, alignment: WrapAlignment.spaceBetween, children: [
-                        Text('${floor['name']}', style: HPType.titleCard(context.hp.text)),
+                        // the name once: here for a single floor, else on its tab above
+                        if (_floors!.length == 1) Text('${floor['name']}', key: const Key('floor-title'), style: HPType.titleCard(context.hp.text)),
                         SegmentedButton<bool>(
                           key: const Key('floor-view'),
                           showSelectedIcon: false,
