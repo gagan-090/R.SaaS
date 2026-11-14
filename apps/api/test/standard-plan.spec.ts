@@ -28,6 +28,10 @@ describe('Standard plan', () => {
       const r = await t.http().post(api('/staff')).set(bearer(std.ownerToken)).send({ name: role, email: `${uniq(role)}@example.test`, role, pin: '482915' }).expect(403);
       expect(r.body.code).toBe('employee_limit');
     }
+    // the console reads the plan from /me to leave Staff out of the menu
+    const me = (await t.http().get(api('/me')).set(bearer(std.ownerToken)).expect(200)).body;
+    expect(me.plan).toMatchObject({ state: 'active', limits: { staffPerBranch: 0 } });
+    expect(me.plan.features).toContain('floor.editor');
     const limits = (await t.http().get(api('/staff/limits')).set(bearer(std.ownerToken)).expect(200)).body;
     expect(limits).toMatchObject({ employeeLimit: 0, activeEmployees: 0 });
     // Professional still adds people
@@ -56,8 +60,31 @@ describe('Standard plan', () => {
     expect((await t.owner.license.findUniqueOrThrow({ where: { id: lic.id } })).signedToken).toBe(again.signedToken);
   });
 
+  it('a new restaurant starts with the 9 main categories and one floor; the owner can rename and delete them', async () => {
+    const std = await onboardRestaurant(t, sa, 'standard');
+    const auth = bearer(std.ownerToken);
+    const cats = (await t.http().get(api('/menu/categories')).set(auth).expect(200)).body as { id: string; name: string }[];
+    expect(cats.map((c) => c.name)).toEqual(STANDARD_CATEGORIES);
+    const floors = (await t.http().get(api('/floors')).set(auth).expect(200)).body as { name: string; branchId: string }[];
+    expect(floors.map((f) => [f.name, f.branchId])).toEqual([['Ground floor', std.branchId]]);
+    // they are ordinary categories: rename one, delete another
+    const soups = cats.find((c) => c.name === 'Soups')!;
+    await t.http().patch(api(`/menu/categories/${soups.id}`)).set(auth).send({ name: 'Soups & Shorba' }).expect(200);
+    const chinese = cats.find((c) => c.name === 'Chinese')!;
+    await t.http().delete(api(`/menu/categories/${chinese.id}`)).set(auth).expect(204);
+    const after = ((await t.http().get(api('/menu/categories')).set(auth).expect(200)).body as { name: string }[]).map((c) => c.name);
+    expect(after).toContain('Soups & Shorba');
+    expect(after).not.toContain('Chinese');
+    // "Add standard categories" brings back only what is missing
+    const seeded = (await t.http().post(api('/menu/seed-categories')).set(auth).expect(201)).body;
+    expect(seeded.created).toBe(2); // Soups (renamed away) and Chinese (deleted)
+  });
+
   it('"Add standard categories" adds the 9 main categories, once', async () => {
     const std = await onboardRestaurant(t, sa, 'standard');
+    for (const c of (await t.http().get(api('/menu/categories')).set(bearer(std.ownerToken)).expect(200)).body as { id: string }[]) {
+      await t.owner.menuCategory.delete({ where: { id: c.id } }); // a restaurant from before the defaults
+    }
     const first = (await t.http().post(api('/menu/seed-categories')).set(bearer(std.ownerToken)).expect(201)).body;
     expect(first).toMatchObject({ created: 9, total: 9 });
     const names = (await t.http().get(api('/menu/categories')).set(bearer(std.ownerToken)).expect(200)).body.map((c: { name: string }) => c.name);

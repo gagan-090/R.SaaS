@@ -116,6 +116,12 @@ export async function onboardRestaurant(t: TestApp, adminToken: string, planCode
   };
 }
 
+/** The floor every new restaurant starts with ("Ground floor"). */
+export async function defaultFloor(t: TestApp, ownerToken: string) {
+  const floors = (await t.http().get(api('/floors')).set('Authorization', `Bearer ${ownerToken}`).expect(200)).body as { id: string; name: string }[];
+  return floors[0];
+}
+
 /** Adds a staff user with a role directly (fixture) and returns a signed-in access token. */
 export async function addStaff(t: TestApp, tenantId: string, role: 'auditor' | 'cashier' | 'waiter' | 'chef' | 'it_admin') {
   const email = `${uniq(role)}@example.test`;

@@ -463,3 +463,11 @@ pos_app **91 passed, 5 skipped**. Release APKs rebuilt (POS + Admin, API_BASE_UR
 - Floors: the floor name shows once (tabs only with 2+ floors); "Add floor" hidden when the plan's floors are used.
 Tests: api **167 passed** (new `standard-plan.spec.ts`; staff/console specs moved to Professional, layout spec: Standard
 saves layouts); admin_web **150 passed, 8 skipped**; pos_app **93 passed, 5 skipped**; hub_server **53 passed, 1 skipped**.
+
+## Defaults for new restaurants; no Staff on Standard (2026-11-14)
+- Checked: new restaurants had no floor and no categories. Now both onboarding paths create the 9 main categories and
+  one floor "Ground floor" (synced to the main device like any other row — sync spec uses it).
+- Categories on phones: the chosen category shows Rename / Hide from POS / Delete buttons (was a hidden long-press, no delete).
+- Standard (owner only): Staff and Roles removed from the console menu and Staff & Team from the POS More screen;
+  the owner's POS PIN is set under Settings → Your POS PIN. `/me` returns `plan`.
+Tests: api **168 passed**; admin_web **152 passed, 8 skipped**; pos_app **93 passed, 5 skipped**.

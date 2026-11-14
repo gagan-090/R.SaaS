@@ -12,6 +12,7 @@ import 'package:rsaas_admin_web/api/api_client.dart';
 import 'package:rsaas_admin_web/app.dart';
 import 'package:rsaas_admin_web/screens/console/floor_editor.dart';
 import 'package:rsaas_admin_web/screens/console/import_dialog.dart';
+import 'package:rsaas_admin_web/screens/console/staff_screen.dart' show MyPinDialog;
 import 'package:rsaas_admin_web/util/download.dart';
 import 'package:rsaas_admin_web/state/providers.dart';
 import 'package:rsaas_admin_web/util/image_prep.dart';
@@ -117,7 +118,7 @@ class FakeRestaurantApi {
           case ('POST', '/auth/login'):
             out = {'status': 'ok', 'accessToken': 'a', 'refreshToken': 'r', 'expiresIn': 900};
           case ('GET', '/me'):
-            out = me;
+            out = {...me, 'plan': {'state': 'active', 'features': features, 'limits': limits}};
           case ('GET', '/tenant/overview'):
             out = overview();
           case ('GET', '/tenant/branding'):
@@ -256,7 +257,14 @@ class FakeRestaurantApi {
             staff.firstWhere((x) => x['id'] == me['id'])['hasPin'] = true;
             out = {'id': me['id'], 'hasPin': true};
           default:
-            if (req.method == 'PATCH' && path.startsWith('/menu/items/')) {
+            if (req.method == 'PATCH' && path.startsWith('/menu/categories/')) {
+              final c = cats.firstWhere((x) => x['id'] == path.split('/').last);
+              c.addAll(body);
+              out = c;
+            } else if (req.method == 'DELETE' && path.startsWith('/menu/categories/')) {
+              cats.removeWhere((x) => x['id'] == path.split('/').last);
+              return http.Response('', 204);
+            } else if (req.method == 'PATCH' && path.startsWith('/menu/items/')) {
               final it = items.firstWhere((i) => i['id'] == path.split('/').last);
               it.addAll(body);
               out = it;
@@ -671,13 +679,56 @@ void main() {
     expect([for (final v in sizes) (v['name'], v['portionLabel'], v['portionRatio'], v['isDefault'])], [('Half plate', 'half', 0.5, false), ('Full plate', 'full', 1.0, true)]);
   });
 
-  testWidgets('owner-only plan (Standard): no "Add person", a clear note instead', (t) async {
-    await start(t, size: phone, setup: (f) => f.limits = {'staffPerBranch': 0, 'floorsPerBranch': 1, 'devicesPerBranch': 1});
-    await go(t, 'Staff', size: phone);
-    expect(find.byKey(const Key('add-staff')), findsNothing);
-    expect(find.byKey(const Key('owner-only-plan')), findsOneWidget);
-    expect(find.byKey(const Key('limit-reached')), findsNothing);
-    expect(find.textContaining('0 employees'), findsNothing);
+  testWidgets('owner-only plan (Standard): no Staff or Roles in the menu; the owner sets their PIN under Settings', (t) async {
+    final api = await start(t, size: phone, setup: (f) => f.limits = {'staffPerBranch': 0, 'floorsPerBranch': 1, 'devicesPerBranch': 1});
+    await t.tap(find.byKey(const Key('open-nav')));
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('nav-Staff')), findsNothing);
+    expect(find.byKey(const Key('nav-Roles')), findsNothing);
+    expect(find.byKey(const Key('nav-Menu')), findsOneWidget);
+    await t.tap(find.byKey(const Key('nav-Settings')));
+    await t.pumpAndSettle();
+    await t.ensureVisible(find.byKey(const Key('my-pin-card')));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('set-my-pin')));
+    await t.pumpAndSettle();
+    expect(find.byType(MyPinDialog), findsOneWidget);
+    expect(api.calls.where((r) => r.url.path.endsWith('/staff')), isEmpty);
+  });
+
+  testWidgets('a plan with employees keeps Staff in the menu and no PIN card in Settings', (t) async {
+    await start(t, size: phone);
+    await t.tap(find.byKey(const Key('open-nav')));
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('nav-Staff')), findsOneWidget);
+    await t.tap(find.byKey(const Key('nav-Settings')));
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('my-pin-card')), findsNothing);
+  });
+
+  testWidgets('phone: the chosen category can be renamed and deleted with plain buttons', (t) async {
+    final api = await start(t, size: phone, setup: (f) => f.cats.addAll([{'id': 'c-s', 'name': 'Soups', 'sortOrder': 10}, {'id': 'c-ch', 'name': 'Chinese', 'sortOrder': 20}]));
+    await go(t, 'Menu', size: phone);
+    expect(find.byKey(const Key('category-actions')), findsNothing); // "All" chosen: nothing to rename
+    await t.tap(find.text('Soups'));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('category-rename')));
+    await t.pumpAndSettle();
+    await t.enterText(find.byKey(const Key('category-name')), 'Soups & Shorba');
+    await t.tap(find.widgetWithText(PrimaryButton, 'Save'));
+    await t.pumpAndSettle();
+    expect(api.cats.firstWhere((c) => c['id'] == 'c-s')['name'], 'Soups & Shorba');
+    await t.scrollUntilVisible(find.text('Chinese'), 80, scrollable: find.ancestor(of: find.text('All'), matching: find.byType(Scrollable)).first);
+    await t.pumpAndSettle();
+    await t.tap(find.text('Chinese'));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('category-delete')));
+    await t.pumpAndSettle();
+    await t.tap(find.widgetWithText(DangerButton, 'Delete'));
+    await t.pumpAndSettle();
+    expect(api.cats.map((c) => c['id']), isNot(contains('c-ch')));
+    expect(find.byKey(const Key('category-actions')), findsNothing); // back on "All"
+    expect(t.takeException(), isNull);
   });
 
   testWidgets('floors: one floor shows its name once; Standard (one floor) has no "Add floor"; the editor moves tables', (t) async {

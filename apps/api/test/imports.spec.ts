@@ -87,7 +87,8 @@ describe('excel import', () => {
     const v = (await validate('menu', 'menu.xlsx', (await buildTemplate('menu')).toString('base64')).expect(200)).body;
     expect(v.issues.filter((i: { severity: string }) => i.severity === 'error')).toEqual([]);
     expect(v.counts).toMatchObject({ itemsCreate: 4, variantsCreate: 6, recipes: 2 });
-    expect(v.preview.categoriesToCreate).toEqual(expect.arrayContaining(['Soft Drinks', 'Main Course', 'Desserts', 'Starters']));
+    // Main Course, Desserts and Starters are among the 9 every restaurant starts with: only the new one is created
+    expect(v.preview.categoriesToCreate).toEqual(['Soft Drinks']);
     await commit(v.id).expect(200);
     const items = (await t.http().get(api('/menu/items')).set(owner()).expect(200)).body;
     const cola = items.find((i: { code: string }) => i.code === 'COLA');

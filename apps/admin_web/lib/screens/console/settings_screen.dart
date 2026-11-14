@@ -7,6 +7,7 @@ import '../../state/providers.dart';
 import '../../widgets/common.dart';
 import '../../widgets/labels.dart';
 import 'branding_card.dart';
+import 'staff_screen.dart' show MyPinDialog;
 
 /// Restaurant settings: what prints on every bill (name, address, GSTIN), the plan, and GST rates.
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -95,6 +96,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  /// Owner-only plan: no Staff page, so the owner's own POS PIN is set here.
+  bool get _ownerOnly {
+    final a = ref.read(authProvider);
+    return a is SignedIn && a.ownerOnlyPlan;
+  }
+
+  Widget get _myPin {
+    final a = ref.read(authProvider) as SignedIn;
+    final has = a.me['hasPin'] == true;
+    return SectionCard(
+      key: const Key('my-pin-card'),
+      title: 'Your POS PIN',
+      child: Row(children: [
+        Expanded(child: Text(has ? 'You sign in on the POS with your PIN. Change it here.' : 'You have no POS PIN yet. The POS asks for it.', style: HPType.body(context.hp.muted))),
+        const SizedBox(width: HPSpace.md),
+        SecondaryButton(key: const Key('set-my-pin'), label: has ? 'Change PIN' : 'Set PIN', icon: Icons.pin_outlined, height: 48, onPressed: () async {
+          final ok = await showDialog<bool>(barrierDismissible: false, context: context, builder: (_) => MyPinDialog(api: _api));
+          if (ok == true) {
+            await ref.read(authProvider.notifier).refresh();
+            if (mounted) showDone(context, 'PIN saved — use it on the POS in about a minute');
+          }
+        }),
+      ]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_error != null) return loadErrorView(_error!, page: 'Settings', onRetry: _load);
@@ -152,6 +179,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 const SizedBox(width: HPSpace.lg),
                 Expanded(flex: 2, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [plan, const SizedBox(height: HPSpace.lg), taxes])),
               ]),
+        if (_ownerOnly) ...[const SizedBox(height: HPSpace.lg), _myPin],
         const SizedBox(height: HPSpace.lg),
         const BrandingCard(),
       ]),

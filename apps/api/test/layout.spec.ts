@@ -1,6 +1,6 @@
 /** Visual floor layout: save / reload, unique names, optimistic lock, open orders, overlap warnings, live states. */
 import { uuidv7 } from '../src/common/uuid';
-import { TestApp, addStaff, api, createAdmin, createTestApp, loginAdmin, onboardRestaurant } from './helpers';
+import { TestApp, addStaff, api, createAdmin, createTestApp, loginAdmin, onboardRestaurant, defaultFloor } from './helpers';
 
 describe('floor layout editor', () => {
   let t: TestApp;
@@ -98,7 +98,8 @@ describe('floor layout editor', () => {
     // another restaurant cannot see or edit this floor
     await t.http().get(api(`/floors/${floor.id}/layout`)).set(bearer(std.ownerToken)).expect(404);
     // Standard includes the editor too: its owner moves tables on their own floor
-    const sf = (await t.http().post(api('/floors')).set(bearer(std.ownerToken)).send({ branchId: std.branchId, name: 'Main' }).expect(201)).body;
+    const sf = await defaultFloor(t, std.ownerToken); // Standard: its one floor exists from the start
+    await t.http().post(api('/floors')).set(bearer(std.ownerToken)).send({ branchId: std.branchId, name: 'Second' }).expect(403); // one floor in Standard
     const sl = (await t.http().get(api(`/floors/${sf.id}/layout`)).set(bearer(std.ownerToken)).expect(200)).body;
     await t.http().put(api(`/floors/${sf.id}/layout`)).set(bearer(std.ownerToken)).send({ version: sl.floor.version, width: 1200, height: 800, tables: [tbl('S1', 300, 200)] }).expect(200);
   });

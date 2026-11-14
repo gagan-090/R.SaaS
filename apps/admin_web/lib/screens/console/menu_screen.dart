@@ -309,6 +309,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   Future<void> _deleteCategory(Json c) async {
     if (!await confirm(context, title: 'Delete ${c['name']}?', message: 'Only empty categories can be deleted. Terminals remove it on their next sync.')) return;
     await _run(() => _api.deleteCategory(c['id'] as String), 'Category deleted');
+    if (mounted && _cat == c['id']) setState(() => _cat = null); // back to "All"
   }
 
   // ---------------- dishes
@@ -833,7 +834,8 @@ class _CategoryList extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.hp;
     if (horizontal) {
-      return SizedBox(
+      final current = selected == null ? null : cats.where((c) => c['id'] == selected).firstOrNull;
+      final chips = SizedBox(
         height: 44,
         child: ListView(scrollDirection: Axis.horizontal, children: [
           Padding(padding: const EdgeInsets.only(right: HPSpace.sm), child: CategoryChip(label: 'All', count: _count(null), selected: selected == null, onTap: () => onSelect(null))),
@@ -853,6 +855,24 @@ class _CategoryList extends StatelessWidget {
             ),
         ]),
       );
+      if (!canEdit || current == null) return chips;
+      // phone: the chosen category's own actions, in plain sight (no hidden long-press)
+      final hidden = current['active'] == false;
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        chips,
+        const SizedBox(height: HPSpace.xs),
+        Wrap(key: const Key('category-actions'), spacing: HPSpace.xs, crossAxisAlignment: WrapCrossAlignment.center, children: [
+          TextButton.icon(key: const Key('category-rename'), onPressed: () => onRename(current), icon: const Icon(Icons.edit_outlined, size: 18), label: const Text('Rename')),
+          TextButton.icon(key: const Key('category-toggle'), onPressed: () => onToggle(current), icon: Icon(hidden ? Icons.visibility_outlined : Icons.visibility_off_outlined, size: 18), label: Text(hidden ? 'Show on POS' : 'Hide from POS')),
+          TextButton.icon(
+            key: const Key('category-delete'),
+            onPressed: () => onDelete(current),
+            style: TextButton.styleFrom(foregroundColor: p.danger),
+            icon: const Icon(Icons.delete_outline_rounded, size: 18),
+            label: const Text('Delete'),
+          ),
+        ]),
+      ]);
     }
     Widget row(String? id, String name) {
       final sel = selected == id;

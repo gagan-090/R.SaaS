@@ -1,3 +1,4 @@
+import { STANDARD_CATEGORIES } from '../menu/menu.controller';
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query, Res } from '@nestjs/common';
 import { ApiBody, ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
@@ -129,6 +130,7 @@ export class RestaurantsController {
         const branch = await tx.branch.create({
           data: { tenantId: tenant.id, code: 'BR01', name: b.restaurantName, gstin: b.gstin, address: b.address },
         });
+        await createRestaurantDefaults(tx, tenant.id, branch.id);
         const owner = await tx.user.create({
           data: {
             tenantId: tenant.id, name: b.ownerName, email: ownerEmail, passwordHash,
@@ -314,6 +316,7 @@ export class RestaurantsController {
       const branch = await tx.branch.create({
         data: { tenantId: tenant.id, code: 'BR01', name: reg.restaurantName, gstin: reg.gstin, address: reg.address },
       });
+      await createRestaurantDefaults(tx, tenant.id, branch.id);
       const owner = await tx.user.create({
         data: {
           tenantId: tenant.id, name: reg.ownerName, email: reg.ownerEmail, passwordHash,
@@ -775,3 +778,14 @@ export class RestaurantsController {
     return p;
   }
 }
+
+/**
+ * What every new restaurant starts with: the 9 main menu categories (the owner renames or deletes them freely) and one
+ * floor, so the owner can add dishes and tables straight away.
+ */
+export async function createRestaurantDefaults(tx: Tx, tenantId: string, branchId: string) {
+  await tx.menuCategory.createMany({ data: STANDARD_CATEGORIES.map((name, i) => ({ tenantId, name, sortOrder: (i + 1) * 10 })) });
+  await tx.floor.create({ data: { tenantId, branchId, name: DEFAULT_FLOOR_NAME } });
+}
+
+export const DEFAULT_FLOOR_NAME = 'Ground floor';

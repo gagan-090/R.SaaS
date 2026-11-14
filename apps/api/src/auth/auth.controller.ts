@@ -9,6 +9,7 @@ import { AllowEnrollmentToken, AuthenticatedOnly, Public } from '../common/decor
 import { badRequest } from '../common/errors';
 import { apiBody, zbody } from '../common/validation';
 import { DbService } from '../db/db.service';
+import { LicenseService } from '../licensing/license.service';
 import { SyncService } from '../sync/sync.service';
 import { AuthService } from './auth.service';
 
@@ -27,7 +28,7 @@ const meta = (req: AppRequest, ip: string, ua?: string) => ({ ip, userAgent: ua,
 @ApiTags('auth')
 @Controller()
 export class AuthController {
-  constructor(private auth: AuthService, private db: DbService, private sync: SyncService) {}
+  constructor(private auth: AuthService, private db: DbService, private sync: SyncService, private licenses: LicenseService) {}
 
   /** POS owner console without a second sign-in: the main device vouches for the person signed in on it with their PIN. */
   @Public()
@@ -107,7 +108,10 @@ export class AuthController {
     const tenant = profile && 'tenantId' in profile && profile.tenantId
       ? await this.db.platform((tx) => tx.restaurantTenant.findUnique({ where: { id: profile.tenantId }, select: { id: true, name: true, code: true } }))
       : null;
+    // the restaurant's plan, so the console shows only what it includes (e.g. no Staff on an owner-only plan)
+    const ent = tenant ? await this.db.tenant(tenant.id, (tx) => this.licenses.entitlement(tx, tenant.id)) : null;
     return {
+      ...(ent ? { plan: { state: ent.state, features: ent.features, limits: ent.limits } } : {}),
       type: a.type, ...profile, mfaEnrolled: !!profile?.mfa?.enrolledAt, mfa: undefined, pinHash: undefined, ...(hasPin === undefined ? {} : { hasPin }),
       ...(profile && 'roles' in profile ? { roles: undefined, customRoleName: profile.roles.find((r) => r.customRole)?.customRole?.name ?? null } : {}),
       tenant: tenant ? { id: tenant.id, name: tenant.name, code: tenant.code } : null,

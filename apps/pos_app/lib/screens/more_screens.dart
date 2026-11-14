@@ -93,7 +93,7 @@ class MoreScreen extends ConsumerWidget {
                         tile('reports', Icons.bar_chart_rounded, 'Sales & Reports', 'Daily sales, bills, payments & KPIs', () => push(const ReportsDashboardScreen())),
                       if (s.can('menu.read') || s.roles.contains('owner'))
                         tile('menu', Icons.restaurant_menu_rounded, 'Menu & Stock', 'Dish availability & 86 management', () => push(const MenuManagementScreen())),
-                      if (s.can('staff.read') || s.can('staff.manage') || s.roles.contains('owner'))
+                      if ((s.can('staff.read') || s.can('staff.manage') || s.roles.contains('owner')) && !ownerOnlyPlan(ref))
                         tile('staff', Icons.badge_outlined, 'Staff & Team', 'Add people, roles & PIN status', () => push(const StaffManagementScreen())),
                       if (s.can('floor.read') || s.roles.contains('owner'))
                         tile('floors', Icons.table_restaurant_outlined, 'Floors & Capacity', 'Floor layouts & table occupancy', () => push(const FloorsOverviewScreen())),
@@ -345,7 +345,7 @@ class AdminHomeScreen extends ConsumerWidget {
                 const SizedBox(height: HPSpace.md),
                 tile('Menu & Stock', 'Dish availability & 86 management', Icons.restaurant_menu_rounded, () => const MenuManagementScreen()),
               ],
-              if (s != null && (s.can('staff.read') || s.can('staff.manage') || s.roles.contains('owner'))) ...[
+              if (s != null && (s.can('staff.read') || s.can('staff.manage') || s.roles.contains('owner')) && !ownerOnlyPlan(ref)) ...[
                 const SizedBox(height: HPSpace.md),
                 tile('Staff & Team', 'Add people, roles & PIN status', Icons.badge_outlined, () => const StaffManagementScreen()),
               ],

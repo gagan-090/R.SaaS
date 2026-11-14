@@ -586,7 +586,7 @@ class _StaffManagementScreenState extends ConsumerState<StaffManagementScreen> {
     if (api == null) return const Scaffold(body: LoadingState());
     final p = context.hp;
     // Standard: one device run by the owner — no employees to add (the cloud refuses them too)
-    final ownerOnly = ((ref.watch(planProvider).valueOrNull?['limits'] as Map?)?['staffPerBranch']) == 0;
+    final ownerOnly = ownerOnlyPlan(ref);
     final canAdd = (s?.can('staff.manage') ?? false) && !ownerOnly;
 
     return Scaffold(
@@ -1073,6 +1073,9 @@ final planProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) asyn
   if (api == null) return const {};
   return ((await api.branch())['license'] as Map?)?.cast<String, dynamic>() ?? const {};
 });
+
+/// Owner-only plan (Standard: one device, no employees): no Staff section on the POS.
+bool ownerOnlyPlan(WidgetRef ref) => ((ref.watch(planProvider).valueOrNull?['limits'] as Map?)?['staffPerBranch']) == 0;
 
 /// The plan from the hub's signed license ("Active · Standard"), the same plan the console shows.
 String planLabel(Map<String, dynamic> lic) {

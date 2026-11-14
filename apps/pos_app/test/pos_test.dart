@@ -775,7 +775,7 @@ void main() {
     await exitConsole(t);
   });
 
-  testWidgets('Restaurant & License shows the plan on the license (Standard), never a fixed "Premium"; owner-only plan has no Add person', (t) async {
+  testWidgets('Restaurant & License shows the plan on the license (Standard), never a fixed "Premium"; owner-only plan has no Staff section', (t) async {
     final hub = await start(t, size: phone);
     hub.license = {
       'plan': 'standard', 'state': 'active', 'limits': {'staffPerBranch': 0, 'devicesPerBranch': 1, 'floorsPerBranch': 1},
@@ -797,12 +797,10 @@ void main() {
     await t.tap(find.byTooltip('Back'));
     await t.pumpAndSettle();
 
-    await t.ensureVisible(find.byKey(const Key('more-staff')));
-    await t.pumpAndSettle();
-    await t.tap(find.byKey(const Key('more-staff')));
-    await t.pumpAndSettle();
-    expect(find.text('Your plan is for the owner only'), findsOneWidget);
-    expect(find.byKey(const Key('add-staff')), findsNothing);
+    // no Staff section at all on an owner-only plan
+    expect(find.byKey(const Key('more-staff')), findsNothing);
+    expect(find.text('Staff & Team'), findsNothing);
+    expect(find.byKey(const Key('more-settings')), findsOneWidget);
   });
 
   test('plan label follows the license state', () {

@@ -4,7 +4,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { uuidv7 } from '../src/common/uuid';
-import { api, createAdmin, createTestApp, fillParams, listRoutes, loginAdmin, onboardRestaurant, TestApp } from './helpers';
+import { api, createAdmin, createTestApp, fillParams, listRoutes, loginAdmin, onboardRestaurant, TestApp, defaultFloor } from './helpers';
 
 describe('tenancy & RLS', () => {
   let t: TestApp;
@@ -22,7 +22,7 @@ describe('tenancy & RLS', () => {
     B = await onboardRestaurant(t, accessToken);
     for (const R of [A, B]) {
       const auth = { Authorization: `Bearer ${R.ownerToken}` };
-      const floor = (await t.http().post(api('/floors')).set(auth).send({ branchId: R.branchId, name: 'Ground' }).expect(201)).body;
+      const floor = await defaultFloor(t, R.ownerToken); // every restaurant starts with one floor
       const table = (await t.http().post(api('/tables')).set(auth).send({ floorId: floor.id, name: 'T1' }).expect(201)).body;
       const tax = (await t.http().post(api('/tax-rules')).set(auth).send({ name: 'GST 5%', rateBp: 500 }).expect(201)).body;
       const cat = (await t.http().post(api('/menu/categories')).set(auth).send({ name: 'Mains' }).expect(201)).body;

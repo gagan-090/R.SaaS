@@ -100,3 +100,5 @@ Format: date · decision · why · alternative rejected.
 - 2026-11-14 · Licenses follow their plan: on start the API re-signs active licenses whose token features/limits differ from the plan (same dates) — so a plan changed by a migration reaches existing restaurants, like an edit in Plans does.
 - 2026-11-14 · "Add standard categories" = 9 main categories in serving order (Beverages … Desserts); dish names are still recognised by 40 detailed groups, folded into those 9.
 - 2026-11-14 · Dish sizes: name + price only; serving amount and half/full are read from the size name; code and recipe scale under "More details"; ready-made size sets in one dropdown.
+- 2026-11-14 · Every new restaurant starts with the 9 main categories and one floor ("Ground floor"), created with the restaurant (both onboarding paths); they are ordinary rows the owner renames or deletes.
+- 2026-11-14 · Owner-only plan (staffPerBranch 0): the console hides Staff and Roles, the POS hides Staff & Team; `/me` carries the plan (state, features, limits) for this. The owner's own POS PIN moves to Settings.

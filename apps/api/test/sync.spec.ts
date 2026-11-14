@@ -2,7 +2,7 @@
 import { uuidv7 } from '../src/common/uuid';
 import { verifyLicense } from '../src/licensing/license-token';
 import { loadEnv } from '../src/config/env';
-import { TestApp, api, createAdmin, createTestApp, loginAdmin, onboardRestaurant } from './helpers';
+import { TestApp, api, createAdmin, createTestApp, loginAdmin, onboardRestaurant, defaultFloor } from './helpers';
 
 describe('sync', () => {
   let t: TestApp;
@@ -56,7 +56,7 @@ describe('sync', () => {
 
   it('pull returns config since the cursor, with a verifiable license token', async () => {
     const auth = bearer(R.ownerToken);
-    const floor = (await t.http().post(api('/floors')).set(auth).send({ branchId: R.branchId, name: 'Ground' }).expect(201)).body;
+    const floor = await defaultFloor(t, R.ownerToken); // every restaurant starts with one floor
     await t.http().post(api('/tables')).set(auth).send({ floorId: floor.id, name: 'T1' }).expect(201);
     const p1 = (await t.http().get(api('/sync/pull?since=0')).set('X-Device-Token', device).expect(200)).body;
     expect(p1.floors).toHaveLength(1);

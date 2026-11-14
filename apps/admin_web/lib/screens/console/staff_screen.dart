@@ -85,7 +85,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen> {
   }
 
   Future<void> _setMyPin() async {
-    final ok = await showDialog<bool>(barrierDismissible: false, context: context, builder: (_) => _MyPinDialog(api: _api));
+    final ok = await showDialog<bool>(barrierDismissible: false, context: context, builder: (_) => MyPinDialog(api: _api));
     if (ok == true) {
       await _load();
       if (mounted) showDone(context, 'PIN saved — use it on the POS in about a minute');
@@ -453,14 +453,14 @@ class _StaffEditorState extends State<_StaffEditor> {
   }
 }
 
-class _MyPinDialog extends StatefulWidget {
-  const _MyPinDialog({required this.api});
+class MyPinDialog extends StatefulWidget {
+  const MyPinDialog({super.key, required this.api});
   final ApiClient api;
   @override
-  State<_MyPinDialog> createState() => _MyPinDialogState();
+  State<MyPinDialog> createState() => MyPinDialogState();
 }
 
-class _MyPinDialogState extends State<_MyPinDialog> {
+class MyPinDialogState extends State<MyPinDialog> {
   final _pin = TextEditingController(), _again = TextEditingController();
   bool _busy = false;
   String? _error;

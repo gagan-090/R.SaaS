@@ -41,6 +41,9 @@ class SignedIn extends AuthState {
 
   String? get restaurantName => (me['tenant'] as Map?)?['name'] as String?;
   String? get restaurantCode => (me['tenant'] as Map?)?['code'] as String?;
+  /// The restaurant's plan is for the owner alone (Standard: one device, no employees).
+  bool get ownerOnlyPlan => ((me['plan'] as Map?)?['limits'] as Map?)?['staffPerBranch'] == 0;
+
   String get restaurantPrefix => restaurantShortPrefix(name: restaurantName, fallbackCode: restaurantCode);
 }
 
@@ -119,6 +122,9 @@ class AuthNotifier extends Notifier<AuthState> with ChangeNotifier {
   Future<void> finishEnrollment() => _loadMe();
 
   Future<void> _loadMe() async => _set(SignedIn(await _api.me()));
+
+  /// Re-reads who is signed in (after a PIN change, a plan change …).
+  Future<void> refresh() => _loadMe();
 
   Future<void> logout() async {
     await _api.logout();

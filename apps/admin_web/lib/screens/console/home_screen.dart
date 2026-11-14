@@ -24,7 +24,10 @@ class ConsoleHome extends ConsumerWidget {
     if (a.can('reports.read') && a.can('restaurant.profile.read')) return const RestaurantDashboardScreen();
     final api = ref.read(apiProvider);
     final role = a.me['customRoleName'] as String? ?? roleInfo[a.roles.firstOrNull ?? '']?.$1 ?? 'Team member';
-    final items = restaurantNav.where((n) => n.$1 != '/console' && n.$4 != null && a.can(n.$4!)).toList();
+    final items = restaurantNav
+        .where((n) => n.$1 != '/console' && n.$4 != null && a.can(n.$4!))
+        .where((n) => !a.ownerOnlyPlan || (n.$1 != '/console/staff' && n.$1 != '/console/roles'))
+        .toList();
     final p = context.hp;
     return PageFrame(
       title: 'Hello, ${'${a.me['name'] ?? ''}'.split(' ').first}',

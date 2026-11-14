@@ -175,7 +175,11 @@ class ConsoleShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authProvider);
     final me = auth is SignedIn ? auth : null;
-    final items = nav.where((n) => n.$4 == null || (me?.can(n.$4!) ?? false)).toList();
+    // an owner-only plan has no team to manage: no Staff or Roles pages (the owner's PIN is under Settings)
+    final items = nav
+        .where((n) => n.$4 == null || (me?.can(n.$4!) ?? false))
+        .where((n) => !(me?.ownerOnlyPlan ?? false) || (n.$1 != '/console/staff' && n.$1 != '/console/roles'))
+        .toList();
     final root = items.isEmpty ? '/' : items.first.$1;
     final idx = items.lastIndexWhere((n) => n.$1 == root ? location == root : location.startsWith(n.$1));
     final narrow = isNarrowWeb(context);
