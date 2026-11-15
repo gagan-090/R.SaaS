@@ -103,3 +103,6 @@ Format: date · decision · why · alternative rejected.
 - 2026-11-14 · Every new restaurant starts with the 9 main categories and one floor ("Ground floor"), created with the restaurant (both onboarding paths); they are ordinary rows the owner renames or deletes.
 - 2026-11-14 · Owner-only plan (staffPerBranch 0): the console hides Staff and Roles, the POS hides Staff & Team; `/me` carries the plan (state, features, limits) for this. The owner's own POS PIN moves to Settings.
 - 2026-11-14 · POS shows the invoice PDF with the `printing` package (phone's own print preview: see, print to any printer the phone knows, save / share) when no bill printer is set up or it is unreachable; "View / print bill" is on the payment screen, before collecting money.
+- 2026-11-15 · KOT status without the kitchen display (Standard, Professional): whoever takes orders (`order.write`: owner, cashier, waiter) moves a KOT; with "kds" (Premium) it stays `kds.update` (kitchen, owner). Hub and POS share the rule.
+- 2026-11-15 · Custom branding is in every plan from Standard up (migration adds it to standard + professional; licenses re-signed at start-up).
+- 2026-11-15 · Settings: Restaurant details (name, GSTIN, address, logo, own POS PIN) / Themes (presets + HSV custom colour, one text style = size + heading weight) / Your plan / Taxes; every SectionCard can be collapsible.

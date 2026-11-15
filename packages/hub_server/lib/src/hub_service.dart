@@ -943,11 +943,15 @@ class HubService {
 
   /// Chef moves a ticket new → preparing → ready → served (new → ready allowed for quick items).
   Future<Map<String, Object?>> setTicketStatus(Actor a, String ticketId, String status) async {
-    a.require('kds.update');
-    // owner-only plan (Standard): the owner is waiter, cashier and kitchen in one, so marking a KOT ready / served is
-    // part of serving, not the separate kitchen display; other plans need "kds" for it
-    final limits = (await license()).payload?['limits'] as Map?;
-    await requireFeature(limits?['staffPerBranch'] == 0 ? 'billing' : 'kds');
+    // with the kitchen display (Premium) the kitchen moves tickets; without it (Standard, Professional) there is no
+    // kitchen screen staff, so whoever takes orders (owner, cashier, waiter) moves the KOT: cooking → ready → served
+    if ((await license()).features.contains('kds')) {
+      a.require('kds.update');
+      await requireFeature('kds');
+    } else {
+      if (!a.permissions.contains('order.write')) a.require('kds.update');
+      await requireFeature('billing');
+    }
     return _tx(() async {
       final k = await db.selectOne('SELECT * FROM kitchen_tickets WHERE id = ?', [ticketId]);
       if (k == null) throw notFound('Kitchen ticket');

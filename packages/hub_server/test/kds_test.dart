@@ -63,14 +63,20 @@ void main() {
     expect((await h.post('/kds/tickets/$ticketId/status', session: cashier, body: {'status': 'ready'})).status, 403);
   });
 
-  test('KDS needs the kds feature (Premium); a waiter only sees their own tips', () async {
+  test('Professional (no kitchen display): owner, cashier and waiter move the KOT; a waiter only sees their own tips', () async {
     final pro = await Harness.start();
-    final c = await pro.login(Harness.chef);
-    final o = (await pro.post('/orders', session: await pro.login(Harness.cashier), body: {'type': 'takeaway'})).json;
     final cs = await pro.login(Harness.cashier);
-    await pro.post('/orders/${o['id']}/lines', session: cs, body: {'lines': [{'menuItemId': Harness.naan, 'qty': 1}]});
-    final k = (await pro.post('/orders/${o['id']}/kot', session: cs)).json;
-    expect((await pro.post('/kds/tickets/${k['ticketId']}/status', session: c, body: {'status': 'ready'})).code, 'feature_not_in_plan');
+    final w = await pro.login(Harness.waiter);
+    final ow = await pro.login(Harness.owner);
+    for (final (who, session) in [('cashier', cs), ('waiter', w), ('owner', ow)]) {
+      final o = (await pro.post('/orders', session: cs, body: {'type': 'takeaway'})).json;
+      await pro.post('/orders/${o['id']}/lines', session: cs, body: {'lines': [{'menuItemId': Harness.naan, 'qty': 1}]});
+      final k = (await pro.post('/orders/${o['id']}/kot', session: cs)).json;
+      for (final st in ['preparing', 'ready', 'served']) {
+        final r = await pro.post('/kds/tickets/${k['ticketId']}/status', session: session, body: {'status': st});
+        expect(r.status, 200, reason: '$who → $st: $r');
+      }
+    }
     await pro.close();
 
     final (orderId, _) = await kot();

@@ -20,12 +20,22 @@ describe('branding', () => {
   afterAll(() => t.close());
 
   it('a plan without branding: the owner sees it is off and cannot save', async () => {
-    const std = await onboardRestaurant(t, saToken, 'standard');
+    const code = `nobrand_${Date.now().toString(36)}`;
+    await t.http().post(api('/plans')).set(bearer(saToken))
+      .send({ code, name: 'No branding', featureFlags: ['tables', 'menu', 'billing'], limits: { branches: 1 }, pricePaise: 0 }).expect(201);
+    const std = await onboardRestaurant(t, saToken, code);
     const g = (await t.http().get(api('/tenant/branding')).set(bearer(std.ownerToken)).expect(200)).body;
     expect(g).toMatchObject({ enabled: false, branding: null });
     const r = await t.http().put(api('/tenant/branding')).set(bearer(std.ownerToken)).send(STYLE).expect(403);
     expect(r.body.code).toBe('feature_not_in_plan');
     await t.http().put(api('/tenant/branding/logo')).set(bearer(std.ownerToken)).send({ contentType: 'image/png', dataBase64: PNG }).expect(403);
+  });
+
+  it('Standard includes custom branding: the owner saves a colour, text style and logo', async () => {
+    const std = await onboardRestaurant(t, saToken, 'standard');
+    expect((await t.http().get(api('/tenant/branding')).set(bearer(std.ownerToken)).expect(200)).body.enabled).toBe(true);
+    await t.http().put(api('/tenant/branding')).set(bearer(std.ownerToken)).send({ ...STYLE, color: '#3c8d5a' }).expect(200);
+    await t.http().put(api('/tenant/branding/logo')).set(bearer(std.ownerToken)).send({ contentType: 'image/png', dataBase64: PNG }).expect(200);
   });
 
   it('premium owner sets colour, text style and logo; the overview and the hub pull carry it; bad input is refused', async () => {

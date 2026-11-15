@@ -9,6 +9,8 @@ import '../hub/hub_api.dart';
 import '../state/app_state.dart';
 import '../ui/common.dart';
 import '../ui/shell.dart';
+import 'admin_screens.dart' show canMoveKot;
+import 'order_screen.dart';
 
 /// K1 Kitchen display: New → Preparing → Ready columns (tablets) or a status filter (phones). Readable from 2 m:
 /// big table names, quantity badges, notes in italic, and an age bar (green < 10 min, saffron 10–20, red > 20).
@@ -58,7 +60,8 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
     final s = ref.watch(sessionProvider);
     if (s == null) return const SizedBox.shrink();
     ref.watch(hubTickProvider);
-    final canUpdate = s.can('kds.update');
+    final canUpdate = canMoveKot(ref, s);
+    final canEdit = s.can('order.write');
     final wide = MediaQuery.sizeOf(context).width >= Breakpoints.threePane;
     final p = context.hp;
     return Scaffold(
@@ -75,7 +78,20 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
               if (tickets.isEmpty) {
                 return const EmptyState(icon: Icons.soup_kitchen_outlined, title: 'No tickets', message: 'New KOTs appear here the moment a waiter or cashier sends them.');
               }
-              Widget card(Json t) => _TicketCard(key: Key('ticket-${t['kotNo']}'), ticket: t, canUpdate: canUpdate, busy: _busy.contains(t['id']), onMove: (st) => _move(api, t, st));
+              Widget card(Json t) => _TicketCard(
+                key: Key('ticket-${t['kotNo']}'),
+                ticket: t,
+                canUpdate: canUpdate,
+                busy: _busy.contains(t['id']),
+                onMove: (st) => _move(api, t, st),
+                // edit the KOT on its order: cancel an item (with a reason), change what is not sent yet, add more
+                onEdit: canEdit && t['orderId'] != null
+                    ? () async {
+                        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => OrderScreen(orderId: t['orderId'] as String)));
+                        if (mounted) setState(() => _refresh++);
+                      }
+                    : null,
+              );
               const columns = [('new', 'New'), ('preparing', 'Preparing'), ('ready', 'Ready to serve')];
               if (wide) {
                 // a board readable from 2 m; on ultrawide monitors the columns stop growing and the board centres
@@ -130,10 +146,11 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
 }
 
 class _TicketCard extends StatelessWidget {
-  const _TicketCard({super.key, required this.ticket, required this.canUpdate, required this.busy, required this.onMove});
+  const _TicketCard({super.key, required this.ticket, required this.canUpdate, required this.busy, required this.onMove, this.onEdit});
   final Json ticket;
   final bool canUpdate, busy;
   final ValueChanged<String> onMove;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -167,7 +184,11 @@ class _TicketCard extends StatelessWidget {
               ]),
             ]),
             const SizedBox(height: HPSpace.sm),
-            StatusChip(label: status, tone: tone),
+            Row(children: [
+              Expanded(child: Align(alignment: Alignment.centerLeft, child: StatusChip(label: status, tone: tone))),
+              if (onEdit != null)
+                TextButton.icon(key: Key('ticket-${ticket['kotNo']}-edit'), onPressed: onEdit, icon: const Icon(Icons.edit_outlined, size: 18), label: const Text('Edit KOT')),
+            ]),
             const SizedBox(height: HPSpace.md),
             for (final l in (ticket['lines'] as List).cast<Json>())
               Padding(

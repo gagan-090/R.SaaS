@@ -138,11 +138,12 @@ export const FEATURE_FLAGS = {
 } as const;
 export type FeatureFlag = keyof typeof FEATURE_FLAGS;
 
-// Standard: one device run by the owner (no employees), with the visual floor editor to move tables
-const STANDARD: FeatureFlag[] = ['tables', 'orders.dinein', 'orders.takeaway', 'menu', 'billing', 'offline.single', 'floor.editor'];
+// Standard: one device run by the owner (no employees), with the visual floor editor to move tables and the
+// restaurant's own logo, colour and text style
+const STANDARD: FeatureFlag[] = ['tables', 'orders.dinein', 'orders.takeaway', 'menu', 'billing', 'offline.single', 'floor.editor', 'branding'];
 const PROFESSIONAL: FeatureFlag[] = [...STANDARD, 'floors', 'multi_cashier', 'waiter_app', 'lan_hub'];
 const PREMIUM: FeatureFlag[] = [
-  ...PROFESSIONAL, 'franchise', 'roles.extended', 'kds', 'recipes', 'menu.approval', 'inventory', 'shifts', 'branding',
+  ...PROFESSIONAL, 'franchise', 'roles.extended', 'kds', 'recipes', 'menu.approval', 'inventory', 'shifts',
   'staff_portal', 'roles.custom', 'import.excel', 'expenses',
 ];
 

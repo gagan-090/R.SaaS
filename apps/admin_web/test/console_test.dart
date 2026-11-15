@@ -763,7 +763,7 @@ void main() {
     expect((five['width'], five['height']), (190, 76));
   });
 
-  testWidgets('a plan with employees keeps Staff in the menu and no PIN card in Settings', (t) async {
+  testWidgets('a plan with employees keeps Staff in the menu; the POS PIN is reset under Restaurant details', (t) async {
     await start(t, size: phone);
     await t.tap(find.byKey(const Key('open-nav')));
     await t.pumpAndSettle();
@@ -772,7 +772,57 @@ void main() {
     expect(find.byKey(const Key('nav-Hubs & devices')), findsOneWidget);
     await t.tap(find.byKey(const Key('nav-Settings')));
     await t.pumpAndSettle();
-    expect(find.byKey(const Key('my-pin-card')), findsNothing);
+    expect(find.byKey(const Key('my-pin-card')), findsOneWidget);
+  });
+
+  testWidgets('settings: Restaurant details (name, GST, address, logo, PIN), Themes, plan includes, Taxes; every section hides and shows', (t) async {
+    final api = await start(t, size: phone, setup: (f) => f.brandingInPlan = true);
+    await go(t, 'Settings', size: phone);
+    expect(find.text('ON EVERY BILL'), findsNothing);
+    expect(find.text('RESTAURANT DETAILS'), findsOneWidget);
+    for (final k in ['profile-name', 'profile-gstin', 'profile-address', 'logo-section', 'set-my-pin']) {
+      expect(find.byKey(Key(k)), findsOneWidget, reason: k);
+    }
+    expect(find.text('YOUR LOOK'), findsNothing);
+    expect(find.text('GST RATES'), findsNothing);
+    for (final title in ['Themes', 'Your plan', 'Taxes']) {
+      await t.scrollUntilVisible(find.byKey(Key('fold-$title')), 300, scrollable: find.byType(Scrollable).first);
+      await t.pumpAndSettle();
+    }
+    expect(find.byKey(const Key('plan-includes')), findsOneWidget);
+    expect(find.text('YOUR PLAN INCLUDES'), findsOneWidget);
+    // hide and show
+    await t.scrollUntilVisible(find.byKey(const Key('fold-Restaurant details')), -300, scrollable: find.byType(Scrollable).first);
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('fold-Restaurant details')));
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('profile-name')), findsNothing);
+    await t.tap(find.byKey(const Key('fold-Restaurant details')));
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('profile-name')), findsOneWidget);
+    // Themes: one text style choice; a custom colour from the full picker is what gets saved
+    await t.scrollUntilVisible(find.byKey(const Key('custom-colour')), 300, scrollable: find.byType(Scrollable).first);
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('brand-text-style')), findsOneWidget);
+    expect(find.text('Extra bold'), findsNothing); // no separate heading weight
+    await t.tap(find.byKey(const Key('custom-colour')));
+    await t.pumpAndSettle();
+    final hue = t.getRect(find.byKey(const Key('hue')));
+    await t.tapAt(Offset(hue.left + hue.width * .5, hue.center.dy)); // about half way round the colour wheel
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('use-custom-colour')));
+    await t.pumpAndSettle();
+    final hex = t.widget<TextField>(find.byKey(const Key('brand-hex'))).controller!.text;
+    expect(hex, matches(RegExp(r'^#[0-9A-F]{6}$')));
+    await t.tap(find.text('Small'));
+    await t.pumpAndSettle();
+    await t.scrollUntilVisible(find.byKey(const Key('save-branding')), 300, scrollable: find.byType(Scrollable).first);
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const Key('save-branding')));
+    await t.pumpAndSettle();
+    expect(api.last('PUT', '/tenant/branding'), {'color': hex, 'textSize': 'compact', 'headingWeight': 'regular', 'headingCase': 'normal'});
+    expect(t.takeException(), isNull);
+    HPBrand.activate(null);
   });
 
   testWidgets('phone: the chosen category can be renamed and deleted with plain buttons', (t) async {
@@ -892,7 +942,7 @@ void main() {
       await go(t, 'Settings', size: desktop);
       await t.scrollUntilVisible(find.byKey(const Key('save-branding')), 300, scrollable: find.byType(Scrollable).last);
       await t.tap(find.byKey(const Key('swatch-#1A73E8')));
-      await t.tap(find.text('Large'));
+      await t.tap(find.text('Large')); // one choice: large text with extra bold headings
       await t.tap(find.text('AA'));
       await t.pumpAndSettle();
       expect(find.text('SEND TO KITCHEN'), findsOneWidget); // live preview
@@ -903,7 +953,7 @@ void main() {
       await t.tap(find.byKey(const Key('swatch-#1A73E8')));
       await t.tap(find.byKey(const Key('save-branding')));
       await t.pumpAndSettle();
-      expect(api.last('PUT', '/tenant/branding'), {'color': '#1A73E8', 'textSize': 'large', 'headingWeight': 'bold', 'headingCase': 'upper'});
+      expect(api.last('PUT', '/tenant/branding'), {'color': '#1A73E8', 'textSize': 'large', 'headingWeight': 'heavy', 'headingCase': 'upper'});
       expect(find.byKey(const Key('brand-name')), findsOneWidget); // sidebar shows the restaurant, not BhojMitra
       expect(find.text('DEMO DHABA'), findsWidgets);
       expect(HPColors.saffron, const Color(0xFF1A73E8));

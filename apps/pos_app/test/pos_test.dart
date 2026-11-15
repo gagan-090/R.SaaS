@@ -6,6 +6,7 @@ import 'package:rsaas_pos/app.dart';
 import 'package:rsaas_pos/hub/hub_api.dart';
 import 'package:rsaas_pos/screens/admin_screens.dart';
 import 'package:rsaas_pos/screens/bill_screens.dart' show showInvoicePdf;
+import 'package:rsaas_pos/screens/order_screen.dart' show OrderScreen;
 import 'package:rsaas_pos/screens/owner_console.dart';
 import 'package:rsaas_pos/screens/setup_screens.dart';
 import 'package:rsaas_pos/state/app_state.dart';
@@ -364,6 +365,36 @@ void main() {
       }
       expect(find.byKey(const Key('kot-1-ready')), findsOneWidget);
       expect(find.textContaining('Ready at the pass'), findsOneWidget);
+    });
+
+    testWidgets('[$tag] Professional: the cashier cooks the KOT on Kitchen (no "kds" refusal) and edits it from there', (t) async {
+      final hub = await start(t, size: size, brightness: brightness);
+      hub.license = {'plan': 'professional', 'state': 'active', 'limits': {'staffPerBranch': null},
+        'features': ['tables', 'orders.dinein', 'orders.takeaway', 'menu', 'billing', 'offline.single', 'floor.editor', 'floors', 'multi_cashier', 'waiter_app', 'lan_hub']};
+      await signIn(t, 'Ravi', '1234');
+      await orderTable1(t, narrow: narrow);
+      if (narrow) {
+        await t.tapAt(const Offset(10, 10)); // close the order sheet
+        await t.pumpAndSettle();
+      }
+      await t.pageBack();
+      await t.pumpAndSettle();
+      await nav(t, 'Kitchen');
+      await t.tap(find.byKey(const Key('ticket-1-preparing')));
+      await t.pumpAndSettle();
+      expect(hub.tickets.single['status'], 'preparing');
+      expect(find.textContaining('Your plan does not include'), findsNothing);
+      // Edit KOT: the order opens; an item is cancelled there and the kitchen card shows it crossed out
+      await t.tap(find.byKey(const Key('ticket-1-edit')));
+      await t.pumpAndSettle();
+      expect(find.byType(OrderScreen), findsOneWidget);
+      await t.pageBack();
+      await t.pumpAndSettle();
+      expect(find.byKey(const Key('ticket-1')), findsOneWidget);
+      await scrollTo(t, find.byKey(const Key('ticket-1-ready')));
+      await t.tap(find.byKey(const Key('ticket-1-ready')));
+      await t.pumpAndSettle();
+      expect(hub.tickets.single['status'], 'ready');
     });
 
     testWidgets('[$tag] Standard: the owner orders, marks the KOT ready and served from the order, and bills', (t) async {

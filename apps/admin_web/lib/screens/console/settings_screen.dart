@@ -9,7 +9,8 @@ import '../../widgets/labels.dart';
 import 'branding_card.dart';
 import 'staff_screen.dart' show MyPinDialog;
 
-/// Restaurant settings: what prints on every bill (name, address, GSTIN), the plan, and GST rates.
+/// Restaurant settings: restaurant details (name, GSTIN, address, logo — on every bill — and the owner's POS PIN),
+/// themes, the plan and taxes. Every section shows / hides from its title.
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
   @override
@@ -78,7 +79,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder: (d) => StatefulBuilder(
         builder: (d, set) => HPDialog(
-          title: 'Add a GST rate',
+          title: 'Add a tax rate',
           actions: [SecondaryButton(label: 'Cancel', onPressed: () => Navigator.pop(d)), PrimaryButton(label: 'Add', height: 56, onPressed: () => Navigator.pop(d, true))],
           child: Wrap(spacing: HPSpace.sm, children: [
             for (final r in [0, 500, 1200, 1800, 2800]) ChoiceChip(label: Text('${r ~/ 100}%'), selected: rate == r, onSelected: (_) => set(() => rate = r)),
@@ -96,30 +97,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  /// Owner-only plan: no Staff page, so the owner's own POS PIN is set here.
-  bool get _ownerOnly {
-    final a = ref.read(authProvider);
-    return a is SignedIn && a.ownerOnlyPlan;
-  }
-
+  /// The signed-in person's own POS PIN (set or reset here; the POS asks for it).
   Widget get _myPin {
     final a = ref.read(authProvider) as SignedIn;
     final has = a.me['hasPin'] == true;
-    return SectionCard(
-      key: const Key('my-pin-card'),
-      title: 'Your POS PIN',
-      child: Row(children: [
-        Expanded(child: Text(has ? 'You sign in on the POS with your PIN. Change it here.' : 'You have no POS PIN yet. The POS asks for it.', style: HPType.body(context.hp.muted))),
-        const SizedBox(width: HPSpace.md),
-        SecondaryButton(key: const Key('set-my-pin'), label: has ? 'Change PIN' : 'Set PIN', icon: Icons.pin_outlined, height: 48, onPressed: () async {
+    return Column(key: const Key('my-pin-card'), crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Text('POS PIN', style: HPType.label(context.hp.text)),
+      const SizedBox(height: HPSpace.sm),
+      Text(has ? 'You sign in on the POS with your PIN. Reset it here.' : 'You have no POS PIN yet. The POS asks for it.', style: HPType.body(context.hp.muted)),
+      const SizedBox(height: HPSpace.sm),
+      Align(alignment: Alignment.centerLeft, child: SecondaryButton(key: const Key('set-my-pin'), label: has ? 'Reset PIN' : 'Set PIN', icon: Icons.pin_outlined, height: 48, onPressed: () async {
           final ok = await showDialog<bool>(barrierDismissible: false, context: context, builder: (_) => MyPinDialog(api: _api));
           if (ok == true) {
             await ref.read(authProvider.notifier).refresh();
             if (mounted) showDone(context, 'PIN saved — use it on the POS in about a minute');
           }
-        }),
-      ]),
-    );
+        })),
+    ]);
   }
 
   @override
@@ -130,19 +124,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final lic = _overview!['license'] as Json;
     final edit = _can('restaurant.profile.manage');
     final narrow = isNarrowWeb(context);
+    final signedIn = ref.read(authProvider);
+    final hasPinRow = signedIn is SignedIn && signedIn.isRestaurant;
     final profile = SectionCard(
-      title: 'On every bill',
+      title: 'Restaurant details',
+      collapsible: true,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text('Name, GST and address print on every bill.', style: HPType.body(p.muted)),
+        const SizedBox(height: HPSpace.md),
         TextField(key: const Key('profile-name'), controller: _name, enabled: edit, decoration: const InputDecoration(labelText: 'Restaurant name')),
         const SizedBox(height: HPSpace.md),
-        TextField(controller: _gstin, enabled: edit, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(labelText: 'GSTIN', hintText: '27AAAPA1234A1Z5')),
+        TextField(key: const Key('profile-gstin'), controller: _gstin, enabled: edit, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(labelText: 'GST number (GSTIN)', hintText: '27AAAPA1234A1Z5')),
         const SizedBox(height: HPSpace.md),
-        TextField(controller: _address, enabled: edit, maxLines: 2, decoration: const InputDecoration(labelText: 'Address')),
-        if (edit) ...[const SizedBox(height: HPSpace.lg), Align(alignment: Alignment.centerRight, child: PrimaryButton(key: const Key('save-profile'), label: 'Save', busy: _busy, height: 48, onPressed: _saveProfile))],
+        TextField(key: const Key('profile-address'), controller: _address, enabled: edit, maxLines: 2, decoration: const InputDecoration(labelText: 'Address')),
+        if (edit) ...[const SizedBox(height: HPSpace.lg), Align(alignment: Alignment.centerRight, child: PrimaryButton(key: const Key('save-profile'), label: 'Save details', busy: _busy, height: 48, onPressed: _saveProfile))],
+        const SizedBox(height: HPSpace.lg),
+        const Divider(height: 1),
+        const SizedBox(height: HPSpace.lg),
+        const BrandingCard(part: BrandPart.logo),
+        if (hasPinRow) ...[
+          const SizedBox(height: HPSpace.lg),
+          const Divider(height: 1),
+          const SizedBox(height: HPSpace.lg),
+          _myPin,
+        ],
       ]),
     );
     final plan = SectionCard(
       title: 'Your plan',
+      collapsible: true,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Wrap(spacing: HPSpace.md, runSpacing: HPSpace.xs, crossAxisAlignment: WrapCrossAlignment.center, children: [
           Text('${lic['planName'] ?? '—'}', style: HPType.titleCard(p.text).copyWith(fontSize: 26)),
@@ -151,7 +161,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: 4),
         Text(lic['endsAt'] == null ? 'No active license' : 'Renews ${shortDate(lic['endsAt'])}', style: HPType.body(p.muted)),
         const SizedBox(height: HPSpace.md),
-        Text('INCLUDES', style: HPType.overline(p.muted)),
+        Text('YOUR PLAN INCLUDES', key: const Key('plan-includes'), style: HPType.overline(p.muted)),
         const SizedBox(height: HPSpace.sm),
         Wrap(spacing: HPSpace.xs, runSpacing: HPSpace.xs, children: [
           for (final f in (lic['features'] as List).cast<String>())
@@ -160,7 +170,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ]),
     );
     final taxes = SectionCard(
-      title: 'GST rates',
+      title: 'Taxes',
+      collapsible: true,
       actions: [if (_can('menu.publish')) TextButton.icon(onPressed: _addTax, icon: const Icon(Icons.add_rounded, size: 18), label: const Text('Add'))],
       child: _taxes!.isEmpty
           ? Text('No GST rates yet. Adding your first dish creates GST 5%.', style: HPType.body(p.muted))
@@ -170,18 +181,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
     return PageFrame(
       title: 'Settings',
-      subtitle: 'Restaurant details, your look, plan and taxes',
+      subtitle: 'Restaurant details, themes, plan and taxes · tap a title to show or hide it',
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         narrow
-            ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [profile, const SizedBox(height: HPSpace.lg), plan, const SizedBox(height: HPSpace.lg), taxes])
+            ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [profile, const SizedBox(height: HPSpace.lg), const BrandingCard(), const SizedBox(height: HPSpace.lg), plan, const SizedBox(height: HPSpace.lg), taxes])
             : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Expanded(flex: 3, child: profile),
+                Expanded(flex: 3, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [profile, const SizedBox(height: HPSpace.lg), const BrandingCard()])),
                 const SizedBox(width: HPSpace.lg),
                 Expanded(flex: 2, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [plan, const SizedBox(height: HPSpace.lg), taxes])),
               ]),
-        if (_ownerOnly) ...[const SizedBox(height: HPSpace.lg), _myPin],
-        const SizedBox(height: HPSpace.lg),
-        const BrandingCard(),
       ]),
     );
   }

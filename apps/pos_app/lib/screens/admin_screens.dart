@@ -1074,6 +1074,14 @@ final planProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) asyn
   return ((await api.branch())['license'] as Map?)?.cast<String, dynamic>() ?? const {};
 });
 
+/// May this person move a KOT (cooking → ready → served)? With the kitchen display (Premium) the kitchen does; without
+/// it (Standard, Professional) whoever takes orders does — the hub applies the same rule.
+bool canMoveKot(WidgetRef ref, StaffSession s) {
+  if (s.can('kds.update')) return true;
+  final features = ref.watch(planProvider).valueOrNull?['features'] as List?;
+  return features != null && !features.contains('kds') && s.can('order.write');
+}
+
 /// Owner-only plan (Standard: one device, no employees): no Staff section on the POS.
 bool ownerOnlyPlan(WidgetRef ref) => ((ref.watch(planProvider).valueOrNull?['limits'] as Map?)?['staffPerBranch']) == 0;
 

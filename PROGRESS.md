@@ -512,3 +512,12 @@ code, passes now); pos_app **96 passed, 5 skipped**.
   for older restaurants.
 - Category chips wrap onto rows instead of a sideways scroll, so all 9 (plus All / + Category / Arrange by course) show.
 - Tests: admin_web 154 passed (8 skipped); new phone test: all 9 categories on screen, no seed button.
+
+## KOT for floor staff without KDS, Edit KOT, Standard branding, Settings re-organised (2026-11-15)
+- Hub + POS: on plans without "kds" the owner, cashier and waiter move KOTs (no "Your plan does not include kds");
+  Kitchen cards have "Edit KOT" (opens the order: cancel items with a reason, add more).
+- API: Standard (and Professional) include custom branding; migration 20261115090000_branding_in_every_plan.
+- Console Settings: Restaurant details (name, GST, address, logo, Reset PIN), Themes (custom colour picker over the full
+  RGB range, one text style Small/Normal/Large = light/bold/extra-bold headings, Aa/AA), Your plan ("Your plan
+  includes"), Taxes; every section hides / shows from its title.
+- Tests: api 169, admin_web 155 (8 skipped), pos_app 103 (5 skipped), hub_server 54 — all passed.

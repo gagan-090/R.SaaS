@@ -316,31 +316,59 @@ class _AsyncViewState<T> extends State<AsyncView<T>> {
       );
 }
 
-class SectionCard extends StatelessWidget {
-  const SectionCard({super.key, required this.title, required this.child, this.actions = const []});
+/// A titled card. [collapsible]: tapping the title shows / hides the content (open at first unless [initiallyOpen] is
+/// false); the title row is keyed `fold-<title>`.
+class SectionCard extends StatefulWidget {
+  const SectionCard({super.key, required this.title, required this.child, this.actions = const [], this.collapsible = false, this.initiallyOpen = true});
   final String title;
   final Widget child;
   final List<Widget> actions;
+  final bool collapsible, initiallyOpen;
   @override
-  Widget build(BuildContext context) => Card(
+  State<SectionCard> createState() => _SectionCardState();
+}
+
+class _SectionCardState extends State<SectionCard> {
+  late bool _open = widget.initiallyOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.hp;
+    final open = !widget.collapsible || _open;
+    // title and its actions share a line when they fit, otherwise the actions wrap underneath
+    Widget head = Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: HPSpace.sm,
+      children: [
+        Text(widget.title.toUpperCase(), style: HPType.overline(p.muted)),
+        if (widget.actions.isNotEmpty && open) Wrap(spacing: HPSpace.xs, children: widget.actions),
+      ],
+    );
+    if (widget.collapsible) {
+      head = InkWell(
+        key: Key('fold-${widget.title}'),
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => setState(() => _open = !_open),
         child: Padding(
-          padding: const EdgeInsets.all(HPSpace.x2),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // title and its actions share a line when they fit, otherwise the actions wrap underneath
-          Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: HPSpace.sm,
-            children: [
-              Text(title.toUpperCase(), style: HPType.overline(context.hp.muted)),
-              if (actions.isNotEmpty) Wrap(spacing: HPSpace.xs, children: actions),
-            ],
-          ),
-            const SizedBox(height: HPSpace.lg),
-            child,
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(children: [
+            Expanded(child: head),
+            Tooltip(message: _open ? 'Hide' : 'Show', child: Icon(_open ? Icons.expand_less_rounded : Icons.expand_more_rounded, color: p.muted)),
           ]),
         ),
       );
+    }
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(HPSpace.x2),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          head,
+          if (open) ...[const SizedBox(height: HPSpace.lg), widget.child],
+        ]),
+      ),
+    );
+  }
 }
 
 /// P10 step-up prompt: password + the admin's own current TOTP code. Returns (password, code) or null.

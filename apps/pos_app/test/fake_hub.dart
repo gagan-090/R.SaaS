@@ -229,7 +229,9 @@ class FakeHubApi extends HubApi {
 
   @override
   Future<Json> setTicketStatus(String ticketId, String status) async {
-    if (!_perms.contains('kds.update')) throw HubApiException(403, 'missing_permission', 'Missing permission: kds.update');
+    // same rule as the hub: the kitchen with the kitchen display; without it, whoever takes orders
+    final kdsInPlan = (license['features'] as List).contains('kds');
+    if (!_perms.contains('kds.update') && (kdsInPlan || !_perms.contains('order.write'))) throw HubApiException(403, 'missing_permission', 'Missing permission: kds.update');
     final k = tickets.firstWhere((k) => k['id'] == ticketId);
     k['status'] = status;
     events$.add({'type': 'kds.ticket_status', 'data': {'orderId': k['orderId'], 'status': status}});

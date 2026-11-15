@@ -10,6 +10,7 @@ import '../state/app_state.dart';
 import '../ui/common.dart';
 import '../ui/media.dart';
 import '../ui/shell.dart';
+import 'admin_screens.dart' show canMoveKot;
 import 'bill_screens.dart';
 
 const quickNotes = ['Less spicy', 'Extra spicy', 'No onion', 'No garlic', 'Jain', 'Extra butter', 'Pack separately'];
@@ -394,7 +395,7 @@ class _OrderScreenState extends ConsumerState<OrderScreen> {
               tone: switch (k['status']) { 'ready' => HPTone.success, 'served' => HPTone.neutral, _ => HPTone.pending },
             ),
             // whoever may move kitchen tickets (the owner on Standard runs kitchen and floor alone) moves it from here
-            if (session.can('kds.update') && _nextKot[k['status']] != null)
+            if (canMoveKot(ref, session) && _nextKot[k['status']] != null)
               ActionChip(
                 key: Key('kot-${k['kot_no']}-to-${_nextKot[k['status']]!.$1}'),
                 avatar: Icon(_nextKot[k['status']]!.$3, size: 16),
