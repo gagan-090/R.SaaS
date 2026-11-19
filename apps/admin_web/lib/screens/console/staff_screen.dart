@@ -73,7 +73,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen> {
   }
 
   Future<void> _edit([Json? u]) async {
-    final saved = await showDialog<String>(
+    final saved = await showConsoleDialog<String>(
       barrierDismissible: false,
       context: context,
       builder: (_) => _StaffEditor(api: _api, user: u, roles: _roles, customRoles: _customRoles, limits: _limits!),
@@ -85,7 +85,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen> {
   }
 
   Future<void> _setMyPin() async {
-    final ok = await showDialog<bool>(barrierDismissible: false, context: context, builder: (_) => MyPinDialog(api: _api));
+    final ok = await showConsoleDialog<bool>(barrierDismissible: false, context: context, builder: (_) => MyPinDialog(api: _api));
     if (ok == true) {
       await _load();
       if (mounted) showDone(context, 'PIN saved — use it on the POS in about a minute');

@@ -521,3 +521,12 @@ code, passes now); pos_app **96 passed, 5 skipped**.
   RGB range, one text style Small/Normal/Large = light/bold/extra-bold headings, Aa/AA), Your plan ("Your plan
   includes"), Taxes; every section hides / shows from its title.
 - Tests: api 169, admin_web 155 (8 skipped), pos_app 103 (5 skipped), hub_server 54 — all passed.
+
+## Fix: bill details "Missing bearer token" inside the POS; invoice numbers restarting on a new main device (2026-11-19)
+- Console dialogs inside the POS used the POS's providers (no console sign-in). All 38 console dialogs now go
+  through `showConsoleDialog`. Test: console embedded in a host app, dashboard → bill opens with the bearer token
+  (fails without the fix: "Something went wrong").
+- Two bills numbered BR01/26-27/000001: each main device counted from 1. The cloud now sends the highest invoice
+  number per FY on every pull; the hub never goes below it. Bills already issued are not changed (paid bills are
+  never edited).
+- Tests: api 170, admin_web 156 (8 skipped), pos_app 103 (5 skipped), hub_server 55 — all passed.

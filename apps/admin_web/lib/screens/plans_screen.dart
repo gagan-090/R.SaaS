@@ -59,7 +59,7 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
   }
 
   Future<void> _edit([Json? plan]) async {
-    final saved = await showDialog<String>(barrierDismissible: false, context: context, builder: (_) => PlanEditor(api: ref.read(apiProvider), plan: plan));
+    final saved = await showConsoleDialog<String>(barrierDismissible: false, context: context, builder: (_) => PlanEditor(api: ref.read(apiProvider), plan: plan));
     if (saved == null) return;
     ref.invalidate(activePlansProvider);
     setState(() => _reload++);

@@ -374,7 +374,7 @@ class _RestaurantsScreenState extends ConsumerState<RestaurantsScreen> {
   int _awaitingReload = 0;
 
   Future<void> _register() async {
-    if (await showDialog<bool>(barrierDismissible: false, context: context, builder: (_) => const RegisterRestaurantDialog()) == true) {
+    if (await showConsoleDialog<bool>(barrierDismissible: false, context: context, builder: (_) => const RegisterRestaurantDialog()) == true) {
       // a new registration waits for the owner's email: show it there
       setState(() {
         _awaitingTab = true;
@@ -783,7 +783,7 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
       final r = await api.ownerPasswordReset(widget.id, reason, await api.stepUp(step.$1, step.$2));
       _reload();
       if (!mounted) return;
-      await showDialog<void>(
+      await showConsoleDialog<void>(
         context: context,
         builder: (c) => HPDialog(
           title: r['emailed'] == true ? 'Reset link sent' : 'Email not delivered',
@@ -935,7 +935,7 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
     if (action == 'upgrade' || action == 'downgrade' || action == 'issue') {
       final plans = await ref.read(activePlansProvider.future);
       if (!mounted) return;
-      plan = await showDialog<String>(
+      plan = await showConsoleDialog<String>(
         context: context,
         builder: (c) => SimpleDialog(title: Text('Choose plan to $action'), children: [
           for (final p in plans)
@@ -967,7 +967,7 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
   Future<void> _payment() async {
     final amount = TextEditingController(), ref0 = TextEditingController();
     String method = 'upi';
-    final ok = await showDialog<bool>(
+    final ok = await showConsoleDialog<bool>(
       barrierDismissible: false,
       context: context,
       builder: (c) => StatefulBuilder(
@@ -1669,7 +1669,7 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
 
 /// P8 Plans (feature flags + limits).
 /// Shown when the email provider refused the message: the Super Admin passes the link on another way.
-Future<void> showActivationLinkDialog(BuildContext context, Map<String, dynamic> r) => showDialog<void>(
+Future<void> showActivationLinkDialog(BuildContext context, Map<String, dynamic> r) => showConsoleDialog<void>(
       barrierDismissible: false,
       context: context,
       builder: (c) => HPDialog(
@@ -1736,7 +1736,7 @@ class _PendingRegistrationsState extends ConsumerState<PendingRegistrations> {
 
   Future<void> _activate(Map<String, dynamic> r) async {
     final password = TextEditingController();
-    final ok = await showDialog<bool>(barrierDismissible: false, context: context, builder: (d) => HPDialog(title: 'Activate ${r['restaurantName']}', actions: [SecondaryButton(label: 'Cancel', onPressed: () => Navigator.pop(d)), PrimaryButton(label: 'Activate', onPressed: () { if (password.text.length >= 12) Navigator.pop(d, true); })], child: TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'Owner password', helperText: 'At least 12 characters. No email required.'))));
+    final ok = await showConsoleDialog<bool>(barrierDismissible: false, context: context, builder: (d) => HPDialog(title: 'Activate ${r['restaurantName']}', actions: [SecondaryButton(label: 'Cancel', onPressed: () => Navigator.pop(d)), PrimaryButton(label: 'Activate', onPressed: () { if (password.text.length >= 12) Navigator.pop(d, true); })], child: TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'Owner password', helperText: 'At least 12 characters. No email required.'))));
     if (ok != true) { password.dispose(); return; }
     try { await ref.read(apiProvider).activateRegistration(r['id'] as String, password.text); if (mounted) { setState(() => _reload++); showDone(context, 'Restaurant active. Owner can sign in with email and password.'); } } catch (e) { if (mounted) showError(context, e); } finally { password.dispose(); }
   }

@@ -134,7 +134,7 @@ class _BrandingCardState extends ConsumerState<BrandingCard> {
   Future<void> _pickCustom() async {
     final start = _draft?.color ?? context.hp.accent;
     var hsv = HSVColor.fromColor(start);
-    final picked = await showDialog<Color>(
+    final picked = await showConsoleDialog<Color>(
       context: context,
       builder: (d) => StatefulBuilder(builder: (d, set) {
         final c = hsv.toColor();

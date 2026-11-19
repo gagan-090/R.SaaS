@@ -269,7 +269,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
 
   Future<void> _editCategory([Json? c]) async {
     final name = TextEditingController(text: c?['name'] as String? ?? '');
-    final ok = await showDialog<bool>(
+    final ok = await showConsoleDialog<bool>(
       barrierDismissible: false,
       context: context,
       builder: (d) => HPDialog(
@@ -328,7 +328,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     final rows = TextEditingController();
     String? error;
     bool busy = false;
-    final saved = await showDialog<bool>(barrierDismissible: false, context: context, builder: (d) => StatefulBuilder(builder: (d, update) => HPDialog(
+    final saved = await showConsoleDialog<bool>(barrierDismissible: false, context: context, builder: (d) => StatefulBuilder(builder: (d, update) => HPDialog(
       title: 'Quick menu entry',
       actions: [
         SecondaryButton(label: 'Cancel', onPressed: busy ? null : () => Navigator.pop(d)),
@@ -450,7 +450,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     }
     if (!mounted) return;
     final defaultCat = _cat ?? (_cats!.isNotEmpty ? _cats!.first['id'] as String : 'standard:Main Course');
-    final saved = await showDialog<bool>(
+    final saved = await showConsoleDialog<bool>(
       barrierDismissible: false,
       context: context,
       builder: (_) => _ItemEditor(
@@ -593,7 +593,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
               showError(context, 'Excel import is not in your plan. Ask the Super Admin to enable "Excel import (menu & inventory)" in Plans, then sign in again.');
               return;
             }
-            final done = await showDialog<bool>(barrierDismissible: false, context: context, builder: (_) => ImportDialog(api: _api, kind: 'menu'));
+            final done = await showConsoleDialog<bool>(barrierDismissible: false, context: context, builder: (_) => ImportDialog(api: _api, kind: 'menu'));
             if (done == true) await _load();
           }),
         // the 9 standard categories come with every new restaurant: no separate "Add standard categories" button
@@ -1443,7 +1443,7 @@ class _ItemEditorState extends State<_ItemEditor> {
             }),
             onChanged: () => setState(() {}),
             onRecipe: widget.canMapRecipes && s.id != null
-                ? () => showDialog<void>(barrierDismissible: false, context: context, builder: (_) => RecipeDialog(api: widget.api, variantId: s.id!, title: '${_name.text.trim()} · ${s.name.text.trim()}'))
+                ? () => showConsoleDialog<void>(barrierDismissible: false, context: context, builder: (_) => RecipeDialog(api: widget.api, variantId: s.id!, title: '${_name.text.trim()} · ${s.name.text.trim()}'))
                 : null,
           ),
         if (widget.canMapRecipes && _sizes.any((s) => s.id == null))

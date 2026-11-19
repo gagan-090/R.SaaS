@@ -284,6 +284,14 @@ class HubService {
     int b(Object? v) => v == true ? 1 : 0;
     await db.transaction(() async {
       if (token != null) await db.setMeta('license_token', token);
+      // invoice numbers already used by this branch (on an earlier main device): never issue one of them again
+      for (final r in rows('invoiceCounters').where((r) => r['branchCode'] == config.branchCode)) {
+        await db.execute(
+          'INSERT INTO invoice_counters(branch_code, fy, last_number) VALUES (?,?,?) '
+          'ON CONFLICT(branch_code, fy) DO UPDATE SET last_number = MAX(last_number, excluded.last_number)',
+          [config.branchCode, r['fy'], r['lastNumber']],
+        );
+      }
       for (final r in rows('floors')) {
         await db.execute('INSERT OR REPLACE INTO floors(id, name, sort_order, deleted, width, height) VALUES (?,?,?,?,?,?)',
             [r['id'], r['name'], r['sortOrder'], b(r['deleted']), r['width'] ?? 1200, r['height'] ?? 800]);

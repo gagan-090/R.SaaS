@@ -463,6 +463,25 @@ void main() {
       expect((await h.post('/orders/$tk/bill', session: cashier)).json['invoice_no'], 'BR01/27-28/000001');
     });
 
+    test('a new main device continues the invoice series the cloud already has (never 000001 again)', () async {
+      // the earlier main device issued up to 000041 this year; another branch's and a stale lower count are ignored
+      final pull = await h.configPull()
+        ..['invoiceCounters'] = [
+          {'branchCode': 'BR01', 'fy': '26-27', 'lastNumber': 41},
+          {'branchCode': 'BR02', 'fy': '26-27', 'lastNumber': 900},
+        ];
+      await h.hub.applyConfig(pull);
+      final id = await openDineIn(Harness.t1);
+      await add(id, [{'menuItemId': Harness.naan, 'qty': 1}]);
+      expect((await h.post('/orders/$id/bill', session: cashier)).json['invoice_no'], 'BR01/26-27/000042');
+      // a later pull that has not seen 000042 yet never moves the counter back
+      await h.hub.applyConfig(await h.configPull()
+        ..['invoiceCounters'] = [{'branchCode': 'BR01', 'fy': '26-27', 'lastNumber': 41}]);
+      final id2 = await openDineIn(Harness.t2);
+      await add(id2, [{'menuItemId': Harness.naan, 'qty': 1}]);
+      expect((await h.post('/orders/$id2/bill', session: cashier)).json['invoice_no'], 'BR01/26-27/000043');
+    });
+
     test('discount needs discount.apply; above 10% needs a reason', () async {
       final id = await openDineIn(Harness.t1);
       await add(id, [{'menuItemId': Harness.butterChicken, 'qty': 1}]);

@@ -10,6 +10,7 @@ import 'package:http/testing.dart';
 import 'package:image/image.dart' as img;
 import 'package:rsaas_admin_web/api/api_client.dart';
 import 'package:rsaas_admin_web/app.dart';
+import 'package:rsaas_admin_web/embed.dart';
 import 'package:rsaas_admin_web/screens/console/floor_editor.dart';
 import 'package:rsaas_admin_web/screens/console/import_dialog.dart';
 import 'package:rsaas_admin_web/screens/console/staff_screen.dart' show MyPinDialog;
@@ -115,7 +116,13 @@ class FakeRestaurantApi {
         if (noPlan && (path.startsWith('/menu/') || path.startsWith('/floors'))) {
           return http.Response('{"code":"feature_not_in_plan","message":"Your plan does not include \\"menu\\""}', 403);
         }
+        // like the API: a page's data needs the console's sign-in
+        if (path.startsWith('/tenant/') && req.headers['authorization'] == null) {
+          return http.Response('{"statusCode":401,"code":"unauthorized","message":"Missing bearer token"}', 401);
+        }
         switch ((req.method, path)) {
+          case ('POST', '/auth/refresh'):
+            out = {'accessToken': 'a', 'refreshToken': 'r2', 'expiresIn': 900};
           case ('POST', '/auth/login'):
             out = {'status': 'ok', 'accessToken': 'a', 'refreshToken': 'r', 'expiresIn': 900};
           case ('GET', '/me'):
@@ -761,6 +768,34 @@ void main() {
     final one = sent.firstWhere((x) => x['name'] == '1'), five = sent.firstWhere((x) => x['name'] == '5');
     expect((one['width'], one['height']), (100, 100));
     expect((five['width'], five['height']), (190, 76));
+  });
+
+  testWidgets('inside the POS: a bill opened from the dashboard loads with the console sign-in, not "Missing bearer token"', (t) async {
+    t.view.physicalSize = const Size(1000, 1600); // the tablet in the report
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final fake = FakeRestaurantApi();
+    EmbeddedAdminConsole.debugHttpClient = fake.client();
+    addTearDown(() {
+      EmbeddedAdminConsole.debugHttpClient = null;
+      EmbeddedAdminConsole.forget('owner-1');
+    });
+    // the POS: its own app, its own providers and screen stack; the console is a page pushed on it
+    await t.pumpWidget(ProviderScope(child: MaterialApp(home: Builder(builder: (c) => Scaffold(body: Center(child: TextButton(
+      key: const Key('open-console'),
+      onPressed: () => Navigator.of(c).push(MaterialPageRoute<void>(builder: (_) => EmbeddedAdminConsole(userKey: 'owner-1', initialSession: 'r1', onExit: () {}))),
+      child: const Text('Owner console'),
+    )))))));
+    await t.tap(find.byKey(const Key('open-console')));
+    await t.pumpAndSettle();
+    await t.scrollUntilVisible(find.text('BR01/26-27/000101'), 300, scrollable: find.byType(Scrollable).first);
+    await t.pumpAndSettle();
+    await t.tap(find.text('BR01/26-27/000101'));
+    await t.pumpAndSettle();
+    expect(find.text('Missing bearer token'), findsNothing);
+    expect(find.text('Something went wrong'), findsNothing);
+    expect(find.text('less spicy'), findsOneWidget); // the bill's lines, from the bill itself
+    expect(fake.calls.where((r) => r.url.path.endsWith('/tenant/bills/bill-1')).single.headers['authorization'], 'Bearer a');
   });
 
   testWidgets('a plan with employees keeps Staff in the menu; the POS PIN is reset under Restaurant details', (t) async {

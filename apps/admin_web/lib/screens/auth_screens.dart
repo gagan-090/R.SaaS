@@ -98,7 +98,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _forgotPin() async {
     final email = TextEditingController(text: _email.text.trim());
-    final go = await showDialog<bool>(
+    final go = await showConsoleDialog<bool>(
       barrierDismissible: false,
       context: context,
       builder: (c) => HPDialog(

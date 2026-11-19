@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 
 import '../api/api_client.dart';
@@ -251,7 +252,7 @@ Widget loadErrorView(Object error, {required String page, VoidCallback? onRetry}
 
 /// Yes / no confirmation without a reason; destructive (red) by default, [destructive] false for a plain action.
 Future<bool> confirm(BuildContext context, {required String title, required String message, String confirmLabel = 'Delete', bool destructive = true}) async =>
-    await showDialog<bool>(
+    await showConsoleDialog<bool>(
       barrierDismissible: false,
       context: context,
       builder: (c) => HPDialog(
@@ -374,7 +375,7 @@ class _SectionCardState extends State<SectionCard> {
 /// P10 step-up prompt: password + the admin's own current TOTP code. Returns (password, code) or null.
 Future<(String, String)?> askStepUp(BuildContext context, {bool mfaRequired = true}) {
   final pw = TextEditingController(), code = TextEditingController();
-  return showDialog<(String, String)>(
+  return showConsoleDialog<(String, String)>(
     barrierDismissible: false,
     context: context,
     builder: (c) => HPDialog(
@@ -393,5 +394,17 @@ Future<(String, String)?> askStepUp(BuildContext context, {bool mfaRequired = tr
         ],
       ]),
     ),
+  );
+}
+
+/// Every console pop-up opens through this. Inside the POS the pop-up lands on the POS's own screen stack, outside the
+/// console, so it is given the console's providers (its sign-in, API, plan); without this a pop-up that loads data
+/// itself asks the server with no sign-in ("Missing bearer token").
+Future<T?> showConsoleDialog<T>({required BuildContext context, required WidgetBuilder builder, bool barrierDismissible = true}) {
+  final container = ProviderScope.containerOf(context, listen: false);
+  return showDialog<T>(
+    context: context,
+    barrierDismissible: barrierDismissible,
+    builder: (c) => UncontrolledProviderScope(container: container, child: Builder(builder: builder)),
   );
 }

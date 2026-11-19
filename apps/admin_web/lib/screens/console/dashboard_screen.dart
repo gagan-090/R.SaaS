@@ -492,7 +492,7 @@ class _RecentBills extends ConsumerWidget {
         InkWell(
           key: Key('recent-${b['invoiceNo']}'),
           borderRadius: BorderRadius.circular(10),
-          onTap: () => showDialog<void>(context: context, builder: (_) => _BillDetail(id: '${b['id']}')),
+          onTap: () => showConsoleDialog<void>(context: context, builder: (_) => _BillDetail(id: '${b['id']}')),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: HPSpace.sm, horizontal: HPSpace.xs),
             child: Row(children: [

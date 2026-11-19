@@ -71,6 +71,21 @@ describe('sync', () => {
     expect(p3.tables.map((x: { name: string }) => x.name)).toEqual(['T2']);
   });
 
+  it('a replacement main device learns the last invoice number used, so it never starts again at 000001', async () => {
+    const bill = (no: string, op = 'create') => ({ ...ev('bill'), op, payload: { branchId: R.branchId, invoice_no: no, status: 'billed' } });
+    await t.http().post(api('/sync/push')).set('X-Device-Token', device)
+      .send({ events: [bill('BR01/26-27/000007'), bill('BR01/26-27/000012'), bill('BR01/26-27/000012', 'update'), bill('BR01/25-26/000300')] }).expect(200);
+    const reg = (await t.http().post(api('/devices/register-hub')).set(bearer(R.ownerToken))
+      .send({ name: 'Owner phone', platform: 'android', replace: true }).expect(201)).body;
+    device = reg.deviceToken;
+    const pull = (await t.http().get(api('/sync/pull?since=0')).set('X-Device-Token', device).expect(200)).body;
+    expect(pull.invoiceCounters).toEqual(expect.arrayContaining([
+      { branchCode: 'BR01', fy: '26-27', lastNumber: 12 },
+      { branchCode: 'BR01', fy: '25-26', lastNumber: 300 },
+    ]));
+    expect(pull.invoiceCounters).toHaveLength(2);
+  });
+
   it('unknown or missing device tokens are refused', async () => {
     await t.http().post(api('/sync/push')).send({ events: [] }).expect(401);
     await t.http().get(api('/sync/pull')).set('X-Device-Token', 'nope').expect(401);

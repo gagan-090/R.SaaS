@@ -74,7 +74,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _addTax() async {
     var rate = 500;
-    final ok = await showDialog<bool>(
+    final ok = await showConsoleDialog<bool>(
       barrierDismissible: false,
       context: context,
       builder: (d) => StatefulBuilder(
@@ -107,7 +107,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       Text(has ? 'You sign in on the POS with your PIN. Reset it here.' : 'You have no POS PIN yet. The POS asks for it.', style: HPType.body(context.hp.muted)),
       const SizedBox(height: HPSpace.sm),
       Align(alignment: Alignment.centerLeft, child: SecondaryButton(key: const Key('set-my-pin'), label: has ? 'Reset PIN' : 'Set PIN', icon: Icons.pin_outlined, height: 48, onPressed: () async {
-          final ok = await showDialog<bool>(barrierDismissible: false, context: context, builder: (_) => MyPinDialog(api: _api));
+          final ok = await showConsoleDialog<bool>(barrierDismissible: false, context: context, builder: (_) => MyPinDialog(api: _api));
           if (ok == true) {
             await ref.read(authProvider.notifier).refresh();
             if (mounted) showDone(context, 'PIN saved — use it on the POS in about a minute');

@@ -106,3 +106,5 @@ Format: date · decision · why · alternative rejected.
 - 2026-11-15 · KOT status without the kitchen display (Standard, Professional): whoever takes orders (`order.write`: owner, cashier, waiter) moves a KOT; with "kds" (Premium) it stays `kds.update` (kitchen, owner). Hub and POS share the rule.
 - 2026-11-15 · Custom branding is in every plan from Standard up (migration adds it to standard + professional; licenses re-signed at start-up).
 - 2026-11-15 · Settings: Restaurant details (name, GSTIN, address, logo, own POS PIN) / Themes (presets + HSV custom colour, one text style = size + heading weight) / Your plan / Taxes; every SectionCard can be collapsible.
+- 2026-11-19 · Console pop-ups open through `showConsoleDialog`, which carries the console's provider container: inside the POS a dialog lands on the POS's root navigator, outside the console's ProviderScope.
+- 2026-11-19 · Invoice series survives a new main device: /sync/pull sends `invoiceCounters` (highest number per branch + FY from synced bill events); the hub keeps MAX(local, cloud).

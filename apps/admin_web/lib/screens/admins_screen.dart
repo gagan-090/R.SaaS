@@ -39,7 +39,7 @@ class _AdminsScreenState extends ConsumerState<AdminsScreen> {
 
   static const _statuses = [('active', 'Active'), ('invited', 'Invited'), ('disabled', 'Deactivated')];
 
-  Future<List<String>?> _pickRoles(List<dynamic> roles, Set<String> selected, String title) => showDialog<List<String>>(
+  Future<List<String>?> _pickRoles(List<dynamic> roles, Set<String> selected, String title) => showConsoleDialog<List<String>>(
         barrierDismissible: false,
         context: context,
         builder: (c) => StatefulBuilder(
@@ -59,7 +59,7 @@ class _AdminsScreenState extends ConsumerState<AdminsScreen> {
       );
 
   Future<void> _add([Json? pending]) async {
-    final ok = await showDialog<bool>(barrierDismissible: false, context: context, builder: (_) => _AdminCredentialsDialog(api: ref.read(apiProvider), pending: pending));
+    final ok = await showConsoleDialog<bool>(barrierDismissible: false, context: context, builder: (_) => _AdminCredentialsDialog(api: ref.read(apiProvider), pending: pending));
     if (ok != true || !mounted) return;
     _reload();
     showDone(context, 'Admin ${pending == null ? 'created' : 'activated'} — sign in with email and password');

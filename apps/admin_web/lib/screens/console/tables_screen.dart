@@ -65,7 +65,7 @@ class _TablesScreenState extends ConsumerState<TablesScreen> {
 
   Future<String?> _ask(String title, String label, {String initial = ''}) async {
     final c = TextEditingController(text: initial);
-    return showDialog<String>(
+    return showConsoleDialog<String>(
       barrierDismissible: false,
       context: context,
       builder: (d) => HPDialog(
@@ -91,7 +91,7 @@ class _TablesScreenState extends ConsumerState<TablesScreen> {
   Future<void> _editTable(String floorId, [Json? t]) async {
     final name = TextEditingController(text: t?['name'] as String? ?? '${_nextNumber()}');
     var seats = (t?['seats'] as int?) ?? 4;
-    final ok = await showDialog<bool>(
+    final ok = await showConsoleDialog<bool>(
       barrierDismissible: false,
       context: context,
       builder: (d) => StatefulBuilder(

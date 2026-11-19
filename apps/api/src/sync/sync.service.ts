@@ -100,6 +100,14 @@ export class SyncService {
         this.licenses.entitlement(tx, dev.tenantId),
         tx.restaurantTenant.findUniqueOrThrow({ where: { id: dev.tenantId } }),
       ]);
+      // the highest invoice number this branch has used per financial year, so a new or reinstalled main device
+      // continues the series instead of starting again at 000001 (invoice numbers never repeat)
+      const counters = await tx.$queryRaw<{ code: string; fy: string; last: number }[]>`
+        SELECT split_part(payload->>'invoice_no', '/', 1) AS code, split_part(payload->>'invoice_no', '/', 2) AS fy,
+               max(split_part(payload->>'invoice_no', '/', 3)::int) AS last
+        FROM sync_events
+        WHERE branch_id = ${dev.branchId}::uuid AND entity = 'bill' AND payload->>'invoice_no' ~ '^[^/]+/[^/]+/[0-9]{1,9}$'
+        GROUP BY 1, 2`;
       const all = [branches, floors, tables, taxRules, categories, items, variants, users].flat() as { seq: bigint }[];
       const cursor = all.reduce((m, r) => (r.seq > m ? r.seq : m), since);
       const strip = <T extends { seq: bigint }>(rows: T[]) => rows.map((r) => ({ ...r, seq: r.seq.toString() }));
@@ -108,6 +116,7 @@ export class SyncService {
         menuVersion: tenant.menuVersion,
         tenant: { id: tenant.id, name: tenant.name, gstin: tenant.gstin, address: tenant.address, status: tenant.status, branding: effectiveBranding(tenant.branding, ent.features) },
         licenseToken: ent.token,
+        invoiceCounters: counters.map((c) => ({ branchCode: c.code, fy: c.fy, lastNumber: Number(c.last) })),
         branches: strip(branches), floors: strip(floors), tables: strip(tables), taxRules: strip(taxRules),
         categories: strip(categories), items: strip(items),
         variants: strip(variants).map((v) => ({ ...v, servingQuantity: v.servingQuantity === null ? null : Number(v.servingQuantity), portionRatio: v.portionRatio === null ? null : Number(v.portionRatio) })),
