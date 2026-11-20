@@ -833,12 +833,11 @@ class HubService {
     return t.toJson()..remove('lines');
   }
 
-  /// Restaurant code (from the cloud) / date / time of billing in IST: R000123/2026/11/20/173045. A second bill in the
-  /// same second gets -2, -3 … so a number is never issued twice.
+  /// Restaurant number in hex (from the cloud code) / date / time of billing to the millisecond in IST:
+  /// 007B/20261120/173045123. A clash (same millisecond) gets -2, -3 … so a number is never issued twice.
   Future<String> _nextInvoiceNo() async {
     final tenant = jsonDecode(await db.getMeta('tenant') ?? '{}') as Map<String, Object?>;
-    final code = '${tenant['code'] ?? ''}'.trim().isEmpty ? config.branchCode : '${tenant['code']}'.trim();
-    final base = invoiceNoAt(code, clock());
+    final base = invoiceNoAt(restaurantHexId(tenant['code'] as String?), clock());
     var no = base;
     for (var n = 2; await db.selectOne('SELECT 1 FROM bills WHERE invoice_no = ?', [no]) != null; n++) {
       no = '$base-$n';

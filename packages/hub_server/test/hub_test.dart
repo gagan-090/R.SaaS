@@ -447,7 +447,7 @@ void main() {
   });
 
   group('bills, discounts, invoice numbers', () {
-    test('invoice number = restaurant code / date / time of billing (IST); same second gets -2, -3; never repeats', () async {
+    test('invoice number = restaurant hex id / date / time to the ms (IST); a clash gets -2, -3; never repeats', () async {
       final nos = <String>[];
       for (final t in [Harness.t1, Harness.t2, Harness.t3]) {
         final id = await openDineIn(t);
@@ -455,11 +455,11 @@ void main() {
         nos.add((await h.post('/orders/$id/bill', session: cashier)).json['invoice_no']! as String);
       }
       // the clock is 08:00 UTC = 13:30:00 IST on 12 Oct 2026
-      expect(nos, ['R000123/2026/10/12/133000', 'R000123/2026/10/12/133000-2', 'R000123/2026/10/12/133000-3']);
-      h.now = DateTime.utc(2026, 10, 12, 12, 0, 45); // 17:30:45 IST
+      expect(nos, ['007B/20261012/133000000', '007B/20261012/133000000-2', '007B/20261012/133000000-3']);
+      h.now = DateTime.utc(2026, 10, 12, 12, 0, 45, 123); // 17:30:45.123 IST
       final tk = (await h.post('/orders', session: cashier, body: {'type': 'takeaway'})).json['id'];
       await add(tk as String, [{'menuItemId': Harness.naan, 'qty': 1}]);
-      expect((await h.post('/orders/$tk/bill', session: cashier)).json['invoice_no'], 'R000123/2026/10/12/173045');
+      expect((await h.post('/orders/$tk/bill', session: cashier)).json['invoice_no'], '007B/20261012/173045123');
     });
 
     test('discount needs discount.apply; above 10% needs a reason', () async {

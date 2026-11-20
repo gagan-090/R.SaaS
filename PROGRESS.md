@@ -549,3 +549,5 @@ code, passes now); pos_app **96 passed, 5 skipped**.
   bills from another main device (history sync) are checked too. Old bills unchanged. Receipt snapshots updated (the
   number now wraps onto its own line on 58 mm / beside the date on 80 mm).
 - Tests: core 49, hub_server 55 (1 skipped), api sync 7, pos_app 104 (10 skipped) — all passed.
+- Update (same day): format is now `007B/20261120/173045123` (restaurant number in hex / date / time to the
+  millisecond, IST). Fits one receipt line on 58 mm and 80 mm. Tests: core 49, hub_server 55 (1 skipped) — passed.

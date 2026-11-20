@@ -63,8 +63,11 @@ void main() {
     });
     test('format is BR01/26-27/000123', () {
       expect(formatInvoiceNo('BR01', '26-27', 123), 'BR01/26-27/000123');
-      expect(invoiceNoAt('R000123', DateTime.utc(2026, 11, 20, 12, 0, 45)), 'R000123/2026/11/20/173045'); // 17:30:45 IST
-      expect(invoiceNoAt('R000123', DateTime.utc(2026, 11, 20, 18, 30, 5)), 'R000123/2026/11/21/000005'); // after midnight IST
+      expect(restaurantHexId('R000123'), '007B');
+      expect(restaurantHexId('R070000'), '11170');
+      expect(restaurantHexId(null), '0000');
+      expect(invoiceNoAt('007B', DateTime.utc(2026, 11, 20, 12, 0, 45, 123)), '007B/20261120/173045123'); // 17:30:45.123 IST
+      expect(invoiceNoAt('007B', DateTime.utc(2026, 11, 20, 18, 30, 5, 7)), '007B/20261121/000005007'); // after midnight IST
       expect(() => formatInvoiceNo('BR01', '26-27', 0), throwsRangeError);
     });
   });
