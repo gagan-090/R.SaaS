@@ -631,6 +631,55 @@ void main() {
       expect(worker.currentDelay, const Duration(seconds: 5));
     });
 
+    test('a new main device shows the bills the old one took (also those taken offline), keeps billing offline, never twice', () async {
+      // the old main device bills while the internet is down: everything stays on it
+      final cloud = FakeCloud()..historyPage = 3;
+      final oldWorker = SyncWorker(h.hub.db, h.hub, CloudClient('http://cloud', 'old', client: cloud.client()));
+      cloud.offline = true;
+      final id = await openDineIn(Harness.t1);
+      await add(id, [{'menuItemId': Harness.naan, 'qty': 2}]);
+      final bill = (await h.post('/orders/$id/bill', session: cashier, body: {})).json;
+      expect((await h.post('/bills/${bill['id']}/payments', session: cashier, idem: 'offline-pay-01', body: {'mode': 'cash', 'tenderedPaise': 100000})).status, 201);
+      final open = await openDineIn(Harness.t2);
+      await add(open, [{'menuItemId': Harness.lassi, 'qty': 1}]);
+      expect((await oldWorker.pushOnce()).ok, isFalse);
+      // internet back: it all reaches the cloud
+      cloud.offline = false;
+      while ((await oldWorker.pushOnce()).sent > 0) {}
+
+      // the owner signs in on another phone and makes it the main device: it starts with an empty database
+      final b = await Harness.start(plan: 'standard');
+      addTearDown(b.close);
+      final newWorker = SyncWorker(b.hub.db, b.hub, CloudClient('http://cloud', 'new', client: cloud.client()));
+      expect((await b.get('/bills?date=2026-10-12', session: await b.login(Harness.cashier))).body, isEmpty);
+      expect(await newWorker.pullHistory(), greaterThan(0));
+
+      final bCashier = await b.login(Harness.cashier);
+      final bills = (await b.get('/bills?date=2026-10-12', session: bCashier)).body! as List;
+      expect(bills.map((x) => (x as Map)['invoice_no']), [bill['invoice_no']]);
+      expect((bills.single as Map)['status'], 'paid');
+      expect(await b.hub.db.selectOne('SELECT mode, amount_paise FROM payments WHERE bill_id = ?', [bill['id']]), isNotNull);
+      // the table still being served on the old phone is busy here too, with its dish
+      final moved = (await b.get('/orders/$open', session: bCashier)).json;
+      expect(moved['status'], 'open');
+      expect((moved['lines']! as List).single, containsPair('menu_item_id', Harness.lassi));
+      // nothing was queued to upload again
+      expect((await b.hub.syncStatus())['pending'], 0);
+      // pulling again changes nothing; the old phone skips its own events
+      expect(await newWorker.pullHistory(), 0);
+      expect(await oldWorker.pullHistory(), 0);
+
+      // the new main device keeps billing with the internet down: next invoice number, nothing lost
+      cloud.offline = true;
+      final next = await b.post('/orders', session: bCashier, body: {'type': 'dine_in', 'tableId': Harness.t3, 'waiterId': Harness.waiter});
+      expect(next.status, 201);
+      await b.post('/orders/${next.json['id']}/lines', session: bCashier, body: {'lines': [{'menuItemId': Harness.naan, 'qty': 1}]});
+      final nb = (await b.post('/orders/${next.json['id']}/bill', session: bCashier, body: {})).json;
+      expect(nb['invoice_no'], isNot(bill['invoice_no']));
+      expect((await b.get('/bills?date=2026-10-12', session: bCashier)).body, hasLength(2));
+      expect(() => newWorker.pullHistory(), throwsA(isA<SocketException>()));
+    });
+
     test('config pull applies changes since the cursor', () async {
       final cloud = FakeCloud()..pullBody = await h.configPull();
       final worker = SyncWorker(h.hub.db, h.hub, CloudClient('http://cloud', 'dev-token', client: cloud.client()));

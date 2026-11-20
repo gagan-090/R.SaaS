@@ -530,3 +530,16 @@ code, passes now); pos_app **96 passed, 5 skipped**.
   number per FY on every pull; the hub never goes below it. Bills already issued are not changed (paid bills are
   never edited).
 - Tests: api 170, admin_web 156 (8 skipped), pos_app 103 (5 skipped), hub_server 55 — all passed.
+
+## Fix: bills missing on the owner's other phone; billing must not depend on the internet (2026-11-20)
+- Cause: a new main device (owner signs in on another phone → "Make this the main device") started with an empty
+  local database. The cloud pull only sent menu/staff/config, so bills taken on the earlier phone (online or offline)
+  were in the console but not on the POS.
+- Fix: GET /sync/history (cloud) + `SyncWorker.pullHistory` / `HubService.applyHistory` (hub) bring the branch's
+  orders, KOTs, bills, payments, adjustments and tips onto the main device, every sync tick; they stay for offline
+  use. The invoice counter also moves past every history bill.
+- Offline: billing always runs on the device's own hub. A device that already has its data no longer waits up to 30 s
+  for the cloud at start, and the POS live-update connection reconnects (1 s → 15 s) instead of staying "offline".
+- Tests: api 171, pos_app 104 (10 skipped), hub_server 56 — all passed. New: api history paging; hub take-over
+  (old phone bills offline → syncs → new phone shows the paid bill + the open table, no re-upload, keeps billing
+  offline with a new invoice number); pos reconnect.

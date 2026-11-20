@@ -172,11 +172,52 @@ class StaffSession {
 final sessionProvider = StateProvider<StaffSession?>((ref) => null);
 
 /// Live hub events (WebSocket). Screens watch [hubTickProvider] to refetch when anything changes.
+/// A dropped connection (Wi-Fi switched, internet gone, app paused) reconnects by itself: 1 s, 2 s … up to 15 s apart.
 final hubEventsProvider = StreamProvider<Json>((ref) {
   final api = ref.watch(hubApiProvider);
   if (api == null) return const Stream.empty();
-  return api.events();
+  return reconnecting(api.events);
 });
+
+/// Re-opens [connect] whenever its stream ends; errors are passed on (the "hub offline" banner) until it is back.
+Stream<T> reconnecting<T>(Stream<T> Function() connect, {Duration first = const Duration(seconds: 1), Duration max = const Duration(seconds: 15)}) {
+  late final StreamController<T> out;
+  StreamSubscription<T>? sub;
+  Timer? retry;
+  var wait = first;
+  var closed = false;
+  void open() {
+    if (closed) return;
+    try {
+      sub = connect().listen(
+        (e) {
+          wait = first;
+          out.add(e);
+        },
+        onError: out.addError,
+        onDone: () {
+          if (closed) return;
+          retry = Timer(wait, open);
+          wait = wait * 2 > max ? max : wait * 2;
+        },
+      );
+    } catch (e, st) {
+      out.addError(e, st);
+      retry = Timer(wait, open);
+      wait = wait * 2 > max ? max : wait * 2;
+    }
+  }
+
+  out = StreamController<T>(
+    onListen: open,
+    onCancel: () async {
+      closed = true;
+      retry?.cancel();
+      await sub?.cancel();
+    },
+  );
+  return out.stream;
+}
 
 /// Bumped by pull-down-to-refresh (anywhere in the app): screens reload their data and photos.
 final refreshTickProvider = StateProvider<int>((ref) => 0);

@@ -70,6 +70,14 @@ class CloudClient {
     return j;
   }
 
+  /// The branch's orders / bills / payments the cloud stored after [after] (cursor from the previous page).
+  Future<Map<String, Object?>> history(String? after) async {
+    final q = after == null ? '' : '?after=${Uri.encodeQueryComponent(after)}';
+    final r = await _http.get(Uri.parse('$baseUrl/sync/history$q'), headers: _h).timeout(const Duration(seconds: 30));
+    if (r.statusCode != 200) throw http.ClientException('history failed: ${r.statusCode} ${r.body}');
+    return jsonDecode(r.body) as Map<String, Object?>;
+  }
+
   Future<List<Map<String, Object?>>> push(List<Map<String, Object?>> events) async {
     final r = await _http
         .post(Uri.parse('$baseUrl/sync/push'), headers: _h, body: jsonEncode({'events': events}))
@@ -163,6 +171,18 @@ class SyncWorker {
     await prefetchMedia();
   }
 
+  /// Brings in the branch's bill history from the cloud (bills another main device took), page by page.
+  Future<int> pullHistory({int maxPages = 20}) async {
+    var n = 0;
+    for (var i = 0; i < maxPages; i++) {
+      final page = await cloud.history(await db.getMeta('history_cursor'));
+      n += await hub.applyHistory(((page['events'] as List?) ?? const []).cast<Map<String, Object?>>());
+      if (page['cursor'] != null) await db.setMeta('history_cursor', '${page['cursor']}');
+      if (page['more'] != true) break;
+    }
+    return n;
+  }
+
   /// Caches new menu photos right after a pull so the menu still has photos when the internet drops.
   Future<int> prefetchMedia({int max = 40}) async {
     var n = 0;
@@ -182,6 +202,7 @@ class SyncWorker {
     if (due) {
       try {
         await pullOnce();
+        await pullHistory();
       } catch (_) {
         // offline: keep working on the LAN; the next tick retries
       }

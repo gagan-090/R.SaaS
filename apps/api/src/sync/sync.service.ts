@@ -13,6 +13,9 @@ export const HUB_ENTITIES = [
   'payment', 'tip_allocation', 'stock_movement', 'shift', 'break', 'audit_event',
 ] as const;
 
+/** What a main device needs to show the branch's orders and bills (no audit or stock rows). */
+export const HISTORY_ENTITIES = ['order', 'order_line', 'kitchen_ticket', 'bill', 'bill_adjustment', 'payment', 'tip_allocation'] as const;
+
 export interface PushEvent {
   eventId: string;
   entity: string;
@@ -129,6 +132,34 @@ export class SyncService {
               ...(r.role === 'custom' ? { permissions: r.customRole && !r.customRole.deleted && ent.features.includes('roles.custom') ? r.customRole.permissions : [] } : {}),
             })),
           })),
+      };
+    });
+  }
+
+  /**
+   * Orders, KOTs, bills and payments of this branch as the cloud stored them (every main device's events), oldest first,
+   * after the cursor `<receivedAt ISO>|<eventId>`. A main device that took over from another one (or was reinstalled)
+   * replays them so the POS shows the branch's whole bill history, and keeps it for offline use.
+   */
+  async history(dev: DeviceCtx, after: string | undefined, limit = 500) {
+    const [t, id] = after ? after.split('|') : [];
+    const since = t ? new Date(t) : null;
+    return this.db.tenant(dev.tenantId, async (tx) => {
+      const rows = await tx.syncEvent.findMany({
+        where: {
+          branchId: dev.branchId,
+          entity: { in: [...HISTORY_ENTITIES] },
+          ...(since && id ? { OR: [{ receivedAt: { gt: since } }, { receivedAt: since, eventId: { gt: id } }] } : {}),
+        },
+        orderBy: [{ receivedAt: 'asc' }, { eventId: 'asc' }],
+        take: limit + 1,
+      });
+      const page = rows.slice(0, limit);
+      const last = page.at(-1);
+      return {
+        events: page.map((e) => ({ eventId: e.eventId, entity: e.entity, entityId: e.entityId, op: e.op, payload: e.payload, createdAt: e.createdAt.toISOString() })),
+        cursor: last ? `${last.receivedAt.toISOString()}|${last.eventId}` : (after ?? null),
+        more: rows.length > limit,
       };
     });
   }

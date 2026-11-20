@@ -33,6 +33,7 @@ const PushBody = z.object({
     .max(200),
 });
 const PullQuery = z.object({ since: z.string().regex(/^\d+$/).default('0') });
+const HistoryQuery = z.object({ after: z.string().regex(/^\d{4}-\d\d-\d\dT[\d:.]+Z\|[0-9a-f-]{36}$/).optional() });
 
 @ApiTags('sync')
 @Controller()
@@ -84,6 +85,13 @@ export class SyncController {
   async pull(@Headers('x-device-token') token: string | undefined, @Query(new ZodPipe(PullQuery)) q: z.infer<typeof PullQuery>) {
     const dev = await this.sync.authenticateDevice(token);
     return this.sync.pull(dev, BigInt(q.since));
+  }
+
+  @Public()
+  @Get('sync/history')
+  async history(@Headers('x-device-token') token: string | undefined, @Query(new ZodPipe(HistoryQuery)) q: z.infer<typeof HistoryQuery>) {
+    const dev = await this.sync.authenticateDevice(token);
+    return this.sync.history(dev, q.after);
   }
 
   @Public()

@@ -177,6 +177,7 @@ class FakeCloud {
   String? rejectEntity;
   Map<String, Object?>? pullBody;
   String? lastSince;
+  int historyPage = 500;
 
   final media = <String, List<int>>{};
   int mediaFetches = 0;
@@ -191,6 +192,15 @@ class FakeCloud {
         if (req.url.path.endsWith('/sync/pull')) {
           lastSince = req.url.queryParameters['since'];
           return http.Response.bytes(utf8.encode(jsonEncode(pullBody ?? {})), 200, headers: {'content-type': 'application/json; charset=utf-8'});
+        }
+        if (req.url.path.endsWith('/sync/history')) {
+          // stored order = arrival order; the cursor is the index of the last event sent
+          const kinds = {'order', 'order_line', 'kitchen_ticket', 'bill', 'bill_adjustment', 'payment', 'tip_allocation'};
+          final all = stored.values.where((e) => kinds.contains(e['entity'])).toList();
+          final from = int.parse(req.url.queryParameters['after'] ?? '0');
+          final page = all.skip(from).take(historyPage).toList();
+          final body = {'events': page, 'cursor': '${from + page.length}', 'more': from + page.length < all.length};
+          return http.Response.bytes(utf8.encode(jsonEncode(body)), 200, headers: {'content-type': 'application/json; charset=utf-8'});
         }
         final events = ((jsonDecode(req.body) as Map)['events'] as List).cast<Map<String, Object?>>();
         final results = <Map<String, Object?>>[];

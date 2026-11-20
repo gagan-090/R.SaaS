@@ -339,6 +339,72 @@ class HubService {
     _events.add(HubEvent('menu.version_changed', {'menuVersion': pull['menuVersion']}));
   }
 
+  // ------------------------------------------------------------------ bill history from the cloud
+
+  static const _historyTables = {
+    'order': 'orders', 'order_line': 'order_lines', 'kitchen_ticket': 'kitchen_tickets', 'bill': 'bills', 'bill_adjustment': 'bill_adjustments',
+  };
+  final _columns = <String, Set<String>>{};
+
+  /// Applies the branch's orders, KOTs, bills and payments the cloud has (GET /sync/history): what an earlier main device
+  /// took shows here too — after a take-over or a reinstall — and stays on this device for offline use. Skipped: this
+  /// hub's own events, anything this hub changed later and has not uploaded yet, and rows that clash with this hub's
+  /// own (a table already busy here, a bill already paid here). Returns how many rows were written.
+  Future<int> applyHistory(List<Map<String, Object?>> events) async {
+    var applied = 0;
+    await db.transaction(() async {
+      for (final e in events) {
+        if (await db.selectOne('SELECT 1 FROM sync_outbox WHERE event_id = ?', [e['eventId']]) != null) continue;
+        final newer = await db.selectOne("SELECT 1 FROM sync_outbox WHERE status = 'pending' AND entity = ? AND entity_id = ? AND created_at > ?",
+            [e['entity'], e['entityId'], e['createdAt']]);
+        if (newer != null) continue;
+        final r = _historyRow('${e['entity']}', ((e['payload'] as Map?) ?? const {}).cast<String, Object?>());
+        if (r == null) continue;
+        try {
+          if (await _upsert(r.table, r.row)) applied++;
+          // an invoice number the earlier device used is never issued again here
+          if (RegExp(r'^([^/]+)/([^/]+)/(\d{1,9})$').firstMatch('${r.row['invoice_no'] ?? ''}') case final m? when r.table == 'bills' && m[1] == config.branchCode) {
+            await db.execute(
+              'INSERT INTO invoice_counters(branch_code, fy, last_number) VALUES (?,?,?) '
+              'ON CONFLICT(branch_code, fy) DO UPDATE SET last_number = MAX(last_number, excluded.last_number)',
+              [m[1], m[2], int.parse(m[3]!)],
+            );
+          }
+        } catch (_) {
+          // clashes with this hub's own data: keep ours
+        }
+      }
+    });
+    if (applied > 0) _events.add(HubEvent('sync.history', {'applied': applied}));
+    return applied;
+  }
+
+  ({String table, Map<String, Object?> row})? _historyRow(String entity, Map<String, Object?> p) {
+    if (_historyTables[entity] case final t?) return (table: t, row: p);
+    return switch (entity) {
+      'payment' => (table: 'payments', row: {
+          'id': p['paymentId'], 'bill_id': p['billId'], 'mode': p['mode'], 'amount_paise': p['amountPaise'], 'tendered_paise': p['tenderedPaise'],
+          'change_paise': p['changePaise'] ?? 0, 'reference': p['reference'], 'idempotency_key': p['idempotencyKey'], 'actor': p['actor'] ?? '', 'at': p['at'],
+          'response_json': jsonEncode({for (final k in const ['paymentId', 'billId', 'mode', 'amountPaise', 'tenderedPaise', 'changePaise', 'remainingPaise', 'billStatus', 'at']) k: p[k]}),
+        }),
+      'tip_allocation' => (table: 'tip_allocations', row: {
+          'id': p['id'], 'bill_id': p['billId'], 'waiter_id': p['waiterId'], 'amount_paise': p['amountPaise'], 'actor': p['actor'] ?? '', 'at': p['at'],
+        }),
+      _ => null,
+    };
+  }
+
+  /// Insert-or-update by id, with only the columns this table has.
+  Future<bool> _upsert(String table, Map<String, Object?> row) async {
+    final cols = _columns[table] ??= {for (final c in await db.query('PRAGMA table_info($table)')) c['name']! as String};
+    final keys = [for (final k in row.keys) if (cols.contains(k)) k];
+    if (row['id'] == null || !keys.contains('id')) return false;
+    final values = [for (final k in keys) row[k] is Map || row[k] is List ? jsonEncode(row[k]) : row[k]];
+    final set = [for (final k in keys) if (k != 'id') '$k = excluded.$k'].join(', ');
+    await db.execute('INSERT INTO $table (${keys.join(', ')}) VALUES (${List.filled(keys.length, '?').join(', ')}) ON CONFLICT(id) DO UPDATE SET $set', values);
+    return true;
+  }
+
   // ------------------------------------------------------------------ reads
 
   Future<Map<String, Object?>> _order(String id) async {

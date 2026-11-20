@@ -41,10 +41,14 @@ class HubHost {
     fingerprint = tls.fingerprint;
     final cloud = CloudClient(c.cloudUrl, c.cloudDeviceToken);
     _worker = SyncWorker(_db!, _hub!, cloud);
-    try {
-      await _worker!.pullOnce();
-    } catch (_) {
-      // offline start: keep serving the LAN with the last pulled config
+    // First start: wait for the menu, staff and license. After that never wait for the internet: the device opens at
+    // once with what it has (billing works offline) and the sync worker pulls changes and bill history in the background.
+    if (await _db!.getMeta('config_cursor') == null) {
+      try {
+        await _worker!.pullOnce();
+      } catch (_) {
+        // offline first start: the setup screen explains; the worker keeps trying
+      }
     }
     _server = HubServer(_hub!, hubName: Platform.localHostname, refreshStaff: _worker!.pullOnce, addStaff: cloud.addStaff, consoleSession: cloud.consoleSession, certFingerprint: fingerprint);
     await _server!.start(port: port, tls: tls.context());

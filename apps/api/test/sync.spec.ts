@@ -86,6 +86,33 @@ describe('sync', () => {
     expect(pull.invoiceCounters).toHaveLength(2);
   });
 
+  it('a new main device gets the branch bill history (orders, bills, payments) page by page, without audit rows', async () => {
+    const first = (await t.http().post(api('/devices/register-hub')).set(bearer(R.ownerToken))
+      .send({ name: 'Old phone', platform: 'android', replace: true }).expect(201)).body.deviceToken;
+    const batch = [ev('order'), ev('bill'), ev('payment'), ev('audit_event')];
+    await t.http().post(api('/sync/push')).set('X-Device-Token', first).send({ events: batch }).expect(200);
+    const next = (await t.http().post(api('/devices/register-hub')).set(bearer(R.ownerToken))
+      .send({ name: 'New phone', platform: 'android', replace: true }).expect(201)).body.deviceToken;
+    const all: { eventId: string; entity: string }[] = [];
+    let after: string | undefined;
+    for (let i = 0; i < 50; i++) {
+      const q = after ? `?after=${encodeURIComponent(after)}` : '';
+      const page = (await t.http().get(api(`/sync/history${q}`)).set('X-Device-Token', next).expect(200)).body;
+      all.push(...page.events);
+      after = page.cursor ?? after;
+      if (!page.more) break;
+    }
+    const ids = all.map((e) => e.eventId);
+    expect(ids).toEqual(expect.arrayContaining(batch.slice(0, 3).map((e) => e.eventId)));
+    expect(ids).not.toContain(batch[3].eventId);
+    expect(new Set(ids).size).toBe(ids.length);
+    // nothing new after the last cursor
+    const tail = (await t.http().get(api(`/sync/history?after=${encodeURIComponent(after!)}`)).set('X-Device-Token', next).expect(200)).body;
+    expect(tail).toMatchObject({ events: [], more: false, cursor: after });
+    await t.http().get(api('/sync/history?after=bad')).set('X-Device-Token', next).expect(400);
+    device = next;
+  });
+
   it('unknown or missing device tokens are refused', async () => {
     await t.http().post(api('/sync/push')).send({ events: [] }).expect(401);
     await t.http().get(api('/sync/pull')).set('X-Device-Token', 'nope').expect(401);
