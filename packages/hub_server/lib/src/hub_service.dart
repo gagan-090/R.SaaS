@@ -833,18 +833,20 @@ class HubService {
     return t.toJson()..remove('lines');
   }
 
+  /// Restaurant code (from the cloud) / date / time of billing in IST: R000123/2026/11/20/173045. A second bill in the
+  /// same second gets -2, -3 … so a number is never issued twice.
   Future<String> _nextInvoiceNo() async {
-    final fy = financialYear(clock());
-    final row = await db.selectOne('SELECT last_number FROM invoice_counters WHERE branch_code = ? AND fy = ?', [config.branchCode, fy]);
-    final next = ((row?['last_number'] as int?) ?? 0) + 1;
-    await db.execute(
-      'INSERT INTO invoice_counters(branch_code, fy, last_number) VALUES (?,?,?) ON CONFLICT(branch_code, fy) DO UPDATE SET last_number = excluded.last_number',
-      [config.branchCode, fy, next],
-    );
-    return formatInvoiceNo(config.branchCode, fy, next);
+    final tenant = jsonDecode(await db.getMeta('tenant') ?? '{}') as Map<String, Object?>;
+    final code = '${tenant['code'] ?? ''}'.trim().isEmpty ? config.branchCode : '${tenant['code']}'.trim();
+    final base = invoiceNoAt(code, clock());
+    var no = base;
+    for (var n = 2; await db.selectOne('SELECT 1 FROM bills WHERE invoice_no = ?', [no]) != null; n++) {
+      no = '$base-$n';
+    }
+    return no;
   }
 
-  /// Generates the bill (totals + gap-free invoice number) and locks the order against new lines.
+  /// Generates the bill (totals + unique invoice number) and locks the order against new lines.
   Future<Map<String, Object?>> generateBill(Actor a, String orderId, {Map<String, Object?>? discount, String? discountReason}) async {
     a.require('payment.take');
     await requireFeature('billing');

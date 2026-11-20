@@ -11,3 +11,10 @@ String formatInvoiceNo(String branchCode, String fy, int seq) {
   if (seq <= 0 || seq > 999999) throw RangeError.range(seq, 1, 999999, 'seq');
   return '$branchCode/$fy/${seq.toString().padLeft(6, '0')}';
 }
+
+/// `<restaurant code>/<YYYY>/<MM>/<DD>/<HHMMSS>` at the billing time in IST, e.g. R000123/2026/11/20/173045.
+String invoiceNoAt(String restaurantCode, DateTime instant) {
+  final t = instant.toUtc().add(const Duration(hours: 5, minutes: 30));
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '$restaurantCode/${t.year}/${two(t.month)}/${two(t.day)}/${two(t.hour)}${two(t.minute)}${two(t.second)}';
+}

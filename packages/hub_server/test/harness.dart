@@ -76,7 +76,7 @@ class Harness {
   Future<Map<String, Object?>> configPull({String plan = 'professional', int expDays = 30, int nbfDays = -1}) async => {
         'cursor': '42',
         'menuVersion': 3,
-        'tenant': {'id': 'tenant-1', 'name': 'Demo Dhaba', 'gstin': '27AAAPA1234A1Z5', 'address': 'MG Road, Pune'},
+        'tenant': {'id': 'tenant-1', 'code': 'R000123', 'name': 'Demo Dhaba', 'gstin': '27AAAPA1234A1Z5', 'address': 'MG Road, Pune'},
         'licenseToken': await license(plan: plan, expDays: expDays, nbfDays: nbfDays),
         'branches': [{'id': branchId, 'code': 'BR01', 'name': 'Demo Dhaba — MG Road', 'gstin': '27AAAPA1234A1Z5', 'address': 'MG Road, Pune'}],
         'floors': [{'id': 'f1', 'name': 'Ground', 'sortOrder': 0, 'deleted': false}],

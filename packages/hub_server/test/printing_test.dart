@@ -172,7 +172,7 @@ void main() {
       await printer.waitFor(3);
       expect(FakePrinter.text(printer.jobs[1]), isNot(contains('DUPLICATE')));
       expect(FakePrinter.text(printer.jobs[2]), contains('*** DUPLICATE ***'));
-      expect(FakePrinter.text(printer.jobs[1]), contains('Invoice: BR01/26-27/000001'));
+      expect(FakePrinter.text(printer.jobs[1]), contains('Invoice: R000123/2026/10/12/133000'));
 
       final kotReprint = await rawPost('/kot/$ticketId/print', cashier);
       expect(jsonDecode(kotReprint.body), containsPair('copyNo', 2));

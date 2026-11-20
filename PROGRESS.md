@@ -543,3 +543,9 @@ code, passes now); pos_app **96 passed, 5 skipped**.
 - Tests: api 171, pos_app 104 (10 skipped), hub_server 56 — all passed. New: api history paging; hub take-over
   (old phone bills offline → syncs → new phone shows the paid bill + the open table, no re-upload, keeps billing
   offline with a new invoice number); pos reconnect.
+
+## Invoice numbers by restaurant code + date + time (2026-11-20)
+- New bills: `R000123/2026/11/20/173045` (restaurant code from the cloud pull, IST). Same-second bills get `-2`, `-3`;
+  bills from another main device (history sync) are checked too. Old bills unchanged. Receipt snapshots updated (the
+  number now wraps onto its own line on 58 mm / beside the date on 80 mm).
+- Tests: core 49, hub_server 55 (1 skipped), api sync 7, pos_app 104 (10 skipped) — all passed.

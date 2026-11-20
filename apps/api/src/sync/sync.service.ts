@@ -117,7 +117,7 @@ export class SyncService {
       return {
         cursor: cursor.toString(),
         menuVersion: tenant.menuVersion,
-        tenant: { id: tenant.id, name: tenant.name, gstin: tenant.gstin, address: tenant.address, status: tenant.status, branding: effectiveBranding(tenant.branding, ent.features) },
+        tenant: { id: tenant.id, code: tenant.code, name: tenant.name, gstin: tenant.gstin, address: tenant.address, status: tenant.status, branding: effectiveBranding(tenant.branding, ent.features) },
         licenseToken: ent.token,
         invoiceCounters: counters.map((c) => ({ branchCode: c.code, fy: c.fy, lastNumber: Number(c.last) })),
         branches: strip(branches), floors: strip(floors), tables: strip(tables), taxRules: strip(taxRules),

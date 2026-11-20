@@ -447,39 +447,19 @@ void main() {
   });
 
   group('bills, discounts, invoice numbers', () {
-    test('invoice numbers are per branch per FY and gap-free', () async {
+    test('invoice number = restaurant code / date / time of billing (IST); same second gets -2, -3; never repeats', () async {
       final nos = <String>[];
       for (final t in [Harness.t1, Harness.t2, Harness.t3]) {
         final id = await openDineIn(t);
         await add(id, [{'menuItemId': Harness.naan, 'qty': 1}]);
         nos.add((await h.post('/orders/$id/bill', session: cashier)).json['invoice_no']! as String);
       }
-      expect(nos, ['BR01/26-27/000001', 'BR01/26-27/000002', 'BR01/26-27/000003']);
-      h.now = DateTime.utc(2027, 4, 1, 1); // next FY (06:30 IST, 1 Apr)
-      await h.hub.setLicenseToken(await h.license()); // renewed licence for the new year
-      cashier = await h.login(Harness.cashier); // yesterday's session has expired
+      // the clock is 08:00 UTC = 13:30:00 IST on 12 Oct 2026
+      expect(nos, ['R000123/2026/10/12/133000', 'R000123/2026/10/12/133000-2', 'R000123/2026/10/12/133000-3']);
+      h.now = DateTime.utc(2026, 10, 12, 12, 0, 45); // 17:30:45 IST
       final tk = (await h.post('/orders', session: cashier, body: {'type': 'takeaway'})).json['id'];
       await add(tk as String, [{'menuItemId': Harness.naan, 'qty': 1}]);
-      expect((await h.post('/orders/$tk/bill', session: cashier)).json['invoice_no'], 'BR01/27-28/000001');
-    });
-
-    test('a new main device continues the invoice series the cloud already has (never 000001 again)', () async {
-      // the earlier main device issued up to 000041 this year; another branch's and a stale lower count are ignored
-      final pull = await h.configPull()
-        ..['invoiceCounters'] = [
-          {'branchCode': 'BR01', 'fy': '26-27', 'lastNumber': 41},
-          {'branchCode': 'BR02', 'fy': '26-27', 'lastNumber': 900},
-        ];
-      await h.hub.applyConfig(pull);
-      final id = await openDineIn(Harness.t1);
-      await add(id, [{'menuItemId': Harness.naan, 'qty': 1}]);
-      expect((await h.post('/orders/$id/bill', session: cashier)).json['invoice_no'], 'BR01/26-27/000042');
-      // a later pull that has not seen 000042 yet never moves the counter back
-      await h.hub.applyConfig(await h.configPull()
-        ..['invoiceCounters'] = [{'branchCode': 'BR01', 'fy': '26-27', 'lastNumber': 41}]);
-      final id2 = await openDineIn(Harness.t2);
-      await add(id2, [{'menuItemId': Harness.naan, 'qty': 1}]);
-      expect((await h.post('/orders/$id2/bill', session: cashier)).json['invoice_no'], 'BR01/26-27/000043');
+      expect((await h.post('/orders/$tk/bill', session: cashier)).json['invoice_no'], 'R000123/2026/10/12/173045');
     });
 
     test('discount needs discount.apply; above 10% needs a reason', () async {
