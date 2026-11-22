@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { sha256 } from '../common/crypto';
-import { unauthorized } from '../common/errors';
+import { randomToken, sha256 } from '../common/crypto';
+import { notFound, unauthorized } from '../common/errors';
+import { loadEnv } from '../config/env';
 import { DbService } from '../db/db.service';
 import { LicenseService } from '../licensing/license.service';
 import { effectiveBranding } from '../tenant/branding';
@@ -95,6 +96,9 @@ export class SyncService {
   /** Config changes since the cursor (a global sequence bumped on every insert/update of cloud-owned config). */
   async pull(dev: DeviceCtx, since: bigint) {
     return this.db.tenant(dev.tenantId, async (tx) => {
+      const me = await tx.device.findUnique({ where: { id: dev.deviceId }, select: { promotion: true } });
+      const pr = me?.promotion as { requestId: string; lanDeviceId: string; expiresAt: string } | null;
+      const promotion = pr && new Date(pr.expiresAt).getTime() > Date.now() ? { requestId: pr.requestId, lanDeviceId: pr.lanDeviceId, expiresAt: pr.expiresAt } : null;
       const gt = { gt: since };
       const [branches, floors, tables, taxRules, categories, items, variants, users, ent, tenant] = await Promise.all([
         tx.branch.findMany({ where: { id: dev.branchId, seq: gt } }),
@@ -122,6 +126,7 @@ export class SyncService {
       return {
         cursor: cursor.toString(),
         menuVersion: tenant.menuVersion,
+        promotion,
         tenant: { id: tenant.id, code: tenant.code, name: tenant.name, gstin: tenant.gstin, address: tenant.address, status: tenant.status, branding: effectiveBranding(tenant.branding, ent.features) },
         licenseToken: ent.token,
         invoiceCounters: counters.map((c) => ({ branchCode: c.code, fy: c.fy, lastNumber: Number(c.last) })),
@@ -174,6 +179,36 @@ export class SyncService {
     await this.db.tenant(dev.tenantId, (tx) =>
       tx.device.update({ where: { id: dev.deviceId }, data: { lanDevices: devices as unknown as Prisma.InputJsonValue, lanReportedAt: new Date() } }));
     return { ok: true };
+  }
+
+  /** The hub made a one-time code for the promotion and handed it to the terminal; only its hash is kept. */
+  async promotionCode(dev: DeviceCtx, requestId: string, codeHash: string) {
+    await this.db.tenant(dev.tenantId, async (tx) => {
+      const d = await tx.device.findUnique({ where: { id: dev.deviceId } });
+      const pr = d?.promotion as { requestId: string } | null;
+      if (!pr || pr.requestId !== requestId) throw notFound('Promotion');
+      await tx.device.update({ where: { id: dev.deviceId }, data: { promotion: { ...pr, codeHash } } });
+    });
+    return { ok: true };
+  }
+
+  /**
+   * The terminal claims the main-device role with the code from its hub: a new cloud device (the hub) is created,
+   * the old main device stops being the hub, and the terminal gets its cloud token + the branch facts to run the hub.
+   */
+  async claimPromotion(code: string, name: string | undefined, platform: 'windows' | 'android' | 'ios') {
+    const hash = sha256(code);
+    const old = await this.db.platform((tx) => tx.device.findFirst({ where: { revokedAt: null, promotion: { path: ['codeHash'], equals: hash } } }));
+    const pr = old?.promotion as { expiresAt: string; name?: string } | null;
+    if (!old || !pr || new Date(pr.expiresAt).getTime() < Date.now()) throw unauthorized('invalid_promotion_code', 'This request to become the main device has expired. Ask again from the console.');
+    const token = randomToken(32);
+    const { dev, branch } = await this.db.tenant(old.tenantId, async (tx) => {
+      await tx.device.updateMany({ where: { branchId: old.branchId, isHub: true, revokedAt: null }, data: { isHub: false } });
+      await tx.device.update({ where: { id: old.id }, data: { promotion: Prisma.DbNull } });
+      const dev = await tx.device.create({ data: { name: name ?? pr.name ?? 'Main device', platform, branchId: old.branchId, tenantId: old.tenantId, isHub: true, deviceTokenHash: sha256(token) } });
+      return { dev, branch: await tx.branch.findUniqueOrThrow({ where: { id: old.branchId } }) };
+    });
+    return { deviceId: dev.id, deviceToken: token, branchId: branch.id, branchCode: branch.code, licensePublicKey: loadEnv().LICENSE_PUBLIC_KEY };
   }
 
   async status(dev: DeviceCtx) {

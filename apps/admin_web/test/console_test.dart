@@ -188,6 +188,8 @@ class FakeRestaurantApi {
             status = 201;
           case ('GET', '/devices'):
             out = devices;
+          case ('POST', final p) when p.endsWith('/make-hub'):
+            out = {'id': p.split('/')[2], 'status': p.contains('lan%3A') ? 'pending' : 'done'};
           case ('GET', '/inventory/products'):
             if (!inventoryInPlan) return http.Response('{"code":"feature_not_in_plan","message":"Your plan does not include this"}', 403);
             out = products;
@@ -607,6 +609,15 @@ void main() {
       expect(find.byKey(const Key('device-Ashish tablet')), findsOneWidget);
       expect(find.textContaining('Ashish · Owner · signed in'), findsNWidgets(2));
       expect(find.byTooltip('Revoke'), findsOneWidget);
+      // any device can be made the main device; the hub itself has no button
+      expect(find.byKey(const Key('make-hub-Cashier phone')), findsNothing);
+      await t.tap(find.byKey(const Key('make-hub-Ashish tablet')));
+      await t.pumpAndSettle();
+      await t.tap(find.text('Make main device'));
+      await t.pumpAndSettle();
+      expect(api.last('POST', '/make-hub'), isNotNull);
+      expect(find.text('Asked Ashish tablet to become the main device'), findsOneWidget);
+      await t.pumpAndSettle(const Duration(seconds: 5));
       await t.tap(find.byTooltip('Revoke'));
       await t.pumpAndSettle();
       await t.enterText(find.byKey(const Key('reason-field')), 'Phone lost');

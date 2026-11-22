@@ -84,6 +84,12 @@ class CloudClient {
     if (r.statusCode != 200) throw http.ClientException('device report failed: ${r.statusCode}');
   }
 
+  /// Registers the hash of the one-time code this hub gave the terminal the owner chose as the new main device.
+  Future<void> promotionCode(String requestId, String codeHash) async {
+    final r = await _http.post(Uri.parse('$baseUrl/sync/promotion'), headers: _h, body: jsonEncode({'requestId': requestId, 'codeHash': codeHash})).timeout(const Duration(seconds: 20));
+    if (r.statusCode != 200) throw http.ClientException('promotion failed: ${r.statusCode}');
+  }
+
   Future<List<Map<String, Object?>>> push(List<Map<String, Object?>> events) async {
     final r = await _http
         .post(Uri.parse('$baseUrl/sync/push'), headers: _h, body: jsonEncode({'events': events}))
@@ -171,6 +177,7 @@ class SyncWorker {
     final since = await db.getMeta('config_cursor') ?? '0';
     final body = await cloud.pull(since);
     await hub.applyConfig(body);
+    await _handlePromotion(body['promotion']);
     await db.setMeta('last_pull_at', nowIso());
     _lastPull = DateTime.now();
     hub.mediaFetcher ??= cloud.media;
@@ -187,6 +194,18 @@ class SyncWorker {
       if (page['more'] != true) break;
     }
     return n;
+  }
+
+  /// The console asked to make one of this hub's terminals the main device: give it a one-time code (the cloud keeps
+  /// only its hash) once per request.
+  Future<void> _handlePromotion(Object? p) async {
+    if (p is! Map || p['requestId'] == null) return;
+    final id = '${p['requestId']}';
+    if (await db.getMeta('promotion_request') == id) return;
+    final code = randomToken();
+    await cloud.promotionCode(id, sha256Hex(code));
+    await hub.offerPromotion(requestId: id, deviceId: '${p['lanDeviceId']}', code: code, cloudUrl: cloud.baseUrl, expiresAt: '${p['expiresAt']}');
+    await db.setMeta('promotion_request', id);
   }
 
   /// Caches new menu photos right after a pull so the menu still has photos when the internet drops.

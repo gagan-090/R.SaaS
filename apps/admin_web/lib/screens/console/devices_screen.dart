@@ -58,6 +58,29 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
                     if (i > 0) const Divider(indent: 72),
                     _DeviceRow(
                       device: d,
+                      onMakeHub: d['isHub'] == true || d['becomingHub'] == true
+                          ? null
+                          : () async {
+                              final lan = d['lan'] == true;
+                              if (!await confirm(context,
+                                  title: 'Make ${d['name']} the main device?',
+                                  message: lan
+                                      ? '${d['name']} becomes the hub within a minute (it needs internet once). ${hub?['name'] ?? 'The current hub'} keeps its bills and still uploads them. Other devices then sign in to ${d['name']} with email + PIN on the restaurant Wi-Fi.'
+                                      : '${d['name']} becomes the hub at once. Keep the app open on it. Other devices then sign in to it with email + PIN on the restaurant Wi-Fi.',
+                                  confirmLabel: 'Make main device',
+                                  destructive: false)) {
+                                return;
+                              }
+                              try {
+                                final r = await api.makeHub(d['id'] as String);
+                                if (context.mounted) {
+                                  showDone(context, r['status'] == 'pending' ? 'Asked ${d['name']} to become the main device' : '${d['name']} is the main device now');
+                                }
+                                setState(() => _reload++);
+                              } catch (e) {
+                                if (context.mounted) showError(context, e);
+                              }
+                            },
                       // Wi-Fi terminals are managed on the main device itself
                       onRevoke: d['lan'] == true ? null : () async {
                         final reason = await ReasonDialog.show(context,
@@ -89,9 +112,9 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
 }
 
 class _DeviceRow extends StatelessWidget {
-  const _DeviceRow({required this.device, this.onRevoke});
+  const _DeviceRow({required this.device, this.onRevoke, this.onMakeHub});
   final Json device;
-  final VoidCallback? onRevoke;
+  final VoidCallback? onRevoke, onMakeHub;
   @override
   Widget build(BuildContext context) {
     final p = context.hp;
@@ -116,6 +139,7 @@ class _DeviceRow extends StatelessWidget {
         Text('${device['name']}', style: HPType.label(revoked ? p.faint : p.text), overflow: TextOverflow.ellipsis),
         if (device['isHub'] == true) const StatusChip(label: 'Hub', tone: HPTone.saffron),
         if (lan) const StatusChip(label: 'Wi-Fi', tone: HPTone.neutral),
+        if (device['becomingHub'] == true) const StatusChip(label: 'Becoming hub…', tone: HPTone.saffron),
         if (!revoked) StatusChip(label: online ? 'Online' : 'Offline', tone: online ? HPTone.success : HPTone.neutral),
       ]),
       subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -131,7 +155,13 @@ class _DeviceRow extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
       ]),
-      trailing: revoked || onRevoke == null ? null : IconButton(tooltip: 'Revoke', icon: const Icon(Icons.link_off_rounded), onPressed: onRevoke),
+      trailing: revoked
+          ? null
+          : Row(mainAxisSize: MainAxisSize.min, children: [
+              if (onMakeHub != null)
+                IconButton(key: Key('make-hub-${device['name']}'), tooltip: 'Make main device (hub)', icon: const Icon(Icons.router_outlined), onPressed: onMakeHub),
+              if (onRevoke != null) IconButton(tooltip: 'Revoke', icon: const Icon(Icons.link_off_rounded), onPressed: onRevoke),
+            ]),
     );
   }
 }
@@ -186,7 +216,7 @@ class _HowTo extends StatelessWidget {
         step(3, 'Sign in as the owner with your password', Text(email.isEmpty ? 'Use your console email and password. This device becomes the main device.' : 'For example $email and your console password. This device becomes the main device.', style: HPType.body(p.muted))),
         step(4, 'More devices: email + PIN on the same Wi-Fi', Text('Add staff (email + PIN). On each new device, open BhojMitra POS on the restaurant Wi-Fi and sign in with that email and PIN — it connects to the main device by itself, also without internet.', style: HPType.body(p.muted))),
         if (hasHub)
-          step(5, 'Make another device the main device (Professional, Premium)', Text('On that device: More → Hub & devices → Make this the main device, then sign in with your password. Every device signed in to the main device is listed above with who is using it.', style: HPType.body(p.muted))),
+          step(5, 'Make another device the main device', Text('Tap the hub button next to any device above. A Wi-Fi device switches over by itself within a minute (it needs internet once). Or on that device: More → Hub & devices → Make this the main device.', style: HPType.body(p.muted))),
       ]),
     );
   }

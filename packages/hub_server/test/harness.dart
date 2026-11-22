@@ -179,6 +179,7 @@ class FakeCloud {
   String? lastSince;
   int historyPage = 500;
   final deviceReports = <List<Map<String, Object?>>>[];
+  final promotionCodes = <Map<String, Object?>>[];
 
   final media = <String, List<int>>{};
   int mediaFetches = 0;
@@ -193,6 +194,10 @@ class FakeCloud {
         if (req.url.path.endsWith('/sync/pull')) {
           lastSince = req.url.queryParameters['since'];
           return http.Response.bytes(utf8.encode(jsonEncode(pullBody ?? {})), 200, headers: {'content-type': 'application/json; charset=utf-8'});
+        }
+        if (req.url.path.endsWith('/sync/promotion')) {
+          promotionCodes.add((jsonDecode(req.body) as Map).cast<String, Object?>());
+          return http.Response('{"ok":true}', 200, headers: {'content-type': 'application/json'});
         }
         if (req.url.path.endsWith('/sync/devices')) {
           deviceReports.add(((jsonDecode(req.body) as Map)['devices'] as List).cast<Map<String, Object?>>());

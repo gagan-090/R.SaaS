@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, P
 import { ApiBearerAuth, ApiBody, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import type { Actor, AuditDetails } from '../common/actor';
 import { AuditCtx, CurrentActor } from '../common/actor';
 import { Audited, AuthenticatedOnly, Public, RequirePermissions, RequiresFeature } from '../common/decorators';
@@ -404,10 +405,14 @@ export class ConsoleController {
           user: self?.user ?? null, signedIn: self?.signedIn ?? false, signedInAt: self?.signedInAt ?? null,
         });
         // terminals signed in to this hub over Wi-Fi (Professional / Premium): listed under it, managed on the hub
-        for (const l of lan.filter((x) => !x.self)) {
+        const pr = d.promotion as { lanDeviceId?: string; expiresAt?: string } | null;
+        const promoting = pr?.lanDeviceId && pr.expiresAt && new Date(pr.expiresAt).getTime() > Date.now() ? pr.lanDeviceId : null;
+        // the hub's own spare "This hub (…)" entries from older app versions are not Wi-Fi terminals
+        for (const l of lan.filter((x) => !x.self && !x.name.startsWith('This hub ('))) {
           out.push({
             id: `lan:${l.id}`, name: l.name, platform: l.platform, isHub: false, lan: true, via: d.name, pairedAt: l.pairedAt, lastSeenAt: l.signedInAt,
             revokedAt: null, branch, online: online && l.signedIn, user: l.user, signedIn: l.signedIn, signedInAt: l.signedInAt,
+            becomingHub: promoting === l.id,
           });
         }
       }
@@ -429,6 +434,40 @@ export class ConsoleController {
     });
     Object.assign(audit, { branchId: d.branchId, objectType: 'device', objectId: id, after: { revokedAt: d.revokedAt }, reason: b.reason });
     return { id, revokedAt: d.revokedAt };
+  }
+
+  /**
+   * Make a device the branch's main device. A device that was a main device before (it has its own cloud link) takes
+   * over at once. A Wi-Fi terminal (`lan:<id>`) is asked through the current main device: it gets a one-time code
+   * there and claims the role itself with the cloud (within 15 minutes, needs internet on it).
+   */
+  @RequirePermissions('device.manage')
+  @Audited('device.make_hub')
+  @Post('devices/:id/make-hub')
+  @HttpCode(200)
+  async makeHub(@CurrentActor() a: Actor, @Param('id') id: string, @AuditCtx() audit: AuditDetails) {
+    const lanId = id.startsWith('lan:') ? id.slice(4) : null;
+    return this.t(a, async (tx) => {
+      if (!lanId) {
+        if (!/^[0-9a-f-]{36}$/.test(id)) throw notFound('Device');
+        const d = await tx.device.findUnique({ where: { id } });
+        if (!d || d.revokedAt) throw notFound('Device');
+        if (d.isHub) throw conflict('already_hub', `${d.name} is already the main device`);
+        await tx.device.updateMany({ where: { branchId: d.branchId, isHub: true, revokedAt: null }, data: { isHub: false, promotion: Prisma.DbNull } });
+        await tx.device.update({ where: { id }, data: { isHub: true } });
+        Object.assign(audit, { branchId: d.branchId, objectType: 'device', objectId: id, after: { isHub: true } });
+        return { id, status: 'done', name: d.name };
+      }
+      const hubs = await tx.device.findMany({ where: { isHub: true, revokedAt: null } });
+      type Lan = { id: string; name: string; self?: boolean };
+      const hub = hubs.find((h) => ((h.lanDevices as Lan[] | null) ?? []).some((l) => l.id === lanId && !l.self));
+      if (!hub) throw notFound('Device');
+      const lan = ((hub.lanDevices as Lan[]) ?? []).find((l) => l.id === lanId)!;
+      const promotion = { requestId: uuidv7(), lanDeviceId: lanId, name: lan.name, expiresAt: new Date(Date.now() + 15 * 60_000).toISOString() };
+      await tx.device.update({ where: { id: hub.id }, data: { promotion } });
+      Object.assign(audit, { branchId: hub.branchId, objectType: 'device', objectId: hub.id, after: { promoting: lan.name } });
+      return { id, status: 'pending', name: lan.name, via: hub.name };
+    });
   }
 
   // ---------------- menu: categories, deletes, photos

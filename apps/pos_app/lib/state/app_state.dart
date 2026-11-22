@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -142,6 +143,23 @@ class SetupNotifier extends AsyncNotifier<DeviceSetup?> {
     await save(next);
   }
 
+  /// The owner made this Wi-Fi terminal the main device in the console: claim the role with the one-time code from
+  /// the current hub, start this device's own hub and switch to it (staff sign in again here).
+  Future<void> becomeMainDevice(Json offer) async {
+    final cloudUrl = '${offer['cloudUrl']}';
+    final platform = switch (defaultTargetPlatform) { TargetPlatform.windows => 'windows', TargetPlatform.iOS => 'ios', _ => 'android' };
+    final res = await ref.read(promotionHttpProvider).post(Uri.parse('$cloudUrl/sync/promotion/claim'),
+        headers: {'content-type': 'application/json'}, body: jsonEncode({'code': offer['code'], 'platform': platform})).timeout(const Duration(seconds: 75));
+    final j = res.body.isEmpty ? const <String, dynamic>{} : jsonDecode(res.body) as Map<String, dynamic>;
+    if (res.statusCode != 201) throw HubApiException(res.statusCode, '${j['code'] ?? 'error'}', '${j['message'] ?? 'Could not become the main device'}');
+    final cfg = HubHostConfig(cloudUrl: cloudUrl, cloudDeviceToken: j['deviceToken'] as String, branchId: j['branchId'] as String,
+        branchCode: j['branchCode'] as String, licensePublicKey: j['licensePublicKey'] as String);
+    final host = ref.read(hubHostProvider);
+    await host.start(cfg);
+    ref.read(sessionProvider.notifier).state = null;
+    await save(DeviceSetup(hubBaseUrl: 'https://127.0.0.1:${host.port}/hub/v1', deviceToken: host.localDeviceToken!, fingerprint: host.fingerprint, hubConfig: cfg));
+  }
+
   Future<void> reset() async {
     await ref.read(hubHostProvider).stop();
     await ref.read(deviceStoreProvider).write(null);
@@ -150,6 +168,43 @@ class SetupNotifier extends AsyncNotifier<DeviceSetup?> {
 }
 
 final setupProvider = AsyncNotifierProvider<SetupNotifier, DeviceSetup?>(SetupNotifier.new);
+
+final promotionHttpProvider = Provider<http.Client>((ref) => http.Client());
+
+/// What this device is doing about becoming the main device (shown as a banner), null when nothing.
+final promotionStatusProvider = StateProvider<String?>((ref) => null);
+
+/// On a terminal joined to the main device: when the owner picks it in the console as the new main device, the hub
+/// says so (event "device.promote") and this device takes over by itself. Also checked once when it connects.
+final promotionWatcherProvider = Provider<void>((ref) {
+  final setup = ref.watch(setupProvider).valueOrNull;
+  final api = ref.watch(hubApiProvider);
+  if (setup == null || setup.isHub || api == null || !HubHost.supported) return;
+  var busy = false;
+  // taken now: switching over rebuilds this provider, and the result still has to reach the banner
+  final status = ref.read(promotionStatusProvider.notifier);
+  final setupNotifier = ref.read(setupProvider.notifier);
+  Future<void> check() async {
+    if (busy) return;
+    busy = true;
+    try {
+      final offer = await api.promotion();
+      if (offer['pending'] != true) return;
+      status.state = 'The owner made this the main device — switching over…';
+      await setupNotifier.becomeMainDevice(offer);
+      status.state = null;
+    } catch (e) {
+      if (status.state != null) status.state = 'Could not become the main device: $e';
+    } finally {
+      busy = false;
+    }
+  }
+
+  ref.listen<AsyncValue<Json>>(hubEventsProvider, (_, next) {
+    if (next.valueOrNull?['type'] == 'device.promote') check();
+  });
+  Future.microtask(check);
+});
 
 final hubApiProvider = Provider<HubApi?>((ref) {
   // only the LAN connection matters here: changing the cloud server address must not sign staff out

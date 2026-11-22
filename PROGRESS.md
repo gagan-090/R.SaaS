@@ -561,3 +561,9 @@ code, passes now); pos_app **96 passed, 5 skipped**.
 - Roles page: only the built-in roles in the plan. Setup screen: "Name" field with the placeholder "Enter owner name"
   (empty → the email's name).
 - Tests: api 173, admin_web 156 (18 skipped), pos_app 105 (10 skipped), hub_server 56 (1 skipped) — all passed.
+
+## Make any device the main device from the console (2026-11-22)
+- Hubs & devices: a hub button on every device. A device that was a hub before switches at once; a Wi-Fi device is
+  asked through the current hub and switches over by itself within about a minute (needs internet once), with a
+  banner on it. Spare "This hub (localhost)" entries are hidden.
+- Tests: api 174, admin_web 156 (18 skipped), pos_app 107 (10 skipped), hub_server 57 (1 skipped) — all passed.

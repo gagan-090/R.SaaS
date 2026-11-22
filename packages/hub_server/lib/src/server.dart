@@ -73,6 +73,13 @@ class HubServer {
 
     r.get('/health', (Request q) => _json({'status': 'ok', 'hub': hubName, 'time': nowIso()}));
 
+    // a terminal the owner chose in the console as the new main device fetches its one-time code here
+    r.get('/promotion', (Request q) async {
+      final deviceId = await hub.authenticateDevice(q.headers['x-device-token']);
+      final p = await hub.promotionFor(deviceId);
+      return p == null ? _json({'pending': false}) : _json({'pending': true, ...p});
+    });
+
     // ---- pairing
     // also the discovery probe: a new device on the Wi-Fi scans for this and shows which restaurant it found
     r.get('/pairing/info', (Request q) async {

@@ -51,6 +51,9 @@ abstract class HubApi {
   Future<Json> tip(String billId, {required int amountPaise, String? waiterId});
   Future<List<Json>> bills(DateTime day);
   Future<Json> syncStatus();
+
+  /// The owner chose this device in the console as the new main device: {pending, code, cloudUrl} from the hub.
+  Future<Json> promotion();
   Stream<Json> events();
 
   /// Menu photo bytes from the hub (cached there for offline use); null if there is none.
@@ -190,6 +193,8 @@ class HttpHubApi extends HubApi {
       (await _send('GET', '/bills?date=${day.toIso8601String().substring(0, 10)}') as List).cast<Json>();
   @override
   Future<Json> syncStatus() async => await _send('GET', '/sync/status') as Json;
+  @override
+  Future<Json> promotion() async => await _send('GET', '/promotion') as Json;
 
   @override
   Future<Uint8List?> media(String id) async {

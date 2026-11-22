@@ -131,6 +131,45 @@ describe('sync', () => {
     await t.http().post(api('/sync/devices')).set('X-Device-Token', 'nope').send({ devices: [] }).expect(401);
   });
 
+  it('the owner makes any device the main device from the console: a former hub at once, a Wi-Fi terminal through its hub', async () => {
+    const now = new Date().toISOString();
+    const a = (await t.http().post(api('/devices/register-hub')).set(bearer(R.ownerToken)).send({ name: 'Phone A', platform: 'android', replace: true }).expect(201)).body;
+    await t.http().post(api('/devices/register-hub')).set(bearer(R.ownerToken)).send({ name: 'Phone B', platform: 'android', replace: true }).expect(201);
+    const hubName = async () => ((await t.http().get(api('/devices')).set(bearer(R.ownerToken)).expect(200)).body as { isHub: boolean; name: string }[]).find((d) => d.isHub)?.name;
+    expect(await hubName()).toBe('Phone B');
+    // 1) a device that was a main device before: one tap
+    expect((await t.http().post(api(`/devices/${a.deviceId}/make-hub`)).set(bearer(R.ownerToken)).expect(200)).body).toMatchObject({ status: 'done' });
+    expect(await hubName()).toBe('Phone A');
+    await t.http().post(api(`/devices/${a.deviceId}/make-hub`)).set(bearer(R.ownerToken)).expect(409);
+
+    // 2) a Wi-Fi terminal of hub A
+    await t.http().post(api('/sync/devices')).set('X-Device-Token', a.deviceToken).send({ devices: [
+      { id: 'self', name: 'This hub (localhost)', platform: 'android', pairedAt: now, self: true, user: null, signedInAt: null, signedIn: false },
+      { id: 'spare', name: 'This hub (localhost)', platform: 'android', pairedAt: now, self: false, user: null, signedInAt: null, signedIn: false },
+      { id: 'tab', name: 'Counter tablet', platform: 'android', pairedAt: now, self: false, user: null, signedInAt: null, signedIn: false },
+    ] }).expect(200);
+    const listed = (await t.http().get(api('/devices')).set(bearer(R.ownerToken)).expect(200)).body as { id: string; becomingHub?: boolean }[];
+    expect(listed.filter((d) => d.id.startsWith('lan:')).map((d) => d.id)).toEqual(['lan:tab']); // spare hub entries hidden
+    const asked = (await t.http().post(api('/devices/lan:tab/make-hub')).set(bearer(R.ownerToken)).expect(200)).body;
+    expect(asked).toMatchObject({ status: 'pending', name: 'Counter tablet', via: 'Phone A' });
+    expect(((await t.http().get(api('/devices')).set(bearer(R.ownerToken))).body as { id: string; becomingHub?: boolean }[]).find((d) => d.id === 'lan:tab')?.becomingHub).toBe(true);
+    // hub A learns it on its next pull, makes a one-time code, registers its hash and hands the code to the tablet
+    const pull = (await t.http().get(api('/sync/pull?since=0')).set('X-Device-Token', a.deviceToken).expect(200)).body;
+    expect(pull.promotion).toMatchObject({ lanDeviceId: 'tab' });
+    const code = 'tablet-code-0123456789abcdef';
+    const { createHash } = await import('crypto');
+    await t.http().post(api('/sync/promotion')).set('X-Device-Token', a.deviceToken)
+      .send({ requestId: pull.promotion.requestId, codeHash: createHash('sha256').update(code).digest('hex') }).expect(200);
+    await t.http().post(api('/sync/promotion/claim')).send({ code: 'wrong-code-0123456789abcdef', name: 'X', platform: 'android' }).expect(401);
+    const claimed = (await t.http().post(api('/sync/promotion/claim')).send({ code, name: 'Counter tablet', platform: 'android' }).expect(201)).body;
+    expect(claimed).toMatchObject({ branchId: R.branchId, branchCode: 'BR01', licensePublicKey: loadEnv().LICENSE_PUBLIC_KEY });
+    expect(await hubName()).toBe('Counter tablet');
+    await t.http().get(api('/sync/pull')).set('X-Device-Token', claimed.deviceToken).expect(200);
+    // the code works once
+    await t.http().post(api('/sync/promotion/claim')).send({ code, name: 'Again', platform: 'android' }).expect(401);
+    device = claimed.deviceToken;
+  });
+
   it('unknown or missing device tokens are refused', async () => {
     await t.http().post(api('/sync/push')).send({ events: [] }).expect(401);
     await t.http().get(api('/sync/pull')).set('X-Device-Token', 'nope').expect(401);

@@ -351,6 +351,9 @@ class FakeHubApi extends HubApi {
   Future<List<Json>> bills(DateTime day) async => bills$.values.toList();
   @override
   Future<Json> syncStatus() async => {'pending': 3, 'pushed': 10, 'failed': 0};
+  Json promotionOffer = {'pending': false};
+  @override
+  Future<Json> promotion() async => promotionOffer;
   @override
   Stream<Json> events() => events$.stream;
 }

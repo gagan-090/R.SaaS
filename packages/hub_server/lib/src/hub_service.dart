@@ -235,6 +235,22 @@ class HubService {
     if (d != null) await db.setMeta('self_device_id', d['id']! as String);
   }
 
+  /// The owner chose terminal [deviceId] in the console as the new main device: keep the one-time code for it (only
+  /// that terminal can read it, see [promotionFor]) and tell the terminals, so it picks it up at once.
+  Future<void> offerPromotion({required String requestId, required String deviceId, required String code, required String cloudUrl, required String expiresAt}) async {
+    await db.setMeta('promotion', jsonEncode({'requestId': requestId, 'deviceId': deviceId, 'code': code, 'cloudUrl': cloudUrl, 'expiresAt': expiresAt}));
+    _events.add(HubEvent('device.promote', {'deviceId': deviceId}));
+  }
+
+  /// The pending main-device offer for this terminal, or null.
+  Future<Map<String, Object?>?> promotionFor(String deviceId) async {
+    final raw = await db.getMeta('promotion');
+    if (raw == null) return null;
+    final p = jsonDecode(raw) as Map<String, Object?>;
+    if (p['deviceId'] != deviceId || DateTime.parse('${p['expiresAt']}').isBefore(clock())) return null;
+    return {'code': p['code'], 'cloudUrl': p['cloudUrl'], 'expiresAt': p['expiresAt']};
+  }
+
   /// Every terminal on this hub with the person signed in on it (or last signed in) and their roles — sent to the
   /// cloud so the owner sees all their devices in the console. Spare "This hub" entries from earlier starts are left out.
   Future<List<Map<String, Object?>>> deviceReport() async {
@@ -247,7 +263,7 @@ class HubService {
           'SELECT s.created_at, s.expires_at, u.id AS user_id, u.name, u.roles_json FROM sessions s JOIN users u ON u.id = s.user_id '
           'WHERE s.device_id = ? ORDER BY s.created_at DESC, s.rowid DESC LIMIT 1',
           [d['id']]);
-      if (!isSelf && s == null && '${d['name']}'.startsWith('This hub (')) continue;
+      if (!isSelf && '${d['name']}'.startsWith('This hub (')) continue; // spare self entries from older versions
       out.add({
         'id': d['id'], 'name': d['name'], 'platform': d['platform'], 'pairedAt': d['paired_at'], 'self': isSelf,
         'user': s == null

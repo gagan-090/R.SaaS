@@ -406,6 +406,7 @@ model Device {
   revokedAt       DateTime?      @map("revoked_at") @db.Timestamptz(3)
   lanDevices      Json?          @map("lan_devices") // reported by the hub: its Wi-Fi terminals and who is signed in
   lanReportedAt   DateTime?      @map("lan_reported_at") @db.Timestamptz(3)
+  promotion       Json? // console asked this hub to hand the main-device role to one of its Wi-Fi terminals
 
   @@index([tenantId, branchId])
   @@map("devices")

@@ -4,7 +4,8 @@ import { z } from 'zod';
 import type { Actor, AuditDetails } from '../common/actor';
 import { AuditCtx, CurrentActor } from '../common/actor';
 import { randomToken, sha256 } from '../common/crypto';
-import { Audited, Public, RequirePermissions, RequiresFeature } from '../common/decorators';
+import { Audited, authLimit, Public, RequirePermissions, RequiresFeature } from '../common/decorators';
+import { Throttle } from '@nestjs/throttler';
 import { AppError, badRequest, forbidden, notFound } from '../common/errors';
 import { loadEnv } from '../config/env';
 import { apiBody, zbody, ZodPipe } from '../common/validation';
@@ -40,6 +41,8 @@ const DevicesBody = z.object({
     signedInAt: z.string().max(40).nullable(), signedIn: z.boolean(),
   })).max(200),
 });
+const PromotionCodeBody = z.object({ requestId: z.string().uuid(), codeHash: z.string().regex(/^[0-9a-f]{64}$/) });
+const ClaimBody = z.object({ code: z.string().min(16).max(128), name: z.string().trim().min(1).max(60).optional(), platform: z.enum(['windows', 'android', 'ios']) });
 const HistoryQuery = z.object({ after: z.string().regex(/^\d{4}-\d\d-\d\dT[\d:.]+Z\|[0-9a-f-]{36}$/).optional() });
 
 @ApiTags('sync')
@@ -107,6 +110,24 @@ export class SyncController {
   @ApiBody(apiBody(DevicesBody))
   async devices(@Headers('x-device-token') token: string | undefined, @Body(zbody(DevicesBody)) b: z.infer<typeof DevicesBody>) {
     return this.sync.reportDevices(await this.sync.authenticateDevice(token), b.devices);
+  }
+
+  @Public()
+  @Post('sync/promotion')
+  @HttpCode(200)
+  @ApiBody(apiBody(PromotionCodeBody))
+  async promotionCode(@Headers('x-device-token') token: string | undefined, @Body(zbody(PromotionCodeBody)) b: z.infer<typeof PromotionCodeBody>) {
+    return this.sync.promotionCode(await this.sync.authenticateDevice(token), b.requestId, b.codeHash);
+  }
+
+  /** A Wi-Fi terminal the owner chose in the console becomes the main device (one-time code from its hub). */
+  @Public()
+  @Throttle(authLimit())
+  @Post('sync/promotion/claim')
+  @HttpCode(201)
+  @ApiBody(apiBody(ClaimBody))
+  async claimPromotion(@Body(zbody(ClaimBody)) b: z.infer<typeof ClaimBody>) {
+    return this.sync.claimPromotion(b.code, b.name, b.platform);
   }
 
   @Public()

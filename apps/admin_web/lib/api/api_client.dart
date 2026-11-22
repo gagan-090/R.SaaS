@@ -336,6 +336,7 @@ class ApiClient {
 
   Future<List<dynamic>> devices() async => await _send('GET', '/devices') as List<dynamic>;
   Future<Json> revokeDevice(String id, String reason) async => await _send('POST', '/devices/$id/revoke', body: {'reason': reason}) as Json;
+  Future<Json> makeHub(String id) async => await _send('POST', '/devices/${Uri.encodeComponent(id)}/make-hub', body: const {}) as Json;
 
   /// Base URL the POS app should use for "This device is the hub".
   String get baseUrl => _base;

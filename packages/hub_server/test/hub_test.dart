@@ -678,6 +678,34 @@ void main() {
       expect((await h.hub.deviceReport())[1], containsPair('signedIn', false));
     });
 
+    test('console makes a Wi-Fi terminal the main device: the hub gives only that terminal a one-time code, once', () async {
+      final tab = await h.hub.claimPairing(await h.hub.createPairingCode(), 'Owner tablet', 'android');
+      final other = await h.hub.claimPairing(await h.hub.createPairingCode(), 'Counter PC', 'windows');
+      final cloud = FakeCloud()
+        ..pullBody = {
+          ...await h.configPull(),
+          'promotion': {'requestId': 'req-1', 'lanDeviceId': tab['deviceId'], 'expiresAt': h.now.add(const Duration(minutes: 15)).toIso8601String()},
+        };
+      final worker = SyncWorker(h.hub.db, h.hub, CloudClient('http://cloud', 'dev-token', client: cloud.client()));
+      final events = <HubEvent>[];
+      final sub = h.hub.events.listen(events.add);
+      await worker.pullOnce();
+      await Future<void>.delayed(Duration.zero);
+      expect(events.where((e) => e.type == 'device.promote').single.data, {'deviceId': tab['deviceId']});
+      Future<Map<String, Object?>> ask(Object? token) async =>
+          jsonDecode((await http.get(Uri.parse('${h.base}/promotion'), headers: {'x-device-token': '$token'})).body) as Map<String, Object?>;
+      final offer = await ask(tab['deviceToken']);
+      expect(offer, containsPair('pending', true));
+      expect(offer['cloudUrl'], 'http://cloud');
+      expect(cloud.promotionCodes.single, {'requestId': 'req-1', 'codeHash': sha256Hex(offer['code']! as String)});
+      expect(await ask(other['deviceToken']), {'pending': false}, reason: 'other terminals never see the code');
+      await worker.pullOnce();
+      expect(cloud.promotionCodes, hasLength(1), reason: 'one code per request');
+      h.now = h.now.add(const Duration(minutes: 16));
+      expect(await ask(tab['deviceToken']), {'pending': false}, reason: 'expired');
+      await sub.cancel();
+    });
+
     test('config pull applies changes since the cursor', () async {
       final cloud = FakeCloud()..pullBody = await h.configPull();
       final worker = SyncWorker(h.hub.db, h.hub, CloudClient('http://cloud', 'dev-token', client: cloud.client()));

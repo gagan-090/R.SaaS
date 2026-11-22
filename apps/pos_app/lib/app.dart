@@ -15,6 +15,8 @@ class PosApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final setup = ref.watch(setupProvider);
     final session = ref.watch(sessionProvider);
+    ref.watch(promotionWatcherProvider); // the owner can make this device the main device from the console
+    final promoting = ref.watch(promotionStatusProvider);
     // a restaurant with the "branding" plan feature gets its own colour and text style on every role's screens
     final brand = ref.watch(posLookProvider).valueOrNull?.brand;
     HPBrand.activate(brand);
@@ -26,7 +28,26 @@ class PosApp extends ConsumerWidget {
       themeMode: ref.watch(themeModeProvider), // white (Light) by default; Auto or Dark can be chosen in More
       builder: (context, child) {
         // touching anywhere outside a text field closes the on-screen keyboard (Android / iOS keep it open otherwise)
-        final page = DismissKeyboardOnTapOutside(child: PullToRefresh(child: child ?? const SizedBox.shrink()));
+        Widget page = DismissKeyboardOnTapOutside(child: PullToRefresh(child: child ?? const SizedBox.shrink()));
+        if (promoting != null) {
+          page = Column(children: [
+            Material(
+              key: const Key('promotion-banner'),
+              color: HPColors.saffron,
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: HPSpace.lg, vertical: HPSpace.sm),
+                  child: Row(children: [
+                    Expanded(child: Text(promoting, style: HPType.label(HPColors.onSaffron))),
+                    IconButton(tooltip: 'Close', icon: Icon(Icons.close_rounded, color: HPColors.onSaffron), onPressed: () => ref.read(promotionStatusProvider.notifier).state = null),
+                  ]),
+                ),
+              ),
+            ),
+            Expanded(child: page),
+          ]);
+        }
         if (brand == null || brand.textScale == 1) return page;
         // the brand's size multiplies the person's accessibility setting; it never replaces it
         final system = MediaQuery.textScalerOf(context).scale(100) / 100;

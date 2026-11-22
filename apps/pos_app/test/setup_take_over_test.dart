@@ -154,4 +154,47 @@ void main() {
     expect(host.started?.cloudDeviceToken, 'cloud-dev-token');
     expect(store.value?.isHub, isTrue);
   });
+
+  testWidgets('the owner picks this Wi-Fi terminal in the console: it claims the main-device role by itself and switches over', (t) async {
+    final claims = <Map<String, dynamic>>[];
+    final cloud = MockClient((r) async {
+      expect(r.url.toString(), 'https://cloud.test/api/v1/sync/promotion/claim');
+      claims.add(jsonDecode(r.body) as Map<String, dynamic>);
+      return http.Response(jsonEncode({'deviceId': 'd9', 'deviceToken': 'new-cloud-token', 'branchId': 'b1', 'branchCode': 'BR01', 'licensePublicKey': 'pk'}), 201);
+    });
+    final hub = FakeHubApi()..promotionOffer = {'pending': true, 'code': 'one-time-code-0123456789', 'cloudUrl': 'https://cloud.test/api/v1'};
+    final store = MemoryDeviceStore(const DeviceSetup(hubBaseUrl: 'https://192.168.1.20:8443/hub/v1', deviceToken: 'joined-token'));
+    final host = _FakeHubHost();
+    await t.pumpWidget(ProviderScope(overrides: [
+      deviceStoreProvider.overrideWithValue(store),
+      hubApiFactoryProvider.overrideWithValue((_) => hub),
+      promotionHttpProvider.overrideWithValue(cloud),
+      hubHostProvider.overrideWithValue(host),
+    ], child: const PosApp()));
+    await t.pumpAndSettle();
+    expect(claims, [{'code': 'one-time-code-0123456789', 'platform': 'android'}]);
+    expect(host.started?.cloudDeviceToken, 'new-cloud-token');
+    expect(host.started?.cloudUrl, 'https://cloud.test/api/v1');
+    expect(store.value?.isHub, isTrue);
+    expect(store.value?.hubBaseUrl, startsWith('https://127.0.0.1:'));
+    expect(find.byKey(const Key('promotion-banner')), findsNothing);
+  });
+
+  testWidgets('a terminal nobody picked never claims anything', (t) async {
+    var calls = 0;
+    final cloud = MockClient((r) async {
+      calls++;
+      return http.Response('{}', 500);
+    });
+    final store = MemoryDeviceStore(const DeviceSetup(hubBaseUrl: 'https://192.168.1.20:8443/hub/v1', deviceToken: 'joined-token'));
+    await t.pumpWidget(ProviderScope(overrides: [
+      deviceStoreProvider.overrideWithValue(store),
+      hubApiFactoryProvider.overrideWithValue((_) => FakeHubApi()),
+      promotionHttpProvider.overrideWithValue(cloud),
+      hubHostProvider.overrideWithValue(_FakeHubHost()),
+    ], child: const PosApp()));
+    await t.pumpAndSettle();
+    expect(calls, 0);
+    expect(store.value?.isHub, isFalse);
+  });
 }
