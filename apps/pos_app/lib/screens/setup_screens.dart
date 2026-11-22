@@ -107,7 +107,8 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
           _showAddress = true;
           _error = 'No main device found on this Wi-Fi. Connect this device to the restaurant Wi-Fi, keep the main device open, '
               'and try again — or type the address shown on the main device under More → Hub & devices.\n'
-              'Owner setting up the very first device? Sign in with your password instead of your PIN.';
+              'Owner setting up the very first device? Sign in with your password instead of your PIN.'
+              '${_platform == 'ios' ? '\nOn iPhone / iPad: Settings → BhojMitra POS → turn on "Local Network".' : ''}';
         });
         return;
       }

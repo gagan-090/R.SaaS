@@ -9,4 +9,5 @@ WebSocketChannel connectPinnedWebSocket(Uri uri, String? fingerprint) => WebSock
 typedef ProbedHub = ({String host, int port, String fingerprint, Map<String, dynamic> info});
 
 /// No LAN scanning in a browser.
-Future<List<ProbedHub>> probeHubs({String? onlyHost, int port = 8443, Duration timeout = const Duration(milliseconds: 900)}) async => const [];
+Future<List<ProbedHub>> probeHubs({String? onlyHost, int port = 8443, Duration timeout = const Duration(milliseconds: 900),
+    Duration typedTimeout = const Duration(seconds: 6), void Function(Object error)? onError}) async => const [];

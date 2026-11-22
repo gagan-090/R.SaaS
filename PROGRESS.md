@@ -567,3 +567,7 @@ code, passes now); pos_app **96 passed, 5 skipped**.
   asked through the current hub and switches over by itself within about a minute (needs internet once), with a
   banner on it. Spare "This hub (localhost)" entries are hidden.
 - Tests: api 174, admin_web 156 (18 skipped), pos_app 107 (10 skipped), hub_server 57 (1 skipped) — all passed.
+- Fix (same day): joining the main device from an iPhone. A typed address now gets 6 s and a second try (the first
+  try on iOS only shows the "Local Network" prompt); the scan runs again once on iOS. A failure says why (app not open
+  on the main device / not the same Wi-Fi / no answer) and tells iPhone users to turn on Local Network.
+  Tests: pos_app 109 (10 skipped) — passed.

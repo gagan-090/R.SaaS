@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -285,8 +285,18 @@ Future<JoinedHub?> findAndJoinHub({required String email, required String pin, r
     only = parts.first;
     if (parts.length > 1) port = int.tryParse(parts[1]) ?? 8443;
   }
-  final hubs = await probeHubs(onlyHost: only, port: port);
-  if (hubs.isEmpty) return null;
+  Object? why;
+  var hubs = await probeHubs(onlyHost: only, port: port, onError: (e) => why = e);
+  if (hubs.isEmpty && only == null && !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+    // iPhone: the first scan only brings up the "Local Network" prompt; scan again once it is answered
+    await Future<void>.delayed(const Duration(seconds: 2));
+    hubs = await probeHubs(port: port);
+  }
+  if (hubs.isEmpty) {
+    if (only == null) return null;
+    // a typed address: say what went wrong there instead of "not found"
+    throw HubApiException(0, 'hub_unreachable', unreachableHint(only, port, why));
+  }
   HubApiException? last;
   for (final h in hubs) {
     final base = 'https://${h.host}:${h.port}/hub/v1';
@@ -302,6 +312,21 @@ Future<JoinedHub?> findAndJoinHub({required String email, required String pin, r
     if (last.code != 'invalid_credentials') throw last;
   }
   throw last!;
+}
+
+/// Why a typed main-device address did not answer, in words the person can act on.
+String unreachableHint(String host, int port, Object? error) {
+  final e = '${error ?? ''}';
+  final ios = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+  final permission = ios ? ' On iPhone / iPad: Settings → BhojMitra POS → turn on "Local Network", then try again.' : '';
+  if (e.contains('refused')) {
+    return 'The device at $host answered, but BhojMitra is not running there. Open BhojMitra POS on the main device and keep it on screen, then try again.$permission';
+  }
+  if (e.contains('No route') || e.contains('unreachable') || e.contains('errno = 65') || e.contains('errno = 51')) {
+    return 'This device cannot reach $host. Check that both are on the same Wi-Fi (not a guest network).$permission';
+  }
+  return 'No answer from $host:$port. Check the address under More → Hub & devices on the main device, that the main device is '
+      'open and on the same Wi-Fi as this one.$permission';
 }
 
 /// Opaque helper so the app can show WebSocket channel errors uniformly.

@@ -32,9 +32,13 @@ bool _privateIp(String ip) {
 /// Finds BhojMitra main devices on this device's Wi-Fi / Ethernet: probes every address of the local /24 network on
 /// the hub port (64 at a time, under a second each), or only [onlyHost] when the address was typed in.
 /// No multicast or extra permissions needed. The certificate is trusted on first use and pinned from then on.
-Future<List<ProbedHub>> probeHubs({String? onlyHost, int port = 8443, Duration timeout = const Duration(milliseconds: 900)}) async {
+/// A typed-in address gets [typedTimeout] (a phone main device can take a few seconds for the TLS handshake) and one
+/// more try (iPhone: the first try only shows the "Local Network" prompt). [onError] gets why a typed address failed.
+Future<List<ProbedHub>> probeHubs({String? onlyHost, int port = 8443, Duration timeout = const Duration(milliseconds: 900),
+    Duration typedTimeout = const Duration(seconds: 6), void Function(Object error)? onError}) async {
   final hosts = <String>[];
   if (onlyHost != null) {
+    timeout = typedTimeout;
     hosts.add(onlyHost);
   } else {
     final own = <String>{};
@@ -70,8 +74,8 @@ Future<List<ProbedHub>> probeHubs({String? onlyHost, int port = 8443, Duration t
       if (j is! Map<String, dynamic> || fp == null || !j.containsKey('certFingerprint')) return;
       if (j['certFingerprint'] != null && j['certFingerprint'] != fp) return; // the certificate is not the one it claims
       found.add((host: h, port: port, fingerprint: fp!, info: j));
-    } catch (_) {
-      // nothing listening there
+    } catch (e) {
+      if (onlyHost != null) onError?.call(e); // nothing listening there (a scan ignores it)
     } finally {
       c.close(force: true);
     }
@@ -79,6 +83,10 @@ Future<List<ProbedHub>> probeHubs({String? onlyHost, int port = 8443, Duration t
 
   for (var i = 0; i < hosts.length; i += 64) {
     await Future.wait(hosts.sublist(i, math.min(i + 64, hosts.length)).map(probe));
+  }
+  if (found.isEmpty && onlyHost != null) {
+    await Future<void>.delayed(const Duration(seconds: 1));
+    await probe(onlyHost);
   }
   return found;
 }
