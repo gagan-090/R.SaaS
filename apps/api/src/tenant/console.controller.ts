@@ -391,11 +391,27 @@ export class ConsoleController {
     return this.t(a, async (tx) => {
       const [devices, branches] = await Promise.all([tx.device.findMany({ orderBy: [{ isHub: 'desc' }, { pairedAt: 'desc' }] }), tx.branch.findMany()]);
       const byId = new Map(branches.map((b) => [b.id, b]));
-      return devices.map((d) => ({
-        id: d.id, name: d.name, platform: d.platform, isHub: d.isHub, pairedAt: d.pairedAt, lastSeenAt: d.lastSeenAt, revokedAt: d.revokedAt,
-        branch: byId.get(d.branchId) ? { id: d.branchId, code: byId.get(d.branchId)!.code, name: byId.get(d.branchId)!.name } : null,
-        online: !d.revokedAt && !!d.lastSeenAt && Date.now() - d.lastSeenAt.getTime() < 3 * 60_000,
-      }));
+      type Lan = { id: string; name: string; platform: string; pairedAt: string; self: boolean; user: { name: string; roles: string[] } | null; signedInAt: string | null; signedIn: boolean };
+      const out: Record<string, unknown>[] = [];
+      for (const d of devices) {
+        const branch = byId.get(d.branchId) ? { id: d.branchId, code: byId.get(d.branchId)!.code, name: byId.get(d.branchId)!.name } : null;
+        const online = !d.revokedAt && !!d.lastSeenAt && Date.now() - d.lastSeenAt.getTime() < 3 * 60_000;
+        // only the current hub's report is live; a replaced hub's terminals moved to the new one
+        const lan = d.isHub && !d.revokedAt ? ((d.lanDevices as Lan[] | null) ?? []) : [];
+        const self = lan.find((l) => l.self);
+        out.push({
+          id: d.id, name: d.name, platform: d.platform, isHub: d.isHub, pairedAt: d.pairedAt, lastSeenAt: d.lastSeenAt, revokedAt: d.revokedAt, branch, online,
+          user: self?.user ?? null, signedIn: self?.signedIn ?? false, signedInAt: self?.signedInAt ?? null,
+        });
+        // terminals signed in to this hub over Wi-Fi (Professional / Premium): listed under it, managed on the hub
+        for (const l of lan.filter((x) => !x.self)) {
+          out.push({
+            id: `lan:${l.id}`, name: l.name, platform: l.platform, isHub: false, lan: true, via: d.name, pairedAt: l.pairedAt, lastSeenAt: l.signedInAt,
+            revokedAt: null, branch, online: online && l.signedIn, user: l.user, signedIn: l.signedIn, signedInAt: l.signedInAt,
+          });
+        }
+      }
+      return out;
     });
   }
 

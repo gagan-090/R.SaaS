@@ -17,7 +17,7 @@ import 'fake_hub.dart';
 class _FakeHubHost extends HubHost {
   HubHostConfig? started;
   @override
-  Future<void> start(HubHostConfig c) async {
+  Future<void> start(HubHostConfig c, {String? localToken}) async {
     started = c;
     localDeviceToken = 'local-hub-token';
     fingerprint = 'CC:DD';
@@ -119,5 +119,39 @@ void main() {
     expect(t.widget<TextField>(find.byKey(const Key('setup-secret'))).controller!.text, isEmpty);
     expect(t.widget<TextField>(find.byKey(const Key('setup-secret'))).enabled, isTrue);
     expect(store.value, isNull);
+  });
+
+  testWidgets('a joined device (Pro / Premium): "Make this the main device" signs in with the password and replaces the hub at once', (t) async {
+    final c = cloud();
+    final store = MemoryDeviceStore(const DeviceSetup(hubBaseUrl: 'https://192.168.1.20:8443/hub/v1', deviceToken: 'joined-token'));
+    final host = _FakeHubHost();
+    t.view.physicalSize = const Size(360, 740);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    await t.pumpWidget(ProviderScope(
+      overrides: [
+        deviceStoreProvider.overrideWithValue(store),
+        hubApiFactoryProvider.overrideWithValue((_) => FakeHubApi()),
+        setupHttpClientProvider.overrideWithValue(c.client),
+        hubHostProvider.overrideWithValue(host),
+      ],
+      child: MaterialApp(theme: HPTheme.service(brightness: Brightness.light), home: const DeviceSetupScreen(takeOver: true, email: 'owner@demo.test')),
+    ));
+    await t.pumpAndSettle();
+    expect(find.text('Make this the main device'), findsOneWidget);
+    expect(find.text('Enter owner name'), findsOneWidget, reason: 'the name field shows the placeholder');
+    await t.enterText(find.byKey(const Key('setup-device-name')), 'Ashish');
+    await t.enterText(find.byKey(const Key('setup-secret')), '1234');
+    await t.ensureVisible(find.byKey(const Key('setup-sign-in')));
+    await t.tap(find.byKey(const Key('setup-sign-in')));
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('setup-error')), findsOneWidget, reason: 'a PIN cannot make a main device');
+    expect(c.registers, isEmpty);
+    await t.enterText(find.byKey(const Key('setup-secret')), 'correct horse');
+    await t.tap(find.byKey(const Key('setup-sign-in')));
+    await t.pumpAndSettle();
+    expect(c.registers, [{'name': 'Ashish', 'platform': 'android', 'replace': true}]);
+    expect(host.started?.cloudDeviceToken, 'cloud-dev-token');
+    expect(store.value?.isHub, isTrue);
   });
 }

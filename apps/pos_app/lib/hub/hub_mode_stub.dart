@@ -7,7 +7,7 @@ class HubHost {
   String? localDeviceToken;
   String? fingerprint;
   int port = 8443;
-  Future<void> start(HubHostConfig c) async => throw UnsupportedError('Hub mode is not available on this platform');
+  Future<void> start(HubHostConfig c, {String? localToken}) async => throw UnsupportedError('Hub mode is not available on this platform');
   Future<PairingPayload> newPairingCode() async => throw UnsupportedError('Hub mode is not available on this platform');
   Future<void> stop() async {}
 }

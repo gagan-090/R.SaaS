@@ -141,7 +141,7 @@ void main() {
     await t.enterText(find.byKey(const Key('setup-secret')), '1234');
     await t.tap(find.byKey(const Key('setup-sign-in')));
     await t.pumpAndSettle();
-    expect(calls, ['ravi@demo.test|1234|Cashier terminal|-']);
+    expect(calls, ['ravi@demo.test|1234|ravi|-'], reason: 'no name typed: the email name');
     expect(store.value?.deviceToken, 'issued-device-token');
     expect(store.value?.hubBaseUrl, 'https://10.0.0.5:8443/hub/v1');
     expect(store.value?.fingerprint, 'AA:BB');

@@ -109,7 +109,7 @@ class SetupNotifier extends AsyncNotifier<DeviceSetup?> {
   @override
   Future<DeviceSetup?> build() async {
     final s = await ref.read(deviceStoreProvider).read();
-    if (s != null && s.isHub && HubHost.supported) await ref.read(hubHostProvider).start(s.hubConfig!);
+    if (s != null && s.isHub && HubHost.supported) await ref.read(hubHostProvider).start(s.hubConfig!, localToken: s.deviceToken);
     return s;
   }
 
@@ -138,7 +138,7 @@ class SetupNotifier extends AsyncNotifier<DeviceSetup?> {
     );
     final host = ref.read(hubHostProvider);
     await host.stop();
-    await host.start(next.hubConfig!);
+    await host.start(next.hubConfig!, localToken: s.deviceToken);
     await save(next);
   }
 

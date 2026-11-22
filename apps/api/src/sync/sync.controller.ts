@@ -33,6 +33,13 @@ const PushBody = z.object({
     .max(200),
 });
 const PullQuery = z.object({ since: z.string().regex(/^\d+$/).default('0') });
+const DevicesBody = z.object({
+  devices: z.array(z.object({
+    id: z.string().min(1).max(64), name: z.string().max(120), platform: z.string().max(20), pairedAt: z.string().max(40), self: z.boolean(),
+    user: z.object({ id: z.string().max(64), name: z.string().max(120), roles: z.array(z.string().max(40)).max(10) }).nullable(),
+    signedInAt: z.string().max(40).nullable(), signedIn: z.boolean(),
+  })).max(200),
+});
 const HistoryQuery = z.object({ after: z.string().regex(/^\d{4}-\d\d-\d\dT[\d:.]+Z\|[0-9a-f-]{36}$/).optional() });
 
 @ApiTags('sync')
@@ -92,6 +99,14 @@ export class SyncController {
   async history(@Headers('x-device-token') token: string | undefined, @Query(new ZodPipe(HistoryQuery)) q: z.infer<typeof HistoryQuery>) {
     const dev = await this.sync.authenticateDevice(token);
     return this.sync.history(dev, q.after);
+  }
+
+  @Public()
+  @Post('sync/devices')
+  @HttpCode(200)
+  @ApiBody(apiBody(DevicesBody))
+  async devices(@Headers('x-device-token') token: string | undefined, @Body(zbody(DevicesBody)) b: z.infer<typeof DevicesBody>) {
+    return this.sync.reportDevices(await this.sync.authenticateDevice(token), b.devices);
   }
 
   @Public()

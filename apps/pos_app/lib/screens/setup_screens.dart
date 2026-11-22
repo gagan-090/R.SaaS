@@ -9,6 +9,8 @@ import 'package:rsaas_ui_kit/rsaas_ui_kit.dart';
 
 import '../hub/hub_api.dart';
 import '../hub/hub_mode.dart';
+import 'admin_screens.dart' show planProvider;
+import 'owner_console.dart' show canOpenOwnerConsole;
 import '../state/app_state.dart';
 import '../ui/common.dart';
 import '../ui/media.dart';
@@ -38,13 +40,18 @@ class _Brand extends StatelessWidget {
 /// - email + password: the owner's (or IT admin's) first device signs in to the cloud and becomes the main device. If
 ///   the restaurant already has one, the server says so and the person is asked to use their PIN on that Wi-Fi.
 class DeviceSetupScreen extends ConsumerStatefulWidget {
-  const DeviceSetupScreen({super.key});
+  const DeviceSetupScreen({super.key, this.takeOver = false, this.email});
+
+  /// Opened from Hub & devices on a device that joined the main device: the owner signs in with their password and
+  /// this device becomes the main device in place of the current one (Professional / Premium).
+  final bool takeOver;
+  final String? email;
   @override
   ConsumerState<DeviceSetupScreen> createState() => _DeviceSetupScreenState();
 }
 
 class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
-  final _name = TextEditingController(text: 'Cashier terminal'), _hubAddress = TextEditingController();
+  final _name = TextEditingController(), _hubAddress = TextEditingController();
   final _cloud = TextEditingController(text: const String.fromEnvironment('API_BASE_URL', defaultValue: 'http://localhost:3000/api/v1')),
       _email = TextEditingController(), _password = TextEditingController(), _mfa = TextEditingController(),
       _newPin = TextEditingController(), _newPinAgain = TextEditingController();
@@ -63,12 +70,30 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
 
   static final _pinShape = RegExp(r'^\d{4,8}$');
 
+  @override
+  void initState() {
+    super.initState();
+    if (widget.email != null) _email.text = widget.email!;
+  }
+
+  /// The name shown for this device in Hubs & devices: what was typed, else the part of the email before "@".
+  String get _deviceName {
+    final n = _name.text.trim();
+    if (n.isNotEmpty) return n;
+    final e = _email.text.trim();
+    return e.contains('@') ? e.split('@').first : 'Owner';
+  }
+
   /// The one button: PIN → join the main device on the Wi-Fi; password → the owner's first device becomes the main one.
   Future<void> _signIn() async {
     final email = _email.text.trim(), secret = _password.text;
     if (_existingHub != null) return;
     if (_access != null || _needMfa) return _becomeHub(); // owner half-way through MFA / choosing a PIN
     if (email.isEmpty || secret.isEmpty) return setState(() => _error = 'Enter your email and your PIN (or password)');
+    if (widget.takeOver) {
+      if (_pinShape.hasMatch(secret)) return setState(() => _error = 'Use your account password (not the PIN) to make this the main device');
+      return _becomeHub(replace: true);
+    }
     if (!_pinShape.hasMatch(secret)) return _becomeHub();
     setState(() {
       _busy = true;
@@ -76,7 +101,7 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
       _status = 'Looking for your restaurant\'s main device on this Wi-Fi…';
     });
     try {
-      final joined = await ref.read(joinHubFnProvider)(email: email, pin: secret, deviceName: _name.text.trim(), platform: _platform, host: _showAddress ? _hubAddress.text : null);
+      final joined = await ref.read(joinHubFnProvider)(email: email, pin: secret, deviceName: _deviceName, platform: _platform, host: _showAddress ? _hubAddress.text : null);
       if (joined == null) {
         setState(() {
           _showAddress = true;
@@ -172,7 +197,7 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
       }
       final Map<String, dynamic> reg;
       try {
-        reg = await post('/devices/register-hub', {'name': _name.text.trim(), 'platform': _platform, if (replace) 'replace': true}, bearer: access);
+        reg = await post('/devices/register-hub', {'name': _deviceName, 'platform': _platform, if (replace) 'replace': true}, bearer: access);
       } on HubApiException catch (e) {
         if (e.code != 'hub_exists') rethrow;
         // the restaurant already has a main device: the owner picks — this device takes over, or it joins that one
@@ -190,6 +215,10 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
       await host.start(cfg);
       await ref.read(setupProvider.notifier).save(DeviceSetup(
           hubBaseUrl: 'https://127.0.0.1:${host.port}/hub/v1', deviceToken: host.localDeviceToken!, fingerprint: host.fingerprint, hubConfig: cfg));
+      if (widget.takeOver && mounted) {
+        ref.read(sessionProvider.notifier).state = null; // sign in again on this device's own hub
+        Navigator.of(context).popUntil((r) => r.isFirst);
+      }
     } catch (e) {
       if (mounted) setState(() => _error = errText(e));
     } finally {
@@ -234,10 +263,18 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
                     ThemeModeSwitch(compact: true, value: ref.watch(themeModeProvider), onChanged: ref.read(themeModeProvider.notifier).set),
                   ]),
                   const SizedBox(height: HPSpace.x2),
-                  Text('Sign in to set up this device', style: HPType.titleScreen(p.text)),
-                  const SizedBox(height: HPSpace.xs),
-                  Text('Owner, first device: use your password — it becomes the main device. Everyone else (and the owner on '
-                      'more devices): use your email and POS PIN while on the restaurant Wi-Fi.', style: HPType.body(p.muted).copyWith(fontSize: 15)),
+                  if (widget.takeOver) ...[
+                    Text('Make this the main device', style: HPType.titleScreen(p.text)),
+                    const SizedBox(height: HPSpace.xs),
+                    Text('Sign in with your account password. This device then keeps billing running (also offline) and the other '
+                        'devices join it with email + PIN on the restaurant Wi-Fi. The old main device keeps its bills and still uploads them.',
+                        style: HPType.body(p.muted).copyWith(fontSize: 15)),
+                  ] else ...[
+                    Text('Sign in to set up this device', style: HPType.titleScreen(p.text)),
+                    const SizedBox(height: HPSpace.xs),
+                    Text('Owner, first device: use your password — it becomes the main device. Everyone else (and the owner on '
+                        'more devices): use your email and POS PIN while on the restaurant Wi-Fi.', style: HPType.body(p.muted).copyWith(fontSize: 15)),
+                  ],
                   const SizedBox(height: HPSpace.x2),
                   Card(
                     child: Padding(
@@ -293,7 +330,7 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
                           TextField(key: const Key('setup-mfa'), controller: _mfa, autofocus: true, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Authenticator code', prefixIcon: Icon(Icons.verified_user_outlined)), onSubmitted: (_) => _signIn()),
                         ],
                         const SizedBox(height: HPSpace.md),
-                        TextField(key: const Key('setup-device-name'), controller: _name, decoration: const InputDecoration(labelText: 'Name of this device', prefixIcon: Icon(Icons.devices_rounded))),
+                        TextField(key: const Key('setup-device-name'), controller: _name, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Name', hintText: 'Enter owner name', prefixIcon: Icon(Icons.person_outline_rounded))),
                         if (_showAddress) ...[
                           const SizedBox(height: HPSpace.md),
                           TextField(
@@ -320,7 +357,7 @@ class _DeviceSetupScreenState extends ConsumerState<DeviceSetupScreen> {
                         else
                         PrimaryButton(
                           key: const Key('setup-sign-in'),
-                          label: _needPin ? 'Save PIN and continue' : (_needMfa ? 'Verify' : 'Sign in'),
+                          label: _needPin ? 'Save PIN and continue' : (_needMfa ? 'Verify' : (widget.takeOver ? 'Make main device' : 'Sign in')),
                           icon: Icons.login_rounded,
                           busy: _busy,
                           onPressed: _signIn,
@@ -471,8 +508,22 @@ class _HubStatusScreenState extends ConsumerState<HubStatusScreen> {
                       ]),
                     ),
                   )
-                else
+                else ...[
                   const EmptyState(title: 'Connected to the main device', message: 'This device works with the main device on your restaurant Wi-Fi, also without internet.', icon: Icons.link_rounded),
+                  // Professional / Premium: the owner (or Restaurant Admin) may make any of their devices the main device
+                  if (HubHost.supported &&
+                      canOpenOwnerConsole(ref.watch(sessionProvider)) &&
+                      (((ref.watch(planProvider).valueOrNull?['features'] as List?) ?? const []).contains('lan_hub')))
+                    Padding(
+                      padding: const EdgeInsets.only(top: HPSpace.md),
+                      child: SecondaryButton(
+                        key: const Key('make-main-device'),
+                        label: 'Make this the main device',
+                        icon: Icons.star_rounded,
+                        onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const DeviceSetupScreen(takeOver: true))),
+                      ),
+                    ),
+                ],
                 const SizedBox(height: HPSpace.lg),
                 if (api != null)
                   FutureBuilder<Json>(

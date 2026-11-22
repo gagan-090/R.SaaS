@@ -551,3 +551,13 @@ code, passes now); pos_app **96 passed, 5 skipped**.
 - Tests: core 49, hub_server 55 (1 skipped), api sync 7, pos_app 104 (10 skipped) — all passed.
 - Update (same day): format is now `007B/20261120/173045123` (restaurant number in hex / date / time to the
   millisecond, IST). Fits one receipt line on 58 mm and 80 mm. Tests: core 49, hub_server 55 (1 skipped) — passed.
+
+## Owner sees every device; any device can become the main one; plan roles only (2026-11-22)
+- Console → Hubs & devices: the main device and every device signed in to it over Wi-Fi, each with the person and
+  role ("Ashish · Owner · signed in just now"); Wi-Fi devices are read-only there. New step: how to make another
+  device the main device.
+- POS (Professional / Premium): on a joined device, More → Hub & devices → "Make this the main device" (owner or
+  Restaurant Admin, password sign-in). The hub no longer adds a spare "This hub" device on every restart.
+- Roles page: only the built-in roles in the plan. Setup screen: "Name" field with the placeholder "Enter owner name"
+  (empty → the email's name).
+- Tests: api 173, admin_web 156 (18 skipped), pos_app 105 (10 skipped), hub_server 56 (1 skipped) — all passed.

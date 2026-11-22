@@ -660,6 +660,24 @@ void main() {
       expect(() => newWorker.pullHistory(), throwsA(isA<SocketException>()));
     });
 
+    test('the hub reports every terminal and who is signed in on it (the owner on 2 devices shows twice), each sync', () async {
+      final tab = await h.hub.claimPairing(await h.hub.createPairingCode(), 'Owner tablet', 'android');
+      await h.hub.staffLogin(tab['deviceId']! as String, Harness.owner, Harness.pins[Harness.owner]!);
+      await h.hub.claimPairing(await h.hub.createPairingCode(), 'Counter PC', 'windows'); // nobody signed in yet
+      final cloud = FakeCloud()..pullBody = await h.configPull();
+      final worker = SyncWorker(h.hub.db, h.hub, CloudClient('http://cloud', 'dev-token', client: cloud.client()));
+      await worker.tick();
+      final r = cloud.deviceReports.single;
+      expect(r.map((d) => d['name']), ['Cashier PC', 'Owner tablet', 'Counter PC']);
+      expect(r[0], containsPair('self', true));
+      expect(r[0]['user'], containsPair('id', Harness.owner), reason: 'the owner signed in last on the hub itself in setUp');
+      expect(r[1], allOf(containsPair('self', false), containsPair('signedIn', true)));
+      expect((r[1]['user']! as Map)['roles'], ['owner']);
+      expect(r[2], allOf(containsPair('user', null), containsPair('signedIn', false)));
+      h.now = h.now.add(const Duration(hours: 13)); // sessions run out after 12 h
+      expect((await h.hub.deviceReport())[1], containsPair('signedIn', false));
+    });
+
     test('config pull applies changes since the cursor', () async {
       final cloud = FakeCloud()..pullBody = await h.configPull();
       final worker = SyncWorker(h.hub.db, h.hub, CloudClient('http://cloud', 'dev-token', client: cloud.client()));

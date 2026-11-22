@@ -30,7 +30,10 @@ class FakeRestaurantApi {
     {'id': 'u-own', 'name': 'Demo Owner', 'email': 'owner@demo.com', 'status': 'active', 'role': 'owner', 'hasPin': true, 'canDiscount': false},
   ];
   final devices = <Map<String, dynamic>>[
-    {'id': 'd1', 'name': 'Cashier phone', 'platform': 'android', 'isHub': true, 'pairedAt': '2026-10-13T04:00:00Z', 'lastSeenAt': DateTime.now().toUtc().toIso8601String(), 'revokedAt': null, 'online': true, 'branch': {'id': 'b1', 'code': 'BR01', 'name': 'MG Road'}},
+    {'id': 'd1', 'name': 'Cashier phone', 'platform': 'android', 'isHub': true, 'pairedAt': '2026-10-13T04:00:00Z', 'lastSeenAt': DateTime.now().toUtc().toIso8601String(), 'revokedAt': null, 'online': true, 'branch': {'id': 'b1', 'code': 'BR01', 'name': 'MG Road'},
+      'user': {'id': 'u1', 'name': 'Ashish', 'roles': ['owner']}, 'signedIn': true, 'signedInAt': DateTime.now().toUtc().toIso8601String()},
+    {'id': 'lan:t1', 'name': 'Ashish tablet', 'platform': 'android', 'isHub': false, 'lan': true, 'via': 'Cashier phone', 'pairedAt': '2026-11-20T04:00:00Z', 'lastSeenAt': null, 'revokedAt': null, 'online': true, 'branch': {'id': 'b1', 'code': 'BR01', 'name': 'MG Road'},
+      'user': {'id': 'u1', 'name': 'Ashish', 'roles': ['owner']}, 'signedIn': true, 'signedInAt': DateTime.now().toUtc().toIso8601String()},
   ];
   final customRoles = <Map<String, dynamic>>[];
   final tableLive = <String, String>{}; // table id → occupied / billing from synced orders
@@ -600,6 +603,10 @@ void main() {
       await go(t, 'Hubs & devices', size: size);
       expect(find.text('http://192.168.1.25:3000/api/v1'), findsOneWidget);
       expect(find.byKey(const Key('device-Cashier phone')), findsOneWidget);
+      // every device the owner is signed in on, with the person and role; Wi-Fi terminals are managed on the main device
+      expect(find.byKey(const Key('device-Ashish tablet')), findsOneWidget);
+      expect(find.textContaining('Ashish · Owner · signed in'), findsNWidgets(2));
+      expect(find.byTooltip('Revoke'), findsOneWidget);
       await t.tap(find.byTooltip('Revoke'));
       await t.pumpAndSettle();
       await t.enterText(find.byKey(const Key('reason-field')), 'Phone lost');

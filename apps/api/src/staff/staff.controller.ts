@@ -349,7 +349,10 @@ export class StaffController {
       const custom = await tx.customRole.findMany({ where: { deleted: false }, orderBy: { name: 'asc' }, include: { _count: { select: { assignments: true } } } });
       const grantable = [...limitToPlan(new Set(Object.keys(RESTAURANT_PERMISSIONS)), ent.features)].filter((p) => this.isOwner(a) || a.permissions.has(p));
       return {
-        builtIn: (['owner', 'it_admin', 'cashier', 'waiter', 'chef', 'auditor'] as RestaurantRoleName[]).map((r) => ({
+        // only the roles the plan includes: Standard = the owner alone; Professional adds cashier and waiter;
+        // Premium (roles.extended) adds Restaurant Admin, chef and auditor
+        builtIn: (['owner', 'it_admin', 'cashier', 'waiter', 'chef', 'auditor'] as RestaurantRoleName[]).filter((r) =>
+          r === 'owner' || (ent.limits.staffPerBranch !== 0 && (!EXTENDED_ROLES.includes(r) || ent.features.includes('roles.extended')))).map((r) => ({
           role: r, permissions: [...limitToPlan(new Set(ROLE_PERMISSIONS[r]), ent.features)],
         })),
         custom: custom.map(({ _count, ...c }) => ({ ...c, seq: undefined, members: _count.assignments })),

@@ -113,6 +113,24 @@ describe('sync', () => {
     device = next;
   });
 
+  it('the console lists every device signed in to the main device over Wi-Fi, with the person and role', async () => {
+    const now = new Date().toISOString();
+    const owner = { id: 'u1', name: 'Ashish', roles: ['owner'] };
+    await t.http().post(api('/sync/devices')).set('X-Device-Token', device).send({ devices: [
+      { id: 'd-self', name: 'Ashish', platform: 'android', pairedAt: now, self: true, user: owner, signedInAt: now, signedIn: true },
+      { id: 'd-tab', name: 'Ashish tablet', platform: 'android', pairedAt: now, self: false, user: owner, signedInAt: now, signedIn: true },
+      { id: 'd-pc', name: 'Counter PC', platform: 'windows', pairedAt: now, self: false, user: null, signedInAt: null, signedIn: false },
+    ] }).expect(200);
+    const list = (await t.http().get(api('/devices')).set(bearer(R.ownerToken)).expect(200)).body as Record<string, unknown>[];
+    const hub = list.find((d) => d.isHub === true)!;
+    expect(hub).toMatchObject({ user: owner, signedIn: true });
+    const lan = list.filter((d) => d.lan === true);
+    expect(lan.map((d) => d.name)).toEqual(['Ashish tablet', 'Counter PC']);
+    expect(lan[0]).toMatchObject({ id: 'lan:d-tab', via: hub.name, user: owner, signedIn: true, online: true });
+    expect(lan[1]).toMatchObject({ user: null, signedIn: false, online: false });
+    await t.http().post(api('/sync/devices')).set('X-Device-Token', 'nope').send({ devices: [] }).expect(401);
+  });
+
   it('unknown or missing device tokens are refused', async () => {
     await t.http().post(api('/sync/push')).send({ events: [] }).expect(401);
     await t.http().get(api('/sync/pull')).set('X-Device-Token', 'nope').expect(401);

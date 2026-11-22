@@ -26,6 +26,11 @@ export interface PushEvent {
 }
 export type PushResult = { eventId: string; result: 'accepted' | 'duplicate' | 'rejected'; reason?: string };
 
+export interface LanDevice {
+  id: string; name: string; platform: string; pairedAt: string; self: boolean;
+  user: { id: string; name: string; roles: string[] } | null; signedInAt: string | null; signedIn: boolean;
+}
+
 export interface DeviceCtx {
   deviceId: string;
   tenantId: string;
@@ -162,6 +167,13 @@ export class SyncService {
         more: rows.length > limit,
       };
     });
+  }
+
+  /** The hub's report of its Wi-Fi terminals (and who is signed in on each, itself included) for the console. */
+  async reportDevices(dev: DeviceCtx, devices: LanDevice[]) {
+    await this.db.tenant(dev.tenantId, (tx) =>
+      tx.device.update({ where: { id: dev.deviceId }, data: { lanDevices: devices as unknown as Prisma.InputJsonValue, lanReportedAt: new Date() } }));
+    return { ok: true };
   }
 
   async status(dev: DeviceCtx) {

@@ -178,6 +178,7 @@ class FakeCloud {
   Map<String, Object?>? pullBody;
   String? lastSince;
   int historyPage = 500;
+  final deviceReports = <List<Map<String, Object?>>>[];
 
   final media = <String, List<int>>{};
   int mediaFetches = 0;
@@ -192,6 +193,10 @@ class FakeCloud {
         if (req.url.path.endsWith('/sync/pull')) {
           lastSince = req.url.queryParameters['since'];
           return http.Response.bytes(utf8.encode(jsonEncode(pullBody ?? {})), 200, headers: {'content-type': 'application/json; charset=utf-8'});
+        }
+        if (req.url.path.endsWith('/sync/devices')) {
+          deviceReports.add(((jsonDecode(req.body) as Map)['devices'] as List).cast<Map<String, Object?>>());
+          return http.Response('{"ok":true}', 200, headers: {'content-type': 'application/json'});
         }
         if (req.url.path.endsWith('/sync/history')) {
           // stored order = arrival order; the cursor is the index of the last event sent

@@ -7,6 +7,7 @@ import '../../api/api_client.dart';
 import '../../state/providers.dart';
 import '../../widgets/common.dart';
 import '../../widgets/labels.dart';
+import 'staff_screen.dart' show roleInfo;
 
 String ago(Object? iso) {
   final d = DateTime.tryParse('${iso ?? ''}');
@@ -57,7 +58,8 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
                     if (i > 0) const Divider(indent: 72),
                     _DeviceRow(
                       device: d,
-                      onRevoke: () async {
+                      // Wi-Fi terminals are managed on the main device itself
+                      onRevoke: d['lan'] == true ? null : () async {
                         final reason = await ReasonDialog.show(context,
                             title: 'Revoke ${d['name']}?', confirmLabel: 'Revoke', message: 'It stops syncing immediately. To use it again, set it up from the POS app.');
                         if (reason == null) return;
@@ -95,6 +97,12 @@ class _DeviceRow extends StatelessWidget {
     final p = context.hp;
     final revoked = device['revokedAt'] != null;
     final online = device['online'] == true;
+    final lan = device['lan'] == true;
+    final user = device['user'] as Map?;
+    final roles = ((user?['roles'] as List?) ?? const []).map((r) => roleInfo['$r']?.$1 ?? titleCase('$r')).join(', ');
+    final who = user == null
+        ? 'Nobody signed in yet'
+        : '${user['name']}${roles.isEmpty ? '' : ' · $roles'} · ${device['signedIn'] == true ? 'signed in' : 'last signed in'} ${ago(device['signedInAt'])}';
     return ListTile(
       key: Key('device-${device['name']}'),
       contentPadding: const EdgeInsets.symmetric(horizontal: HPSpace.lg, vertical: HPSpace.xs),
@@ -107,14 +115,22 @@ class _DeviceRow extends StatelessWidget {
       title: Wrap(spacing: HPSpace.sm, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
         Text('${device['name']}', style: HPType.label(revoked ? p.faint : p.text), overflow: TextOverflow.ellipsis),
         if (device['isHub'] == true) const StatusChip(label: 'Hub', tone: HPTone.saffron),
+        if (lan) const StatusChip(label: 'Wi-Fi', tone: HPTone.neutral),
         if (!revoked) StatusChip(label: online ? 'Online' : 'Offline', tone: online ? HPTone.success : HPTone.neutral),
       ]),
-      subtitle: Text(
-        revoked ? 'Revoked ${shortDate(device['revokedAt'])}' : '${titleCase('${device['platform']}')} · ${(device['branch'] as Map?)?['name'] ?? ''} · paired ${shortDate(device['pairedAt'])} · seen ${ago(device['lastSeenAt'])}',
-        style: HPType.body(p.muted),
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-      ),
+      subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (!revoked) Text(who, key: Key('device-user-${device['name']}'), style: HPType.body(p.text), maxLines: 2, overflow: TextOverflow.ellipsis),
+        Text(
+          revoked
+              ? 'Revoked ${shortDate(device['revokedAt'])}'
+              : lan
+                  ? '${titleCase('${device['platform']}')} · joined ${device['via']} over Wi-Fi ${shortDate(device['pairedAt'])}'
+                  : '${titleCase('${device['platform']}')} · ${(device['branch'] as Map?)?['name'] ?? ''} · paired ${shortDate(device['pairedAt'])} · seen ${ago(device['lastSeenAt'])}',
+          style: HPType.body(p.muted),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ]),
       trailing: revoked || onRevoke == null ? null : IconButton(tooltip: 'Revoke', icon: const Icon(Icons.link_off_rounded), onPressed: onRevoke),
     );
   }
@@ -169,6 +185,8 @@ class _HowTo extends StatelessWidget {
         ),
         step(3, 'Sign in as the owner with your password', Text(email.isEmpty ? 'Use your console email and password. This device becomes the main device.' : 'For example $email and your console password. This device becomes the main device.', style: HPType.body(p.muted))),
         step(4, 'More devices: email + PIN on the same Wi-Fi', Text('Add staff (email + PIN). On each new device, open BhojMitra POS on the restaurant Wi-Fi and sign in with that email and PIN — it connects to the main device by itself, also without internet.', style: HPType.body(p.muted))),
+        if (hasHub)
+          step(5, 'Make another device the main device (Professional, Premium)', Text('On that device: More → Hub & devices → Make this the main device, then sign in with your password. Every device signed in to the main device is listed above with who is using it.', style: HPType.body(p.muted))),
       ]),
     );
   }

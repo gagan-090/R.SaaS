@@ -223,8 +223,43 @@ class HubService {
   /// Registers the hub's own device (no code needed — it is the hub). Returns its device token.
   Future<String> registerSelf(String name, String platform) async {
     final token = randomToken();
-    await db.execute('INSERT INTO devices(id, name, platform, token_hash, paired_at) VALUES (?,?,?,?,?)', [uuidv7(), name, platform, sha256Hex(token), nowIso(clock())]);
+    final id = uuidv7();
+    await db.execute('INSERT INTO devices(id, name, platform, token_hash, paired_at) VALUES (?,?,?,?,?)', [id, name, platform, sha256Hex(token), nowIso(clock())]);
+    await db.setMeta('self_device_id', id);
     return token;
+  }
+
+  /// The hub's own POS keeps the token it got at setup; this marks which local device that is (for the device report).
+  Future<void> markSelf(String token) async {
+    final d = await db.selectOne('SELECT id FROM devices WHERE token_hash = ? AND revoked_at IS NULL', [sha256Hex(token)]);
+    if (d != null) await db.setMeta('self_device_id', d['id']! as String);
+  }
+
+  /// Every terminal on this hub with the person signed in on it (or last signed in) and their roles — sent to the
+  /// cloud so the owner sees all their devices in the console. Spare "This hub" entries from earlier starts are left out.
+  Future<List<Map<String, Object?>>> deviceReport() async {
+    final self = await db.getMeta('self_device_id');
+    final now = nowIso(clock());
+    final out = <Map<String, Object?>>[];
+    for (final d in await db.query('SELECT id, name, platform, paired_at FROM devices WHERE revoked_at IS NULL ORDER BY paired_at')) {
+      final isSelf = d['id'] == self;
+      final s = await db.selectOne(
+          'SELECT s.created_at, s.expires_at, u.id AS user_id, u.name, u.roles_json FROM sessions s JOIN users u ON u.id = s.user_id '
+          'WHERE s.device_id = ? ORDER BY s.created_at DESC, s.rowid DESC LIMIT 1',
+          [d['id']]);
+      if (!isSelf && s == null && '${d['name']}'.startsWith('This hub (')) continue;
+      out.add({
+        'id': d['id'], 'name': d['name'], 'platform': d['platform'], 'pairedAt': d['paired_at'], 'self': isSelf,
+        'user': s == null
+            ? null
+            : {
+                'id': s['user_id'], 'name': s['name'],
+                'roles': [for (final r in (jsonDecode('${s['roles_json'] ?? '[]'}') as List)) '${r is Map ? r['role'] : r}'],
+              },
+        'signedInAt': s?['created_at'], 'signedIn': s != null && '${s['expires_at']}'.compareTo(now) > 0,
+      });
+    }
+    return out;
   }
 
   Future<String> authenticateDevice(String? token) async {

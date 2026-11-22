@@ -404,6 +404,8 @@ model Device {
   pairedAt        DateTime       @default(now()) @map("paired_at") @db.Timestamptz(3)
   lastSeenAt      DateTime?      @map("last_seen_at") @db.Timestamptz(3)
   revokedAt       DateTime?      @map("revoked_at") @db.Timestamptz(3)
+  lanDevices      Json?          @map("lan_devices") // reported by the hub: its Wi-Fi terminals and who is signed in
+  lanReportedAt   DateTime?      @map("lan_reported_at") @db.Timestamptz(3)
 
   @@index([tenantId, branchId])
   @@map("devices")

@@ -78,6 +78,12 @@ class CloudClient {
     return jsonDecode(r.body) as Map<String, Object?>;
   }
 
+  /// Tells the cloud which terminals are on this hub and who is signed in on each (shown in the console).
+  Future<void> reportDevices(List<Map<String, Object?>> devices) async {
+    final r = await _http.post(Uri.parse('$baseUrl/sync/devices'), headers: _h, body: jsonEncode({'devices': devices})).timeout(const Duration(seconds: 20));
+    if (r.statusCode != 200) throw http.ClientException('device report failed: ${r.statusCode}');
+  }
+
   Future<List<Map<String, Object?>>> push(List<Map<String, Object?>> events) async {
     final r = await _http
         .post(Uri.parse('$baseUrl/sync/push'), headers: _h, body: jsonEncode({'events': events}))
@@ -203,6 +209,7 @@ class SyncWorker {
       try {
         await pullOnce();
         await pullHistory();
+        await cloud.reportDevices(await hub.deviceReport());
       } catch (_) {
         // offline: keep working on the LAN; the next tick retries
       }

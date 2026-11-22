@@ -163,6 +163,14 @@ describe('staff & staff web portal', () => {
     });
   });
 
+  it('the Roles page lists only the built-in roles the plan includes', async () => {
+    const roles = async (tok: string) => ((await t.http().get(api('/roles')).set(bearer(tok)).expect(200)).body.builtIn as { role: string }[]).map((r) => r.role);
+    const standard = await onboardRestaurant(t, saToken, 'standard');
+    expect(await roles(standard.ownerToken)).toEqual(['owner']);
+    expect(await roles(std.ownerToken)).toEqual(['owner', 'cashier', 'waiter']);
+    expect(await roles(prem.ownerToken)).toEqual(['owner', 'it_admin', 'cashier', 'waiter', 'chef', 'auditor']);
+  });
+
   describe('custom roles', () => {
     it('a custom role grants exactly its permissions, on the web and on the hub; unknown or out-of-plan permissions are refused', async () => {
       const auth = bearer(prem.ownerToken);

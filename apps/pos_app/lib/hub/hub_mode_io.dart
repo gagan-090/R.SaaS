@@ -25,7 +25,10 @@ class HubHost {
   String? fingerprint;
   int port = 8443;
 
-  Future<void> start(HubHostConfig c) async {
+  /// [localToken]: this device's own POS token from an earlier start (kept in the device setup), so a restart does not
+  /// add another "This hub" device.
+  Future<void> start(HubHostConfig c, {String? localToken}) async {
+    localDeviceToken ??= localToken;
     final dir = Directory('${(await getApplicationSupportDirectory()).path}/hub')..createSync(recursive: true);
     _db = HubDatabase.file(File('${dir.path}/hub.sqlite'));
     _hub = HubService(_db!, HubConfig(branchId: c.branchId, branchCode: c.branchCode, licensePublicKey: c.licensePublicKey));
@@ -53,7 +56,11 @@ class HubHost {
     _server = HubServer(_hub!, hubName: Platform.localHostname, refreshStaff: _worker!.pullOnce, addStaff: cloud.addStaff, consoleSession: cloud.consoleSession, certFingerprint: fingerprint);
     await _server!.start(port: port, tls: tls.context());
     _worker!.start();
-    localDeviceToken ??= await _hub!.registerSelf('This hub (${Platform.localHostname})', Platform.isWindows ? 'windows' : 'android');
+    if (localDeviceToken == null) {
+      localDeviceToken = await _hub!.registerSelf('This hub (${Platform.localHostname})', Platform.isWindows ? 'windows' : 'android');
+    } else {
+      await _hub!.markSelf(localDeviceToken!);
+    }
     await newPairingCode();
   }
 
