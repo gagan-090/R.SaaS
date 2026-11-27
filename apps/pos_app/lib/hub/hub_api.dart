@@ -82,15 +82,161 @@ String newIdempotencyKey() {
   return 'pos-${DateTime.now().microsecondsSinceEpoch}-${List.generate(8, (_) => r.nextInt(36).toRadixString(36)).join()}';
 }
 
+/// Talks to the branch hub over whichever route works: the hub's addresses on the restaurant network (Wi-Fi,
+/// Ethernet, a VPN such as Tailscale) first, then the cloud relay ([relayUrl]) for a floor on another router / ISP.
+/// Routes it learns from the hub (`/pairing/info`) or finds again after the hub's IP changed go to [onRoutes].
 class HttpHubApi extends HubApi {
-  HttpHubApi({required this.baseUrl, required this.deviceToken, String? certFingerprint, http.Client? client})
+  HttpHubApi({required this.baseUrl, required this.deviceToken, String? certFingerprint, http.Client? client, List<String> alternates = const [],
+      String? relayUrl, this.onRoutes, Future<List<ProbedHub>> Function()? scan})
       : _fingerprint = certFingerprint,
-        _http = client ?? pinnedHttpClient(certFingerprint);
+        _http = client ?? pinnedHttpClient(certFingerprint),
+        _lan = {baseUrl, ...alternates}.toList(),
+        _relay = relayUrl,
+        _scan = scan ?? probeHubs;
 
   final String baseUrl; // https://192.168.1.10:8443/hub/v1
   final String deviceToken;
   final String? _fingerprint;
   final http.Client _http;
+  final List<String> _lan;
+  String? _relay; // https://api.example.com/api/v1/relay/b/<branchId>/hub/v1
+  final void Function(List<String> lan, String? relay)? onRoutes;
+  final Future<List<ProbedHub>> Function() _scan;
+
+  String? _active;
+  Future<String>? _picking;
+  bool _learned = false;
+  DateTime _lanCheckedAt = DateTime.now();
+  DateTime? _scannedAt;
+
+  /// The route in use right now (null until the first request picks one).
+  String? get activeUrl => _active;
+  bool get viaRelay => _active != null && _active == _relay;
+
+  bool get _single => _lan.length == 1 && _relay == null;
+
+  Future<String> _route() {
+    final a = _active;
+    if (a != null) {
+      // on the relay: look for the restaurant network again now and then (back on the main device's Wi-Fi)
+      if (a == _relay && DateTime.now().difference(_lanCheckedAt) > const Duration(seconds: 60)) {
+        _lanCheckedAt = DateTime.now();
+        unawaited(_firstLan().then((u) {
+          if (u != null) _active = u;
+        }));
+      }
+      return Future.value(a);
+    }
+    if (_single) return Future.value(_active = baseUrl); // one address, no relay: exactly as before
+    return _picking ??= _pick().whenComplete(() => _picking = null);
+  }
+
+  /// The first hub address that answers /health (all tried at once, so a dead address costs no extra time).
+  Future<String?> _firstLan() {
+    final c = Completer<String?>();
+    var left = _lan.length;
+    if (left == 0) return Future.value(null);
+    for (final u in List.of(_lan)) {
+      _http.get(Uri.parse('$u/health')).timeout(const Duration(seconds: 4)).then((r) {
+        if (r.statusCode == 200 && !c.isCompleted) c.complete(u);
+      }, onError: (_) {}).whenComplete(() {
+        if (--left == 0 && !c.isCompleted) c.complete(null);
+      });
+    }
+    return c.future;
+  }
+
+  Future<String> _pick() async {
+    final lan = await _firstLan();
+    _lanCheckedAt = DateTime.now();
+    final pick = lan ?? _relay;
+    if (pick == null) {
+      unawaited(_rediscover());
+      throw HubApiException(0, 'hub_offline', 'Kitchen hub offline');
+    }
+    if (lan == null) unawaited(_rediscover());
+    _active = pick;
+    unawaited(_learn(pick));
+    return pick;
+  }
+
+  /// The hub's other addresses and its cloud relay, from the hub itself (once per connection).
+  Future<void> _learn(String base) async {
+    if (_learned || onRoutes == null) return;
+    _learned = true;
+    try {
+      final r = await _http.get(Uri.parse('$base/pairing/info')).timeout(const Duration(seconds: 15));
+      if (r.statusCode != 200) return;
+      final j = jsonDecode(r.body) as Json;
+      if (_fingerprint != null && j['certFingerprint'] != null && j['certFingerprint'] != _fingerprint) return;
+      final port = Uri.parse(baseUrl).port;
+      var changed = false;
+      for (final a in (j['addresses'] as List? ?? const [])) {
+        final u = 'https://$a:$port/hub/v1';
+        if (!_lan.contains(u)) {
+          _lan.add(u);
+          changed = true;
+        }
+      }
+      final cloud = j['cloudUrl'], branch = j['branchId'];
+      if (cloud is String && cloud.isNotEmpty && branch is String) {
+        final relay = relayUrlFor(cloud, branch);
+        if (relay != _relay) {
+          _relay = relay;
+          changed = true;
+        }
+      }
+      if (changed) onRoutes!(List.unmodifiable(_lan.where((u) => u != baseUrl)), _relay);
+    } catch (_) {
+      _learned = false; // try again on the next connection
+    }
+  }
+
+  /// Nothing answered on the known addresses: the main device may have a new IP on this Wi-Fi. Scan for the same
+  /// certificate (at most every 2 minutes).
+  Future<void> _rediscover() async {
+    final fp = _fingerprint;
+    if (fp == null || onRoutes == null) return;
+    final last = _scannedAt;
+    if (last != null && DateTime.now().difference(last) < const Duration(minutes: 2)) return;
+    _scannedAt = DateTime.now();
+    try {
+      for (final h in await _scan()) {
+        if (h.fingerprint != fp) continue;
+        final u = 'https://${h.host}:${h.port}/hub/v1';
+        if (!_lan.contains(u)) _lan.insert(0, u);
+        _active = u;
+        onRoutes!(List.unmodifiable(_lan.where((x) => x != baseUrl)), _relay);
+        return;
+      }
+    } catch (_) {}
+  }
+
+  /// One request over the current route; a route that cannot be reached is dropped and the next one tried once.
+  /// A request that may have reached the hub (timed out after sending) is retried only when it is a read.
+  Future<http.Response> _request(String method, String path, {String? body, Map<String, String>? extra, required Duration timeout}) async {
+    for (var attempt = 0;; attempt++) {
+      final base = await _route();
+      final relay = base == _relay;
+      final req = http.Request(method, Uri.parse('$base$path'))..headers.addAll({..._h, ...?extra});
+      if (relay) req.headers['x-relay-timeout'] = '${timeout.inSeconds < 20 ? 20 : timeout.inSeconds}';
+      if (body != null) req.body = body;
+      final wait = relay ? Duration(seconds: (timeout.inSeconds < 20 ? 20 : timeout.inSeconds) + 5) : timeout;
+      Object? failure;
+      http.Response? res;
+      try {
+        res = await http.Response.fromStream(await _http.send(req).timeout(wait));
+      } catch (e) {
+        failure = e;
+      }
+      // the relay answers for the hub when the hub is not connected to it
+      final relayDown = relay && res != null && res.statusCode == 503 && res.body.contains('hub_offline');
+      if (res != null && !relayDown) return res;
+      if (_active == base) _active = null;
+      final canRetry = attempt == 0 && !_single && (method == 'GET' || failure is! TimeoutException || relayDown);
+      if (!canRetry) throw HubApiException(0, 'hub_offline', 'Kitchen hub offline');
+    }
+  }
 
   Map<String, String> get _h => {
         'content-type': 'application/json',
@@ -100,13 +246,7 @@ class HttpHubApi extends HubApi {
 
   /// Print routes answer JSON when the printer took the job, otherwise the PDF itself (no printer / unreachable).
   Future<Json> _print(String path, Object body) async {
-    final req = http.Request('POST', Uri.parse('$baseUrl$path'))..headers.addAll(_h)..body = jsonEncode(body);
-    final http.Response res;
-    try {
-      res = await http.Response.fromStream(await _http.send(req).timeout(const Duration(seconds: 15)));
-    } catch (_) {
-      throw HubApiException(0, 'hub_offline', 'Kitchen hub offline');
-    }
+    final res = await _request('POST', path, body: jsonEncode(body), timeout: const Duration(seconds: 15));
     if ((res.headers['content-type'] ?? '').startsWith('application/pdf')) {
       return {'status': 'pdf', 'error': res.headers['x-print-error'], 'copyNo': int.tryParse(res.headers['x-print-copy'] ?? ''), 'pdfBytes': res.bodyBytes.length, 'pdf': res.bodyBytes};
     }
@@ -116,16 +256,7 @@ class HttpHubApi extends HubApi {
   }
 
   Future<dynamic> _send(String method, String path, {Object? body, Map<String, String>? extra, Duration timeout = const Duration(seconds: 8)}) async {
-    final req = http.Request(method, Uri.parse('$baseUrl$path'))..headers.addAll({..._h, ...?extra});
-    if (body != null) req.body = jsonEncode(body);
-    final http.Response res;
-    try {
-      res = await http.Response.fromStream(await _http.send(req).timeout(timeout));
-    } on TimeoutException {
-      throw HubApiException(0, 'hub_offline', 'Kitchen hub offline');
-    } catch (e) {
-      throw HubApiException(0, 'hub_offline', 'Kitchen hub offline');
-    }
+    final res = await _request(method, path, body: body == null ? null : jsonEncode(body), extra: extra, timeout: timeout);
     final decoded = res.body.isEmpty ? null : jsonDecode(utf8.decode(res.bodyBytes));
     if (res.statusCode >= 400) {
       final m = decoded is Map ? decoded : const {};
@@ -198,9 +329,12 @@ class HttpHubApi extends HubApi {
 
   @override
   Future<Uint8List?> media(String id) async {
-    final req = http.Request('GET', Uri.parse('$baseUrl/media/$id'))..headers.addAll(_h);
     try {
-      final res = await http.Response.fromStream(await _http.send(req).timeout(const Duration(seconds: 15)));
+      // through the relay, photos come straight from the cloud (they are public there) instead of via the hub
+      final relay = viaRelay ? _relay : null;
+      final res = relay != null
+          ? await _http.get(Uri.parse('${relay.substring(0, relay.indexOf('/relay/b/'))}/media/$id')).timeout(const Duration(seconds: 20))
+          : await _request('GET', '/media/$id', timeout: const Duration(seconds: 15));
       return res.statusCode == 200 ? res.bodyBytes : null;
     } catch (_) {
       return null; // a missing photo never breaks the menu: the plate illustration shows instead
@@ -229,11 +363,49 @@ class HttpHubApi extends HubApi {
           body: {'amountPaise': amountPaise, 'reason': reason, 'approverUserId': ?approverUserId, 'approverPin': ?approverPin}) as Json;
 
   @override
-  Stream<Json> events() {
-    final ws = connectPinnedWebSocket(Uri.parse('${baseUrl.replaceFirst('http', 'ws')}/events?deviceToken=${Uri.encodeQueryComponent(deviceToken)}'), _fingerprint);
-    return ws.stream.map((m) => jsonDecode(m as String) as Json);
+  Stream<Json> events() async* {
+    final base = await _route();
+    if (base == _relay) {
+      yield* _relayEvents(base);
+      return;
+    }
+    final ws = connectPinnedWebSocket(Uri.parse('${base.replaceFirst('http', 'ws')}/events?deviceToken=${Uri.encodeQueryComponent(deviceToken)}'), _fingerprint);
+    yield* ws.stream.map((m) => jsonDecode(m as String) as Json);
+  }
+
+  /// Live events through the cloud relay (long-poll): the state first, then each change. Ends when the restaurant
+  /// network is reachable again, so the caller reconnects over the WebSocket.
+  Stream<Json> _relayEvents(String relay) async* {
+    final url = '${relay.substring(0, relay.length - '/hub/v1'.length)}/events';
+    Future<Json> poll(int? after) async {
+      final res = await _http.get(Uri.parse(after == null ? url : '$url?after=$after'), headers: _h).timeout(const Duration(seconds: 40));
+      if (res.statusCode != 200) {
+        if (_active == relay) _active = null;
+        throw HubApiException(res.statusCode, 'hub_offline', 'Kitchen hub offline');
+      }
+      return jsonDecode(res.body) as Json;
+    }
+
+    Future<Json> snapshot() async => {'type': 'state.snapshot', 'at': DateTime.now().toUtc().toIso8601String(), 'data': await state()};
+    var p = await poll(null);
+    var seq = p['seq'] as int;
+    yield await snapshot();
+    while (_active == relay) {
+      p = await poll(seq);
+      if (p['reset'] == true) {
+        yield await snapshot();
+      } else {
+        for (final e in (p['events'] as List? ?? const [])) {
+          yield (e as Map).cast<String, dynamic>();
+        }
+      }
+      seq = p['seq'] as int;
+    }
   }
 }
+
+/// The cloud relay address of a branch's main device.
+String relayUrlFor(String cloudUrl, String branchId) => '${cloudUrl.replaceAll(RegExp(r'/+$'), '')}/relay/b/$branchId/hub/v1';
 
 /// QR payload shown by the hub: `rsaas-hub://pair?h=<ip>&p=<port>&c=<one-time code>&f=<cert fingerprint>`
 class PairingPayload {

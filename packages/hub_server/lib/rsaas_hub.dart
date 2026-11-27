@@ -7,6 +7,7 @@ export 'src/license.dart';
 export 'src/permissions.dart';
 export 'src/pin.dart';
 export 'src/printing.dart';
+export 'src/relay.dart';
 export 'src/server.dart';
 export 'src/sync.dart';
 export 'src/tls.dart';

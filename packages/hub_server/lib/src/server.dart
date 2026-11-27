@@ -9,12 +9,13 @@ import 'package:shelf_web_socket/shelf_web_socket.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'hub_service.dart';
+import 'relay.dart';
 import 'util.dart';
 
 /// HTTP + WebSocket API of the branch hub (Build Spec §09), served at /hub/v1.
 /// Devices send `X-Device-Token`; staff actions also send `Authorization: Bearer <session token>`.
 class HubServer {
-  HubServer(this.hub, {required this.hubName, this.certFingerprint, this.refreshStaff, this.addStaff, this.consoleSession});
+  HubServer(this.hub, {required this.hubName, this.certFingerprint, this.refreshStaff, this.addStaff, this.consoleSession, this.cloudUrl, this.addresses});
 
   final HubService hub;
   final Future<void> Function()? refreshStaff;
@@ -28,6 +29,12 @@ class HubServer {
 
   /// SHA-256 fingerprint of the hub's TLS certificate; clients pin it at pairing.
   final String? certFingerprint;
+
+  /// The cloud API (`…/api/v1`): devices on another network reach this hub through its relay.
+  final String? cloudUrl;
+
+  /// Every address this device answers on (Wi-Fi, Ethernet, VPN such as Tailscale), best first.
+  final Future<List<String>> Function()? addresses;
   HttpServer? _server;
   final _sockets = <WebSocketChannel>{};
   StreamSubscription<HubEvent>? _sub;
@@ -84,7 +91,13 @@ class HubServer {
     // also the discovery probe: a new device on the Wi-Fi scans for this and shows which restaurant it found
     r.get('/pairing/info', (Request q) async {
       final tenant = jsonDecode(await hub.db.getMeta('tenant') ?? '{}') as Map;
-      return _json({'app': 'bhojmitra-hub', 'hubName': hubName, 'restaurant': tenant['name'], 'branchId': hub.config.branchId, 'branchCode': hub.config.branchCode, 'certFingerprint': certFingerprint});
+      return _json({'app': 'bhojmitra-hub', 'hubName': hubName, 'restaurant': tenant['name'], 'branchId': hub.config.branchId, 'branchCode': hub.config.branchCode, 'certFingerprint': certFingerprint,
+        'addresses': await addresses?.call() ?? const <String>[], 'cloudUrl': cloudUrl});
+    });
+    // the relay asks whether a device token is one of this hub's devices before it sends live events to it
+    r.get('/whoami', (Request q) async {
+      final deviceId = await hub.authenticateDevice(q.headers['x-device-token']);
+      return _json({'deviceId': deviceId});
     });
     r.post('/pairing/claim', (Request q) async {
       final b = await _body(q);
@@ -93,6 +106,8 @@ class HubServer {
 
     // a new device joins with a staff member's email + PIN (the main device checks it against its synced staff list)
     r.post('/pairing/staff-claim', (Request q) async {
+      // a 4-digit PIN must not be guessable from the internet: through the relay, devices pair with the QR code
+      if (q.headers[relayHeader] != null) throw HubError(403, 'not_relayed', 'Join the main device by scanning its QR code');
       final b = await _body(q);
       return _json(await hub.claimWithStaff('${b['email'] ?? ''}', '${b['pin'] ?? ''}', '${b['deviceName'] ?? 'Device'}', '${b['platform'] ?? ''}'), 201);
     });

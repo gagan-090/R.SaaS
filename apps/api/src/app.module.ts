@@ -31,12 +31,14 @@ import { StaffController } from './staff/staff.controller';
 import { TenantController } from './tenant/tenant.controller';
 
 import { ColdStorage } from './storage/cold-storage';
+import { RelayController } from './relay/relay.controller';
+import { RelayService } from './relay/relay.service';
 
 @Module({
   imports: [ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: loadEnv().API_RATE_LIMIT_PER_MIN }])],
-  controllers: [HealthController, AuthController, PlatformController, RestaurantsController, OwnerSupportController, OwnerPasswordLinkController, PlansController, TenantController, ConsoleController, StaffController, StaffAuthController, MenuController, LayoutController, InventoryController, ExpensesController, ImportsController, RecordsController, SyncController],
+  controllers: [HealthController, AuthController, PlatformController, RestaurantsController, OwnerSupportController, OwnerPasswordLinkController, PlansController, TenantController, ConsoleController, StaffController, StaffAuthController, MenuController, LayoutController, InventoryController, ExpensesController, ImportsController, RecordsController, SyncController, RelayController],
   providers: [
-    DbService, TokensService, AuthService, AuditService, LicenseService, SyncService, InventoryService, ColdStorage, mailerProvider,
+    DbService, TokensService, AuthService, AuditService, LicenseService, SyncService, InventoryService, ColdStorage, RelayService, mailerProvider,
     // Order matters: rate limit → authenticate → authorise → plan/license gate.
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: AuthGuard },

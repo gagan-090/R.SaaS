@@ -94,6 +94,14 @@ Every amount is integer paise end to end. The rules live in `packages/core` and 
 
 Issued only by the hub when a bill closes: `<branch code>/<FY>/<6-digit seq>`, e.g. `BR01/26-27/000123`. The financial year runs April to March. Numbers come from `invoice_counters` in the same SQLite transaction as the bill, so they are gap-free and never reused.
 
+## Floors on another network (multi-address + cloud relay)
+A branch has one main device. Devices keep every address it reports (`/pairing/info`: Wi-Fi, Ethernet, VPN) and use
+the first that answers. When none does (a floor on another router or ISP), they reach it through the cloud relay:
+the hub long-polls `POST /relay/hub/poll` with its cloud token, the API queues device calls made to
+`/relay/b/<branchId>/hub/v1/*`, the hub runs them through its own handler (same device/PIN/permission checks) and
+answers via `POST /relay/hub/reply`; live events are long-polled from `/relay/b/<branchId>/events`. Joining with
+email + PIN is not relayed. The queue is in memory (one API instance).
+
 ## Hub off / failure cases
 
 Build Spec §10 lists the failure cases. If the hub is switched off, other devices show "Kitchen hub offline" and stop taking orders, so there is never a second writer. If the internet is down but Wi-Fi is up, everything keeps working and the outbox drains when the connection returns. Clients retry with the same idempotency keys.

@@ -506,11 +506,25 @@ class _HubStatusScreenState extends ConsumerState<HubStatusScreen> {
                         const SizedBox(height: HPSpace.sm),
                         Text('If the new device cannot find this one, type this address on it:', style: HPType.body(p.muted)),
                         SelectableText(pairing.host, key: const Key('hub-address'), style: HPType.mono(p.text).copyWith(fontSize: 18)),
+                        const SizedBox(height: HPSpace.md),
+                        Text(
+                          'Another floor on a different Wi-Fi or internet line? Sign the device in once on this Wi-Fi. After that it '
+                          'reaches this device from any floor: over the Wi-Fi when it can, otherwise through the internet.',
+                          key: const Key('other-floors-help'),
+                          style: HPType.body(p.muted),
+                        ),
                       ]),
                     ),
                   )
                 else ...[
-                  const EmptyState(title: 'Connected to the main device', message: 'This device works with the main device on your restaurant Wi-Fi, also without internet.', icon: Icons.link_rounded),
+                  if (api is HttpHubApi && api.viaRelay)
+                    const EmptyState(
+                        key: Key('connected-via-relay'),
+                        title: 'Connected through the internet',
+                        message: 'The main device is not on this Wi-Fi, so this device reaches it through the internet. Both need internet; on the same Wi-Fi it switches back by itself.',
+                        icon: Icons.cloud_sync_rounded)
+                  else
+                    const EmptyState(title: 'Connected to the main device', message: 'This device works with the main device on your restaurant Wi-Fi, also without internet.', icon: Icons.link_rounded),
                   // Professional / Premium: the owner (or Restaurant Admin) may make any of their devices the main device
                   if (HubHost.supported &&
                       canOpenOwnerConsole(ref.watch(sessionProvider)) &&

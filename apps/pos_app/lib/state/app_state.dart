@@ -14,10 +14,16 @@ import '../hub/hub_mode.dart';
 
 /// How this device reaches its hub. Device tokens are kept in the OS secure store (DPAPI / Android Keystore).
 class DeviceSetup {
-  const DeviceSetup({required this.hubBaseUrl, required this.deviceToken, this.fingerprint, this.hubConfig});
+  const DeviceSetup({required this.hubBaseUrl, required this.deviceToken, this.fingerprint, this.hubConfig, this.altUrls = const [], this.relayUrl});
   final String hubBaseUrl;
   final String deviceToken;
   final String? fingerprint;
+
+  /// The hub's other addresses (another Wi-Fi interface, a VPN such as Tailscale, a new IP found by a scan).
+  final List<String> altUrls;
+
+  /// The hub through the cloud relay, for when none of its addresses can be reached (another floor / ISP).
+  final String? relayUrl;
 
   /// Present when this device IS the hub (Hub mode).
   final HubHostConfig? hubConfig;
@@ -25,6 +31,8 @@ class DeviceSetup {
 
   Map<String, Object?> toJson() => {
         'hubBaseUrl': hubBaseUrl, 'deviceToken': deviceToken, 'fingerprint': fingerprint,
+        if (altUrls.isNotEmpty) 'altUrls': altUrls,
+        'relayUrl': ?relayUrl,
         if (hubConfig != null)
           'hub': {
             'cloudUrl': hubConfig!.cloudUrl, 'cloudDeviceToken': hubConfig!.cloudDeviceToken, 'branchId': hubConfig!.branchId,
@@ -38,6 +46,8 @@ class DeviceSetup {
       hubBaseUrl: j['hubBaseUrl'] as String,
       deviceToken: j['deviceToken'] as String,
       fingerprint: j['fingerprint'] as String?,
+      altUrls: [for (final u in (j['altUrls'] as List? ?? const [])) '$u'],
+      relayUrl: j['relayUrl'] as String?,
       hubConfig: h == null
           ? null
           : HubHostConfig(cloudUrl: h['cloudUrl'] as String, cloudDeviceToken: h['cloudDeviceToken'] as String, branchId: h['branchId'] as String,
@@ -103,7 +113,9 @@ final hubHostProvider = Provider<HubHost>((ref) => HubHost());
 
 /// Builds the hub client for a setup; tests override this with a fake.
 final hubApiFactoryProvider = Provider<HubApi Function(DeviceSetup)>(
-  (ref) => (s) => HttpHubApi(baseUrl: s.hubBaseUrl, deviceToken: s.deviceToken, certFingerprint: s.fingerprint),
+  (ref) => (s) => HttpHubApi(baseUrl: s.hubBaseUrl, deviceToken: s.deviceToken, certFingerprint: s.fingerprint, alternates: s.altUrls, relayUrl: s.relayUrl,
+      // the main device itself always reaches its own hub on this device
+      onRoutes: s.isHub ? null : (lan, relay) => ref.read(setupProvider.notifier).saveRoutes(lan, relay)),
 );
 
 class SetupNotifier extends AsyncNotifier<DeviceSetup?> {
@@ -117,6 +129,13 @@ class SetupNotifier extends AsyncNotifier<DeviceSetup?> {
   Future<void> save(DeviceSetup s) async {
     await ref.read(deviceStoreProvider).write(s);
     state = AsyncData(s);
+  }
+
+  /// Remembers the hub routes a connection learned (no reconnect: staff stay signed in).
+  Future<void> saveRoutes(List<String> altUrls, String? relayUrl) async {
+    final s = state.valueOrNull;
+    if (s == null || s.isHub) return;
+    await save(DeviceSetup(hubBaseUrl: s.hubBaseUrl, deviceToken: s.deviceToken, fingerprint: s.fingerprint, altUrls: altUrls, relayUrl: relayUrl));
   }
 
   /// Main device only: point the hub's cloud sync at a new server address (e.g. the server's Wi-Fi IP changed).

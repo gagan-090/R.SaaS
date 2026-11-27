@@ -571,3 +571,12 @@ code, passes now); pos_app **96 passed, 5 skipped**.
   try on iOS only shows the "Local Network" prompt); the scan runs again once on iOS. A failure says why (app not open
   on the main device / not the same Wi-Fi / no answer) and tells iPhone users to turn on Local Network.
   Tests: pos_app 109 (10 skipped) — passed.
+
+## Floors on different Wi-Fi / internet lines (2026-11-27)
+- POS remembers every address of the main device (Wi-Fi, Ethernet, VPN such as Tailscale), tries them all at once and
+  uses the first that answers; finds the main device again by its certificate when its IP changed.
+- Cloud relay: when no address answers (another floor on Jio / Airtel / Vi), requests and live events go through the
+  cloud to the main device (both need internet); back on the same Wi-Fi it switches back by itself. Hub & devices
+  shows "Connected through the internet" and explains how to add a device on another floor (sign in once on the main
+  device's Wi-Fi). Joining with email + PIN is never relayed. Branches unchanged: one main device per branch.
+- Tests: api 180 (relay 6 new), hub_server 61 (1 skipped; relay 4 new), pos_app 116 (10 skipped; routes 7 new) — all passed.
