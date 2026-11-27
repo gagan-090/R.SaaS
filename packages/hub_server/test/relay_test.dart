@@ -32,6 +32,12 @@ void main() {
     final r = await relay().handle({'id': 'r1', 'method': 'POST', 'path': 'pairing/staff-claim', 'headers': {'content-type': 'application/json', 'x-rsaas-relay': ''}, 'body': body});
     expect(r['status'], 403);
     expect(jsonDecode(utf8.decode(base64Decode(r['bodyB64']! as String)))['code'], 'not_relayed');
+    // nor a one-time pairing code
+    final code = await h.hub.createPairingCode();
+    final claim = await relay().handle({'id': 'r2', 'method': 'POST', 'path': 'pairing/claim', 'headers': {'content-type': 'application/json'},
+        'body': jsonEncode({'code': code, 'deviceName': 'x', 'platform': 'android'})});
+    expect(claim['status'], 403);
+    expect((await h.post('/pairing/claim', body: {'code': code, 'deviceName': 'x', 'platform': 'android'})).status, 201); // code still unused
     // on the Wi-Fi it still works
     expect((await h.post('/pairing/staff-claim', body: jsonDecode(body) as Map<String, Object?>)).status, 201);
   });

@@ -100,14 +100,15 @@ class HubServer {
       return _json({'deviceId': deviceId});
     });
     r.post('/pairing/claim', (Request q) async {
+      if (q.headers[relayHeader] != null) throw HubError(403, 'not_relayed', 'Join the main device once on its Wi-Fi');
       final b = await _body(q);
       return _json(await hub.claimPairing('${b['code'] ?? ''}', '${b['deviceName'] ?? 'Device'}', '${b['platform'] ?? ''}'), 201);
     });
 
     // a new device joins with a staff member's email + PIN (the main device checks it against its synced staff list)
     r.post('/pairing/staff-claim', (Request q) async {
-      // a 4-digit PIN must not be guessable from the internet: through the relay, devices pair with the QR code
-      if (q.headers[relayHeader] != null) throw HubError(403, 'not_relayed', 'Join the main device by scanning its QR code');
+      // a 4-digit PIN must not be guessable from the internet: a device joins once on the main device's Wi-Fi
+      if (q.headers[relayHeader] != null) throw HubError(403, 'not_relayed', 'Join the main device once on its Wi-Fi');
       final b = await _body(q);
       return _json(await hub.claimWithStaff('${b['email'] ?? ''}', '${b['pin'] ?? ''}', '${b['deviceName'] ?? 'Device'}', '${b['platform'] ?? ''}'), 201);
     });

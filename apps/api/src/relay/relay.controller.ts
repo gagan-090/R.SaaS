@@ -27,10 +27,11 @@ const FORWARD = ['x-device-token', 'authorization', 'idempotency-key', 'content-
 /** Answer headers the POS reads (print outcome); everything else stays on the hub. */
 const BACK = ['content-type', 'x-print-status', 'x-print-copy', 'x-print-error'];
 /**
- * Never relayed: joining with email + PIN (a 4-digit PIN must not be guessable from the internet — remote floors pair
- * with the QR code) and the WebSocket (relay devices long-poll `events` below instead).
+ * Never relayed: pairing of any kind (a PIN or one-time code must not be guessable from the internet — a device joins
+ * once on the main device's Wi-Fi), the unauthenticated health probe, and the WebSocket (relay devices long-poll
+ * `events` below instead).
  */
-const BLOCKED = /^(pairing\/staff-claim|events)(\/|\?|$)/;
+const BLOCKED = /^(pairing|health|events)(\/|$)/;
 
 @ApiTags('relay')
 @Controller('relay')
@@ -82,7 +83,9 @@ export class RelayController {
     // dodged by encoding; the query string is passed on as-is
     const [route] = path.split('?', 1);
     if (!/^[A-Za-z0-9_-]+(\/[A-Za-z0-9_-]+)*$/.test(route)) throw badRequest('bad_path', 'Bad path');
-    if (BLOCKED.test(route.toLowerCase())) throw forbidden('not_relayed', 'Join the main device by scanning its QR code (More → Hub & devices on the main device)');
+    if (BLOCKED.test(route.toLowerCase())) throw forbidden('not_relayed', 'Join the main device once on its Wi-Fi, then this device can reach it from any floor');
+    // only devices the main device knows get through (nothing on the hub is reachable anonymously from the internet)
+    await this.relay.checkDevice(branchId, typeof req.headers['x-device-token'] === 'string' ? req.headers['x-device-token'] : undefined);
     const headers: Record<string, string> = {};
     for (const h of FORWARD) {
       const v = req.headers[h];
